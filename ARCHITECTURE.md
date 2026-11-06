@@ -20,6 +20,7 @@ electron/
   state.ts            Persistent key/value state in Electron's user-data directory
   updates.ts          Stable GitHub release checks and semantic-version comparison
   updates.test.ts     Release-check regression tests
+  repositoryScan.ts   Unlimited iterative folder discovery, progress, and cancellation
 
 src/
   App.tsx             Main application shell and panel coordination
@@ -59,6 +60,7 @@ React component
 - **Terminal:** `electron/terminal.ts` manages terminal processes. It prefers `node-pty`, with platform-specific fallbacks when the native module is unavailable. Terminal data and lifecycle events cross IPC.
 - **Persistence:** Zustand settings and remembered repository tabs use `src/lib/storage.ts`. In Electron, storage is bridged to a JSON key/value file in the app's user-data directory; browser preview can fall back to `localStorage`.
 - **Updates:** The main process checks the configured public GitHub repository once after a packaged window loads. A native dialog asks before opening the release page for manual download/installation; the Help menu supports retrying. No renderer IPC or automatic binary replacement is involved.
+- **Folder discovery:** Repository scans have no folder-count or depth ceiling. Iterative traversal skips hidden, dependency/build, and symlink directories; progress events are throttled and cancellation aborts the active Git child process. Scan sessions belong to their requesting renderer and are cancelled if it is destroyed. Unreadable or invalid folders are counted and surfaced by the UI.
 
 ## Main renderer responsibilities
 
@@ -72,6 +74,6 @@ React component
 
 - `npm run dev` starts the Vite/Electron development workflow.
 - `npm run build` runs the TypeScript check and Vite production build.
-- `npm test` runs release-check regression tests.
+- `npm test` runs release-check and repository-discovery regression tests, including traversal beyond 5,000 folders and five levels.
 - `npm run dist` builds host-platform installers using `electron-builder.yml`; GitHub Actions builds all configured targets and creates a draft release. See [RELEASING.md](./RELEASING.md).
 - `vite.config.ts` configures the React and Electron plugins with relative renderer asset URLs for packaged `file://` loading; Electron main and preload bundles are emitted separately from the renderer.

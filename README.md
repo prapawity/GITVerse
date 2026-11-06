@@ -15,6 +15,8 @@ A desktop Git client built with Electron and React, with commit graphs, working-
 - Optional Claude, OpenAI, and GitHub Copilot integrations.
 - Stable-release checks against GitHub Releases, with user-confirmed manual installation.
 
+Dropping folders searches for repositories without a folder-count or depth limit. The scan shows live progress and can be cancelled. Hidden folders, dependency/build directories, and directory symlinks are skipped. Unreadable folders or invalid repositories are reported; cancelling discards the interrupted folder's results and keeps already completed dropped folders.
+
 ## Download
 
 Download a package for your operating system from [GitHub Releases](https://github.com/prapawity/GITVerse/releases). Packages will appear after the first release is published.
@@ -47,7 +49,7 @@ npm run dev
 ```
 
 ```bash
-npm test          # Release-check regression tests
+npm test          # Release-check and repository-scan regression tests
 npm run build    # TypeScript check and production bundles
 npm run dist     # Build installers for the current host
 ```

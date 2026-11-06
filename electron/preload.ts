@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import type { ScanProgress } from '../src/shared/repositoryScan';
 
 const names = ['log', 'status', 'commit', 'checkout', 'checkoutRemote', 'stage', 'unstage', 'refs', 'historyPosition', 'commitDetail', 'commitFileDiff', 'workingFileDiff', 'fetch', 'pull', 'push', 'pushInfo', 'commitIdentity', 'setCommitIdentity', 'createBranch', 'stash', 'stashPop', 'reset', 'cherryPick', 'revert', 'rebaseOnto', 'createTag', 'branchAt', 'fileAt', 'worktreeAdd', 'remoteUrl', 'formatPatch', 'createAnnotatedTag', 'fileBlame', 'fileHistory', 'opState', 'opContinue', 'opAbort', 'opSkip', 'resolveFile', 'merge', 'deleteBranch', 'readWorkFile', 'writeWorkFile'];
 const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
@@ -12,7 +13,13 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   return () => ipcRenderer.removeListener('repo:cloneProgress', handler);
 };
 (gitApi as any).pathForFile = (file: File) => webUtils.getPathForFile(file);
-(gitApi as any).findRepositories = (folder: string) => ipcRenderer.invoke('repo:findRepositories', folder);
+(gitApi as any).findRepositories = (folder: string, id: string) => ipcRenderer.invoke('repo:findRepositories', folder, id);
+(gitApi as any).cancelScan = (id: string) => ipcRenderer.send('repo:cancelScan', id);
+(gitApi as any).onScanProgress = (cb: (id: string, progress: ScanProgress) => void) => {
+  const handler = (_event: unknown, id: string, progress: ScanProgress) => cb(id, progress);
+  ipcRenderer.on('repo:scanProgress', handler);
+  return () => ipcRenderer.removeListener('repo:scanProgress', handler);
+};
 for (const n of names) gitApi[n] = (...a) => ipcRenderer.invoke(`git:${n}`, ...a);
 gitApi.squashCommits = (...a) => ipcRenderer.invoke('git:squashCommits', ...a);
 gitApi.stagedForCommitMessage = (...a) => ipcRenderer.invoke('git:stagedForCommitMessage', ...a);

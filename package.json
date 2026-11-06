@@ -19,7 +19,7 @@
     "postinstall": "node scripts/brand-electron.cjs",
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "tsx --test electron/updates.test.ts",
+    "test": "tsx --test electron/updates.test.ts electron/repositoryScan.test.ts",
     "dist": "npm run build && electron-builder --publish never"
   },
   "dependencies": {

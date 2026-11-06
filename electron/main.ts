@@ -1,15 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import * as git from './git/git';
 import { registerTerminal } from './terminal';
 import { loadState, saveKey } from './state';
 import { registerAi } from './ai';
 import { readSecret, writeSecret } from './ai/common';
 import { checkForRelease } from './updates';
+import { scanRepositories } from './repositoryScan';
 
 // name shown in the macOS menu bar, About box and dock (a packaged build also gets it from productName)
 app.setName('GITVerse');
@@ -100,31 +98,26 @@ ipcMain.handle('repo:open', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
-ipcMain.handle('repo:findRepositories', async (_event, folder: string) => {
-  if (typeof folder !== 'string' || !path.isAbsolute(folder) || folder.includes('\0')) throw new Error('Choose a valid folder.');
-  const root = path.resolve(folder);
-  const queue = [{ dir: root, depth: 0 }];
-  const repos: string[] = [];
-  const skip = new Set(['.git', 'node_modules', 'vendor', 'dist', 'build', '.next', '.venv']);
-  let scanned = 0;
-  let truncated = false;
-  while (queue.length) {
-    if (scanned++ >= 5000) { truncated = true; break; }
-    const { dir, depth } = queue.shift()!;
-    let entries;
-    try { entries = await readdir(dir, { withFileTypes: true }); }
-    catch (error) { if (dir === root) throw new Error('Could not read the dropped folder.'); continue; }
-    if (entries.some((entry) => entry.name === '.git' && (entry.isDirectory() || entry.isFile()))) {
-      const top = await promisify(execFile)('git', ['rev-parse', '--show-toplevel'], { cwd: dir }).then((result) => result.stdout.trim(), () => '');
-      if (top && path.resolve(top) === dir) repos.push(dir);
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.') || skip.has(entry.name)) continue;
-      if (depth >= 5) { truncated = true; continue; }
-      queue.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
-    }
+const scans = new Map<number, { id: string; controller: AbortController }>();
+ipcMain.on('repo:cancelScan', (event, id: string) => {
+  const scan = scans.get(event.sender.id);
+  if (scan?.id === id) scan.controller.abort();
+});
+ipcMain.handle('repo:findRepositories', async (event, folder: string, id: string) => {
+  if (typeof id !== 'string' || !id || scans.has(event.sender.id)) throw new Error('A folder scan is already running or the request is invalid.');
+  const controller = new AbortController();
+  const senderId = event.sender.id;
+  const abort = () => controller.abort();
+  scans.set(senderId, { id, controller });
+  event.sender.once('destroyed', abort);
+  try {
+    return await scanRepositories(folder, controller.signal, (progress) => {
+      if (!event.sender.isDestroyed()) event.sender.send('repo:scanProgress', id, progress);
+    });
+  } finally {
+    event.sender.removeListener('destroyed', abort);
+    scans.delete(senderId);
   }
-  return { root, group: path.basename(root), repos, truncated };
 });
 
 ipcMain.handle('repo:clone', (event, url: string, destination: string) =>

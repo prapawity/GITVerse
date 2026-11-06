@@ -26,6 +26,7 @@ import { StashView } from './components/StashView';
 import { ProfilePicker } from './components/ProfilePicker';
 import { WorkingChangesPanel, type WorkingFile } from './components/WorkingChangesPanel';
 import { useRepo } from './store/repoStore';
+import type { ScanProgress, ScanResult } from './shared/repositoryScan';
 
 let restored = false;
 const Handle = () => <PanelResizeHandle className="w-px bg-surface transition-colors hover:bg-[#4cc2ff]" />;
@@ -66,6 +67,9 @@ export default function App() {
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [draggingFolders, setDraggingFolders] = useState(false);
   const [scanningFolders, setScanningFolders] = useState(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  const [cancellingScan, setCancellingScan] = useState(false);
+  const scanRequest = useRef<{ id: string; cancelled: boolean } | null>(null);
   const dragDepth = useRef(0);
   const [groupMenu, setGroupMenu] = useState<{ repo: string; x: number; y: number } | null>(null);
   const [newGroup, setNewGroup] = useState<string | null>(null);
@@ -171,17 +175,26 @@ export default function App() {
   };
 
   const importFolders = async (paths: string[]) => {
-    if (scanningFolders) return;
+    if (scanRequest.current) return;
     const api = (window as any).gitApi;
     if (!paths.length) { useRepo.getState().notify('error', 'Could not read dropped folders', 'Please drop folders from your file manager.'); return; }
     setScanningFolders(true);
+    setScanProgress(null);
+    setCancellingScan(false);
+    const request = { id: crypto.randomUUID(), cancelled: false };
+    scanRequest.current = request;
+    const unsubscribe = api.onScanProgress((id: string, progress: ScanProgress) => {
+      if (id === request.id) setScanProgress(progress);
+    });
     try {
       const found: string[] = [];
       for (const folder of paths) {
+        if (request.cancelled) break;
         try {
-          const result: { root: string; group: string; repos: string[]; truncated: boolean } = await api.findRepositories(folder);
+          const result: ScanResult = await api.findRepositories(folder, request.id);
+          if (result.cancelled || request.cancelled) break;
           if (!result.repos.length) useRepo.getState().notify('warning', 'No repositories found', folder);
-          if (result.truncated) useRepo.getState().notify('warning', 'Folder scan was limited', 'Only the first 5,000 folders and five levels were scanned. Dependency and hidden folders are skipped.');
+          if (result.skipped) useRepo.getState().notify('warning', 'Some folders could not be scanned', `${result.skipped} folders could not be read or verified as repositories.`);
           const nested = result.repos.filter((repo) => repo !== result.root);
           if (nested.length) {
             const existing = useSettings.getState().repoGroups;
@@ -193,6 +206,7 @@ export default function App() {
             setRepoGroupRoot(group, result.root);
             for (const repo of result.repos) setRepoGroup(repo, group);
           }
+          if (request.cancelled) useRepo.getState().notify('info', 'Folder scan cancelled', 'Results from the interrupted folder were not added. Completed folders are kept.');
           found.push(...result.repos);
         } catch (error: any) {
           useRepo.getState().notify('error', 'Could not scan folder', String(error?.message ?? error).replace(/^Error invoking remote method '[^']*': (Error: )?/, ''));
@@ -204,7 +218,14 @@ export default function App() {
         await openRepo(repos[0]);
         useRepo.getState().notify('success', `Added ${repos.length} repositor${repos.length === 1 ? 'y' : 'ies'}`);
       }
-    } finally { setScanningFolders(false); }
+    } finally { unsubscribe(); scanRequest.current = null; setScanningFolders(false); setScanProgress(null); setCancellingScan(false); }
+  };
+  const cancelFolderScan = () => {
+    const request = scanRequest.current;
+    if (!request || request.cancelled) return;
+    request.cancelled = true;
+    setCancellingScan(true);
+    (window as any).gitApi.cancelScan(request.id);
   };
   const dropFolders = (event: React.DragEvent) => {
     event.preventDefault();
@@ -221,7 +242,19 @@ export default function App() {
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
       onDragLeave={(e) => { e.preventDefault(); if (--dragDepth.current <= 0) { dragDepth.current = 0; setDraggingFolders(false); } }}
       onDrop={(e) => void dropFolders(e)}>
-      {(draggingFolders || scanningFolders) && <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center bg-crust/80"><div role="status" className="rounded-xl border-2 border-dashed border-[#4cc2ff] bg-mantle px-12 py-10 text-center text-lg font-semibold shadow-2xl">{scanningFolders ? 'Finding repositories…' : 'Drop folders to open repositories'}</div></div>}
+      {(draggingFolders || scanningFolders) && <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-crust/80 ${scanningFolders ? '' : 'pointer-events-none'}`}>
+        <div className="mx-4 w-full max-w-[560px] rounded-xl border-2 border-dashed border-[#4cc2ff] bg-mantle p-8 text-center shadow-2xl">
+          <div role="status" aria-live="polite">
+            <h2 className="text-lg font-semibold">{scanningFolders ? 'Finding repositories…' : 'Drop folders to open repositories'}</h2>
+            {scanningFolders && <>
+              <p className="mt-3 text-sm text-sub">{(scanProgress?.scanned ?? 0).toLocaleString()} folders scanned · {(scanProgress?.repositories ?? 0).toLocaleString()} repositories found</p>
+              <p className="mt-2 break-all text-xs text-sub">{scanProgress?.folder}</p>
+              <p className="mt-3 text-sm text-sub">No folder or depth limit. Hidden, dependency and symlink folders are skipped.</p>
+            </>}
+          </div>
+          {scanningFolders && <button autoFocus disabled={cancellingScan} onClick={cancelFolderScan} className="mt-5 min-h-[44px] rounded-md border border-surface px-5 text-sm hover:bg-surface/60 disabled:opacity-50">{cancellingScan ? 'Cancelling…' : 'Cancel scan'}</button>}
+        </div>
+      </div>}
       {/* repo tabs */}
       <div className="flex items-center border-b border-surface bg-crust">
         <div className="flex items-center gap-2 border-r border-surface px-4 text-[14px] font-bold tracking-wide" aria-label="GITVerse">
