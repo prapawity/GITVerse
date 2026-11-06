@@ -34,6 +34,7 @@ const handlers = {
   moveIndexHistory: git.moveIndexHistory,
   refs: git.refs,
   historyPosition: git.historyPosition,
+  agentCheckpoints: git.agentCheckpoints,
   commitDetail: git.commitDetail,
   commitFileDiff: git.commitFileDiff,
   workingFileDiff: git.workingFileDiff,

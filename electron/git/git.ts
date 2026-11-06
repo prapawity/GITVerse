@@ -76,7 +76,7 @@ const R = '\x1e';
 export async function log(cwd: string, limit = 400, skip = 0): Promise<Commit[]> {
   const fmt = ['%H', '%P', '%D', '%an', '%ae', '%aI', '%s', '%b'].join('%x1f') + '%x1e';
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(() => true, () => false);
-  const out = await git(cwd, ['log', '--all', '--topo-order', '--decorate=full', `--skip=${skip}`, `-n${limit}`, `--format=${fmt}`, ...(hasHead ? ['HEAD'] : [])]);
+  const out = await git(cwd, ['log', '--branches', '--remotes', '--tags', '--topo-order', '--decorate=full', `--skip=${skip}`, `-n${limit}`, `--format=${fmt}`, ...(hasHead ? ['HEAD'] : [])]);
   return out
     .split(R)
     .map((r) => r.trim())
@@ -229,10 +229,18 @@ export async function refs(cwd: string): Promise<RefList> {
   return res;
 }
 
+export async function agentCheckpoints(cwd: string) {
+  const out = await git(cwd, ['for-each-ref', '--sort=-committerdate', '--format=%(refname)%09%(objectname:short)%09%(subject)', 'refs/agents/']);
+  return out.split('\n').filter(Boolean).map((line) => {
+    const [ref, hash, ...subject] = line.split('\t');
+    return { ref, hash, subject: subject.join('\t') };
+  });
+}
+
 export async function historyPosition(cwd: string, hash: string) {
   if (!/^[0-9a-f]{40,64}$/i.test(hash)) throw new Error('Invalid commit ID.');
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(() => true, () => false);
-  const out = await git(cwd, ['rev-list', '--all', '--topo-order', ...(hasHead ? ['HEAD'] : [])]);
+  const out = await git(cwd, ['rev-list', '--branches', '--remotes', '--tags', '--topo-order', ...(hasHead ? ['HEAD'] : [])]);
   const index = out.split('\n').indexOf(hash);
   if (index < 0) throw new Error('This commit is no longer in the repository history. Refresh and try again.');
   return index;

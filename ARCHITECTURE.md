@@ -69,6 +69,7 @@ React component
 - `aiStore` manages the provider-neutral transcript, streamed responses, tool calls, and their results.
 - `components/` contains the application surfaces, including the commit graph, repository navigation, working changes, commit details/diffs, stash, merge/conflict tools, AI panel, terminal, and settings.
 - `lib/graphLayout.ts` computes graph lanes independently of the React UI. Other library modules provide shared diff, conflict, ref-tree, and storage behavior.
+- History queries and pagination positions use the same local-branch, remote, tag, and HEAD scope. Agent refs are queried separately by namespace and shown as read-only recovery references in `AgentCheckpoints`, outside the commit graph; classification does not depend on commit-message text.
 
 ## Development and build
 

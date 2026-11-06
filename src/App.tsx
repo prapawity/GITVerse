@@ -26,6 +26,7 @@ import { StashView } from './components/StashView';
 import { ProfilePicker } from './components/ProfilePicker';
 import { WorkingChangesPanel, type WorkingFile } from './components/WorkingChangesPanel';
 import { useRepo } from './store/repoStore';
+import { AgentCheckpoints } from './components/AgentCheckpoints';
 import type { ScanProgress, ScanResult } from './shared/repositoryScan';
 
 let restored = false;
@@ -334,6 +335,7 @@ export default function App() {
             <Panel minSize={20}>
               <div className="flex h-full flex-col">
                 {!conflictFile && !file && <ConflictRow />}
+                {repoPath && !conflictFile && !file && !workingFile && !stashView && <AgentCheckpoints key={repoPath} repo={repoPath} />}
                 <div className="min-h-0 flex-1">
                   {conflictFile ? <MergeTool path={conflictFile} /> : stashView && repoPath ? <StashView repo={repoPath} stash={stashView} onClose={() => setStashView(null)} /> : workingFile && workingView && repoPath ? <DiffView repoPath={repoPath} hash="" file={workingFile} area={workingFile.area} revision={workingRevision} onClose={() => setWorkingFile(null)} /> : file && repoPath && selectedHash ? <DiffView repoPath={repoPath} hash={selectedHash} file={file} onClose={() => setFile(null)} onJumpToCommit={select} /> : graph.rows.length ? (
                     <CommitGraph

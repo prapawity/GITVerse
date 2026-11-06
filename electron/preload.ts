@@ -26,6 +26,7 @@ gitApi.stagedForCommitMessage = (...a) => ipcRenderer.invoke('git:stagedForCommi
 gitApi.cherryPickMany = (...a) => ipcRenderer.invoke('git:cherryPickMany', ...a);
 gitApi.tagCommit = (...a) => ipcRenderer.invoke('git:tagCommit', ...a);
 gitApi.stashDiff = (...a) => ipcRenderer.invoke('git:stashDiff', ...a);
+gitApi.agentCheckpoints = (...a) => ipcRenderer.invoke('git:agentCheckpoints', ...a);
 gitApi.trackedStage = (...a) => ipcRenderer.invoke('git:trackedStage', ...a);
 gitApi.indexUndoState = (...a) => ipcRenderer.invoke('git:indexUndoState', ...a);
 gitApi.moveIndexHistory = (...a) => ipcRenderer.invoke('git:moveIndexHistory', ...a);
