@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --canvas: 30 30 46; --mantle: 24 24 37; --crust: 17 17 27; --surface: 49 50 68; --text: 205 214 244; --sub: 127 132 156; --graph: #1b1f27; }
+:root[data-theme="midnight"] { --canvas: 15 28 48; --mantle: 12 24 42; --crust: 8 17 32; --surface: 41 61 84; --text: 219 232 248; --sub: 147 166 191; --graph: #10243a; }
+:root[data-theme="graphite"] { --canvas: 39 39 42; --mantle: 30 30 33; --crust: 22 22 24; --surface: 68 68 73; --text: 232 232 235; --sub: 167 167 175; --graph: #262729; }
+:root[data-theme="light"] { --canvas: 242 245 249; --mantle: 248 250 252; --crust: 255 255 255; --surface: 207 216 227; --text: 29 41 57; --sub: 84 99 120; --graph: #f4f7fb; color-scheme: light; }
+:root[data-theme="light"] .text-\[\#4cc2ff\] { color: #006fae; }
+:root[data-theme="light"] .text-\[\#a6e3a1\] { color: #257635; }
+:root[data-theme="light"] .text-\[\#fab387\] { color: #a44711; }
+:root[data-theme="light"] .text-\[\#f38ba8\] { color: #aa3052; }
+:root[data-theme="light"] .text-\[\#f9e2af\] { color: #896000; }
+:root[data-theme="light"] .bg-\[\#4cc2ff\].text-crust, :root[data-theme="light"] .bg-\[\#cba6f7\].text-crust { color: #132235; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: rgb(var(--canvas)); color: rgb(var(--text)); font-family: Inter, system-ui, sans-serif; font-size: 14px; }
+
+/* accessibility: visible keyboard focus, reduced motion, tidy scrollbars */
+:focus-visible { outline: 2px solid #4cc2ff; outline-offset: 1px; border-radius: 4px; }
+input:focus-visible, select:focus-visible { outline: none; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #45475a; border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #585b70; }
+button:disabled { cursor: not-allowed; }
+button { cursor: pointer; }
+
+/* loading states: shimmer skeletons + indeterminate bar (transform-only, no layout animation) */
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,.05) 25%, rgba(255,255,255,.12) 37%, rgba(255,255,255,.05) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 4px;
+}
+@keyframes indeterminate { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.progress-bar { height: 2px; overflow: hidden; background: rgba(76,194,255,.14); }
+.progress-bar::after { content: ''; display: block; height: 100%; width: 30%; background: #4cc2ff; animation: indeterminate 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: rgba(255,255,255,.08); }
+  .progress-bar::after { width: 100%; opacity: .45; animation: none; }
+}
+
+/* feedback: toasts slide in, overlay fades in (both disabled under reduced motion by the global rule) */
+@keyframes toast-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.toast-in { animation: toast-in 180ms ease-out; }
+.fade-in { animation: fade-in 160ms ease-out; }
