@@ -44,6 +44,7 @@ interface Props {
   onLoadMore?: () => void;
   headHash?: string | null;
   changeCount: number;
+  stagedCount?: number;
   wipSelected: boolean;
   onSelectWip: () => void;
   navigate?: { hash: string; id: number } | null;
@@ -69,7 +70,7 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number) {
 }
 
 /** Virtualised canvas modelled on GitKraken: BRANCH/TAG | GRAPH | COMMIT MESSAGE. */
-export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '', onSelect, onContextMenu, onDoubleClick, hasMore, loadingMore, onLoadMore, headHash, changeCount, wipSelected, onSelectWip, navigate, onLocateCurrent }: Props) {
+export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '', onSelect, onContextMenu, onDoubleClick, hasMore, loadingMore, onLoadMore, headHash, changeCount, stagedCount = 0, wipSelected, onSelectWip, navigate, onLocateCurrent }: Props) {
   const light = useSettings((s) => s.theme === 'light');
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -152,7 +153,7 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
       ctx.fillStyle = light ? '#536478' : '#9eacbe';
       ctx.fillText('// WIP', msgX, top + ROW_H / 2);
       ctx.fillStyle = light ? '#9b5a00' : '#e3ad62';
-      ctx.fillText(`✎ ${changeCount}`, msgX + 64, top + ROW_H / 2);
+      ctx.fillText(`${changeCount} changed · ${stagedCount} staged`, msgX + 64, top + ROW_H / 2);
     }
 
     // pass 1: row highlight, node→message band, date-group separators
@@ -373,7 +374,7 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
       }
     }
     if (grew) setMsgVer((v) => v + 1);
-  }, [rows, size, scrollTop, selectedHash, selectedHashes, hover, showLines, graphW, msgX, gs, ms, changeCount, wipSelected, wipRows, headIndex, light]);
+  }, [rows, size, scrollTop, selectedHash, selectedHashes, hover, showLines, graphW, msgX, gs, ms, changeCount, stagedCount, wipSelected, wipRows, headIndex, light]);
 
   useEffect(() => {
     const id = requestAnimationFrame(draw);
@@ -446,7 +447,7 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
         }}
       >
         <div style={{ height: totalRows * ROW_H }} />
-        {wipRows > 0 && <button type="button" aria-label={`Local changes, ${changeCount} files`} aria-pressed={wipSelected} onClick={(e) => { e.stopPropagation(); onSelectWip(); }} className="absolute left-0 top-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]" />}
+        {wipRows > 0 && <button type="button" aria-label={`Local changes, ${changeCount} changed files, ${stagedCount} staged`} aria-pressed={wipSelected} onClick={(e) => { e.stopPropagation(); onSelectWip(); }} className="absolute left-0 top-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]" />}
         {maxMsgScroll > 0 && (() => {
           const track = availMsg;
           const thumb = Math.max(36, (track * track) / (track + maxMsgScroll));

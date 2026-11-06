@@ -70,6 +70,7 @@ React component
 - `components/` contains the application surfaces, including the commit graph, repository navigation, working changes, commit details/diffs, stash, merge/conflict tools, AI panel, terminal, and settings.
 - `lib/graphLayout.ts` computes graph lanes independently of the React UI. Other library modules provide shared diff, conflict, ref-tree, and storage behavior.
 - History queries and pagination positions use the same local-branch, remote, tag, and HEAD scope. Agent refs are queried separately by namespace and shown as read-only recovery references in `AgentCheckpoints`, outside the commit graph; classification does not depend on commit-message text.
+- Visible-window polling and focus/visibility events refresh status and compare refs/operation state, reloading history only when those change. Silent reloads preserve the loaded history depth. Both push entry points share post-push fetching and local refresh, with distinct warnings if the fetch fails after a successful push.
 
 ## Development and build
 

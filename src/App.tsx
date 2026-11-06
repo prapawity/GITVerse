@@ -114,10 +114,14 @@ export default function App() {
   useEffect(() => { setWorkingView(true); setWorkingFile(null); setStashView(null); setSelectedHashes([]); }, [repoPath]);
   useEffect(() => {
     if (!repoPath) return;
-    const refresh = () => { if (!document.hidden) void refreshStatus(); };
+    const refresh = () => {
+      const state = useRepo.getState();
+      if (!document.hidden && !state.working && !state.loading && !state.loadingMore) void refreshStatus();
+    };
     window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
     const timer = window.setInterval(refresh, 5000);
-    return () => { window.removeEventListener('focus', refresh); window.clearInterval(timer); };
+    return () => { window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); window.clearInterval(timer); };
   }, [repoPath, refreshStatus]);
   const showWorking = () => { setFile(null); setWorkingFile(null); setSelectedHashes([]); setStashView(null); setWorkingView(true); useRepo.setState({ conflictView: false, conflictFile: null }); void refreshStatus(); };
   const refreshWorking = async () => { await refreshStatus(); setWorkingRevision((v) => v + 1); };
@@ -348,6 +352,7 @@ export default function App() {
                       onLoadMore={loadMore}
                       headHash={headHash}
                       changeCount={status.length}
+                      stagedCount={status.filter((f) => f.index !== ' ' && f.index !== '?' && !['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(f.index + f.worktree)).length}
                       wipSelected={workingView}
                       onSelectWip={showWorking}
                       navigate={navigation}

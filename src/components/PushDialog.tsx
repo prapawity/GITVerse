@@ -36,7 +36,7 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
     setPushing(true); setError('');
     try {
       await api().pushProfiles.push(repo, remote, info.branch, target.trim(), profile, authNeeded ? { username: login.trim(), password } : undefined);
-      if (useRepo.getState().repoPath === repo) await useRepo.getState().refresh();
+      await useRepo.getState().syncAfterPush(repo);
       setPassword('');
       useRepo.getState().notify('success', `Pushed ${info.branch} to ${remote}/${target.trim()}`);
       onClose();

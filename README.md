@@ -19,6 +19,8 @@ Dropping folders searches for repositories without a folder-count or depth limit
 
 The commit graph follows local branches, remotes, tags, and HEAD. Agent recovery refs under `refs/agents/` appear in a separate, collapsible **Agent checkpoints** panel, not as actionable branch commits. They are still Git objects used by the coding agent for recovery; GITVerse does not delete them. Normal branch pushes do not publish those refs.
 
+While the app is visible, repository status, refs, and operation state are checked every five seconds and when returning to the app. Changes made in a terminal or another Git client reload history with a notification. In-app pushes fetch remote refs afterward; a failed follow-up fetch is reported separately from a successful push. The WIP row shows changed and staged file counts; committing consumes staged changes, creates a history entry, and leaves any remaining changes in WIP.
+
 ## Download
 
 Download a package for your operating system from [GitHub Releases](https://github.com/prapawity/GITVerse/releases). Packages will appear after the first release is published.

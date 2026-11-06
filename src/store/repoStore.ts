@@ -63,6 +63,7 @@ interface RepoState {
   openRepo: (path?: string) => Promise<void>;
   refresh: (silent?: boolean) => Promise<void>;
   refreshStatus: () => Promise<void>;
+  syncAfterPush: (cwd: string) => Promise<void>;
   autoFetch: () => Promise<void>;
   select: (hash: string | null) => void;
   setSearch: (q: string) => void;
@@ -77,6 +78,8 @@ type Meta = { blocking?: boolean; fail?: string; done?: string | (() => string |
 
 export const useRepo = create<RepoState>((set, get) => {
   let toastSeq = 0;
+  let checkingStatus = false;
+  let statusErrorReported = false;
   // Electron prefixes IPC failures with "Error invoking remote method 'x': Error: " — noise for the user
   const clean = (m: unknown) => String(m).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
 
@@ -239,9 +242,11 @@ export const useRepo = create<RepoState>((set, get) => {
       const before = get().operation;
       return guard(async () => {
         set({ busy: name });
+        const cwd = get().repoPath;
         try {
-          stopped = await attempt(() => (name === 'fetch' ? api().fetch(get().repoPath, useSettings.getState().autoPrune) : api()[name](get().repoPath)));
-          await get().refresh();
+          stopped = await attempt(() => (name === 'fetch' ? api().fetch(cwd, useSettings.getState().autoPrune) : api()[name](cwd)));
+          if (name === 'push' && cwd) await get().syncAfterPush(cwd);
+          else if (get().repoPath === cwd) await get().refresh();
         } finally {
           set({ busy: null });
         }
@@ -281,11 +286,36 @@ export const useRepo = create<RepoState>((set, get) => {
 
     refreshStatus: async () => {
       const cwd = get().repoPath;
-      if (!cwd) return;
+      if (!cwd || checkingStatus) return;
+      checkingStatus = true;
+      const before = get();
       try {
-        const status = await api().status(cwd);
-        if (get().repoPath === cwd) { set({ status }); await get().refreshIndexHistory(); }
-      } catch { /* the next refresh reports repository errors */ }
+        const [status, refs, operation] = await Promise.all([api().status(cwd), api().refs(cwd), api().opState(cwd)]);
+        if (get().repoPath !== cwd || get().commits !== before.commits) return;
+        const historyChanged = JSON.stringify(refs) !== JSON.stringify(before.refs) || JSON.stringify(operation) !== JSON.stringify(before.operation);
+        set({ status });
+        if (historyChanged) {
+          await get().refresh(true);
+          if (get().repoPath === cwd && JSON.stringify(get().refs) === JSON.stringify(refs)) {
+            get().notify('info', 'Repository changed outside GITVerse', 'Reloaded history, branch references and working changes.');
+          }
+        } else await get().refreshIndexHistory();
+        statusErrorReported = false;
+      } catch (error) {
+        if (get().repoPath === cwd && !statusErrorReported) {
+          get().notify('warning', 'Could not refresh repository', clean(error instanceof Error ? error.message : error));
+          statusErrorReported = true;
+        }
+      } finally { checkingStatus = false; }
+    },
+
+    syncAfterPush: async (cwd) => {
+      try {
+        await api().fetch(cwd, useSettings.getState().autoPrune);
+      } catch (error) {
+        get().notify('warning', 'Push succeeded, but fetching remote updates failed', clean(error instanceof Error ? error.message : error));
+      }
+      if (get().repoPath === cwd) await get().refresh(true);
     },
 
     // background fetch: never shows a spinner or an error banner (being offline is normal)
@@ -304,13 +334,14 @@ export const useRepo = create<RepoState>((set, get) => {
         if (!cwd) return;
         if (!silent) set({ loading: true });
         try {
-          const [commits, status, refs, operation] = await Promise.all([api().log(cwd, pageSize(), 0), api().status(cwd), api().refs(cwd), api().opState(cwd)]);
+          const limit = Math.max(pageSize(), silent ? get().commits.length : 0);
+          const [commits, status, refs, operation] = await Promise.all([api().log(cwd, limit, 0), api().status(cwd), api().refs(cwd), api().opState(cwd)]);
           if (get().repoPath !== cwd) return; // switched repos while waiting
           const was = get().operation;
           // entering a conflicted state brings the conflict workflow forward; leaving it tidies up
           const extra = operation && !was ? { conflictView: true } : !operation ? { conflictView: false, conflictFile: null } : {};
           if (operation && get().conflictFile && !operation.files.includes(get().conflictFile!)) Object.assign(extra, { conflictFile: null });
-          set({ ...extra, commits, status, refs, operation, graph: layoutGraph(commits), hasMore: moreAvailable(commits.length), loadingMore: false });
+          set({ ...extra, commits, status, refs, operation, graph: layoutGraph(commits), hasMore: useSettings.getState().lazyLoad && !useSettings.getState().showAll && commits.length === limit, loadingMore: false });
           await get().refreshIndexHistory();
         } finally {
           set({ loading: false });
