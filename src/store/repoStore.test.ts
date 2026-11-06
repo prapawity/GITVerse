@@ -45,6 +45,7 @@ beforeEach(() => {
     repoPath: '/repo',
     commits: [commit('old')],
     status: [],
+    commitDrafts: {},
     refs: refs('old'),
     operation: null,
     working: null,
@@ -52,6 +53,62 @@ beforeEach(() => {
     toasts: [],
     activity: [],
   });
+});
+
+test('amend prefills the HEAD summary and multiline description while retaining signoff', async () => {
+  useRepo.getState().setCommitDraft('/repo', { summary: '', description: '', amend: false, signoff: true });
+  backend.commitDetail = async (repo, hash) => {
+    assert.equal(repo, '/repo');
+    assert.equal(hash, 'HEAD');
+    return { body: 'Previous summary\r\n\r\nFirst paragraph\r\n\r\nSecond paragraph' };
+  };
+  await useRepo.getState().prefillAmendDraft('/repo');
+  assert.deepEqual(useRepo.getState().commitDrafts['/repo'], {
+    summary: 'Previous summary',
+    description: 'First paragraph\n\nSecond paragraph',
+    amend: true,
+    signoff: true,
+  });
+});
+
+test('amend prefills a summary-only commit without a description', async () => {
+  backend.commitDetail = async () => ({ body: 'Summary only' });
+  await useRepo.getState().prefillAmendDraft('/repo');
+  assert.deepEqual(useRepo.getState().commitDrafts['/repo'], {
+    summary: 'Summary only',
+    description: '',
+    amend: true,
+    signoff: false,
+  });
+});
+
+test('amend discards responses when the repository, draft, or HEAD changes during loading', async () => {
+  for (const change of [
+    () => useRepo.setState({ repoPath: '/other' }),
+    () =>
+      useRepo
+        .getState()
+        .setCommitDraft('/repo', { summary: 'New draft', description: '', amend: false, signoff: false }),
+    () => useRepo.setState({ refs: refs('new') }),
+  ]) {
+    useRepo.setState({ repoPath: '/repo', commitDrafts: {}, refs: refs('old') });
+    backend.commitDetail = async () => {
+      change();
+      return { body: 'Previous summary\n\nPrevious description' };
+    };
+    await useRepo.getState().prefillAmendDraft('/repo');
+    assert.notEqual(useRepo.getState().commitDrafts['/repo']?.summary, 'Previous summary');
+  }
+});
+
+test('amend preserves the draft and remains off if reading HEAD fails', async () => {
+  const draft = { summary: 'Draft', description: '', amend: false, signoff: false };
+  useRepo.getState().setCommitDraft('/repo', draft);
+  backend.commitDetail = async () => {
+    throw new Error('HEAD does not exist');
+  };
+  await assert.rejects(useRepo.getState().prefillAmendDraft('/repo'), /HEAD does not exist/);
+  assert.equal(useRepo.getState().commitDrafts['/repo'], draft);
 });
 
 test('external commits refresh history, references and staged changes with feedback', async () => {

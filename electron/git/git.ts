@@ -174,7 +174,8 @@ export async function commit(
   description = '',
   opts: { amend?: boolean; signoff?: boolean; gpgSign?: boolean } = {},
 ) {
-  const args = ['commit', '-m', summary];
+  const args =
+    opts.amend && !summary.trim() && !description.trim() ? ['commit', '--no-edit'] : ['commit', '-m', summary];
   if (description.trim()) args.push('-m', description);
   if (opts.amend) args.push('--amend');
   if (opts.signoff) args.push('--signoff');
@@ -478,11 +479,20 @@ export async function pushInfo(cwd: string) {
   const remotes = (await git(cwd, ['remote'])).split('\n').filter(Boolean);
   const remote = branch ? (await git(cwd, ['config', '--get', `branch.${branch}.remote`]).catch(() => '')).trim() : '';
   const merge = branch ? (await git(cwd, ['config', '--get', `branch.${branch}.merge`]).catch(() => '')).trim() : '';
+  const selectedRemote = remote || (remotes.includes('origin') ? 'origin' : (remotes[0] ?? ''));
+  const target = merge.startsWith('refs/heads/') ? merge.slice(11) : branch;
+  const remoteHash =
+    selectedRemote && target
+      ? (
+          await git(cwd, ['rev-parse', '--verify', `refs/remotes/${selectedRemote}/${target}`]).catch(() => '')
+        ).trim() || null
+      : null;
   return {
     branch,
     remotes,
-    remote: remote || (remotes.includes('origin') ? 'origin' : (remotes[0] ?? '')),
-    target: merge.startsWith('refs/heads/') ? merge.slice(11) : branch,
+    remote: selectedRemote,
+    target,
+    remoteHash,
   };
 }
 
@@ -492,13 +502,20 @@ export async function pushBranch(
   branch: string,
   target: string,
   auth?: { kind: 'system' | 'ssh' | 'https'; username?: string; sshKey?: string; token?: string },
+  options?: { forceWithLease?: boolean; expectedRemoteHash?: string },
 ) {
   const info = await pushInfo(cwd);
   if (!branch || info.branch !== branch) throw new Error('The current branch changed. Reopen the push dialog.');
   if (!info.remotes.includes(remote)) throw new Error('The selected remote no longer exists.');
   await git(cwd, ['check-ref-format', '--branch', target]);
   const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' };
-  const args = ['push', '--set-upstream', '--', remote, `refs/heads/${branch}:refs/heads/${target}`];
+  const args = ['push', '--set-upstream'];
+  if (options?.forceWithLease) {
+    if (!options.expectedRemoteHash || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(options.expectedRemoteHash))
+      throw new Error('Fetch the remote branch and reopen the push dialog before force pushing.');
+    args.push(`--force-with-lease=refs/heads/${target}:${options.expectedRemoteHash}`);
+  }
+  args.push('--', remote, `refs/heads/${branch}:refs/heads/${target}`);
   if (auth?.kind === 'ssh') {
     if (!auth.sshKey || /[\r\n\0]/.test(auth.sshKey)) throw new Error('Choose a valid SSH private key.');
     const url = (await git(cwd, ['remote', 'get-url', '--push', remote])).trim();

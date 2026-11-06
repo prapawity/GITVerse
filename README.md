@@ -21,6 +21,10 @@ The commit graph follows local branches, remotes, tags, and HEAD. Agent recovery
 
 While the app is visible, repository status, refs, and operation state are checked every five seconds and when returning to the app. Changes made in a terminal or another Git client reload history with a notification. In-app pushes fetch remote refs afterward; a failed follow-up fetch is reported separately from a successful push. The WIP row shows changed and staged file counts; committing consumes staged changes, creates a history entry, and leaves any remaining changes in WIP.
 
+Select **Amend previous commit** to update the latest commit instead of creating a new one. Its summary and description immediately replace the current draft with the latest commit message for editing, without a confirmation dialog. Leave both message fields blank to keep its existing summary and description, or enter a summary and optional description to replace the message. Amend can run without staged files. It rewrites the commit; if already pushed, updating the remote may require a force push.
+
+The Push dialog offers **Force push (--force-with-lease)** for intentionally rewritten history, with a separate confirmation before sending. A non-fast-forward rejection also shows this option instead of retrying automatically. The lease uses the remote-tracking hash captured when the dialog opened: if the remote changes, the push is rejected, even if a background fetch updates local refs. If the remote hash is unavailable or the lease is stale, fetch and review the remote branch, then reopen the dialog. Force push may remove remote-only commits; server-side branch protections still apply.
+
 ## Download
 
 Download a package for your operating system from [GitHub Releases](https://github.com/prapawity/GITVerse/releases). Packages will appear after the first release is published.

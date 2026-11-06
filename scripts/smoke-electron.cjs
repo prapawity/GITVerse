@@ -30,9 +30,11 @@ if (!process.versions.electron) {
         'gitverse.tabs': JSON.stringify({ repos: [repo], active: repo }),
       }),
     );
+    const env = { ...process.env, GITVERSE_SMOKE_DIR: dir };
+    delete env.ELECTRON_RUN_AS_NODE;
     for (let run = 0; run < 2; run++) {
       const result = spawnSync(require('electron'), [__filename], {
-        env: { ...process.env, GITVERSE_SMOKE_DIR: dir, ELECTRON_RUN_AS_NODE: '' },
+        env,
         stdio: 'inherit',
         timeout: 60000,
       });

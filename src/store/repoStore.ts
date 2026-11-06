@@ -25,6 +25,7 @@ interface RepoState {
     repo: string,
     draft: { summary: string; description: string; amend: boolean; signoff: boolean } | null,
   ) => void;
+  prefillAmendDraft: (repo: string) => Promise<void>;
   selectedHash: string | null;
   search: string;
   error: string | null;
@@ -229,6 +230,21 @@ export const useRepo = create<RepoState>((set, get) => {
         else delete commitDrafts[repo];
         return { commitDrafts };
       }),
+    prefillAmendDraft: async (repo) => {
+      if (get().repoPath !== repo) return;
+      const original = get().commitDrafts[repo];
+      const head = get().refs.headHash;
+      const detail: { body: string } = await api().commitDetail(repo, 'HEAD');
+      const latest = get();
+      if (latest.repoPath !== repo || latest.commitDrafts[repo] !== original || latest.refs.headHash !== head) return;
+      const [summary, ...description] = detail.body.split(/\r?\n/);
+      get().setCommitDraft(repo, {
+        summary,
+        description: description.join('\n').trim(),
+        amend: true,
+        signoff: original?.signoff ?? false,
+      });
+    },
     selectedHash: null,
     search: '',
     error: null,

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { AlertTriangle, Loader2, Upload } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { useSettings } from '../store/settingsStore';
+import { askConfirm } from './Dialogs';
 
 const api = () => (window as any).gitApi;
 const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]';
-type Info = { branch: string; remotes: string[]; remote: string; target: string };
+type Info = { branch: string; remotes: string[]; remote: string; target: string; remoteHash: string | null };
 
 export function PushDialog({ repo, onClose }: { repo: string; onClose: () => void }) {
   const [info, setInfo] = useState<Info | null>(null);
@@ -13,6 +15,8 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
   const [authNeeded, setAuthNeeded] = useState(false);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [forcePush, setForcePush] = useState(false);
+  const [rejected, setRejected] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -41,12 +45,22 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
   const canPush = !!info?.branch && !!target && info.remotes.includes(remote);
 
   const push = async () => {
-    if (!canPush || !info || pushing || (authNeeded && (!login.trim() || !password))) return;
+    if (!canPush || !info || pushing || (forcePush && !info.remoteHash) || (authNeeded && (!login.trim() || !password)))
+      return;
     const settings = useSettings.getState();
     const profile = settings.pushProfiles?.[repo]?.find((p) => p.id === settings.selectedPushProfiles?.[repo]);
     setPushing(true);
     setError('');
     try {
+      if (
+        forcePush &&
+        !(await askConfirm(
+          'Force push branch?',
+          `Replace the history of ${remote}/${target.trim()} with ${info.branch}? Remote-only commits may be lost. The push will be rejected if the remote branch changed since this dialog opened.`,
+          { label: 'Force push', danger: true },
+        ))
+      )
+        return;
       await api().pushProfiles.push(
         repo,
         remote,
@@ -54,14 +68,25 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
         target.trim(),
         profile,
         authNeeded ? { username: login.trim(), password } : undefined,
+        forcePush ? { forceWithLease: true, expectedRemoteHash: info.remoteHash } : undefined,
       );
       await useRepo.getState().syncAfterPush(repo);
       setPassword('');
-      useRepo.getState().notify('success', `Pushed ${info.branch} to ${remote}/${target.trim()}`);
+      useRepo
+        .getState()
+        .notify('success', `${forcePush ? 'Force pushed' : 'Pushed'} ${info.branch} to ${remote}/${target.trim()}`);
       onClose();
     } catch (e: any) {
       const message = String(e?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
-      setError(message);
+      const nonFastForward = /non-fast-forward|\(fetch first\)/i.test(message);
+      if (nonFastForward) setRejected(true);
+      setError(
+        nonFastForward
+          ? 'The remote history differs from this branch. Pull to integrate remote commits, or force push if you intentionally rewrote history.'
+          : /stale info/i.test(message)
+            ? 'The remote branch changed. Nothing was overwritten. Fetch and review the remote commits, then reopen this dialog.'
+            : message,
+      );
       useRepo.getState().recordActivity('error', 'Push failed', message, repo);
       if (
         /authentication failed|http basic: access denied|could not read (username|password)|invalid (username|password|credentials)|\b401\b/i.test(
@@ -87,7 +112,7 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
         aria-modal="true"
         aria-labelledby="push-title"
         onMouseDown={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-[560px] overflow-auto rounded-xl border border-surface bg-mantle p-5 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-[560px] overflow-auto rounded-lg border border-surface bg-mantle p-5 shadow-2xl"
       >
         <h2 id="push-title" className="text-lg font-semibold">
           Push branch
@@ -118,6 +143,33 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
               <p className="text-sm text-[#f9e2af]">
                 The configured upstream remote “{remote}” is unavailable. Update the branch's upstream in Git first.
               </p>
+            )}
+            {canPush && (
+              <div
+                className={`space-y-2 border-t pt-3 ${rejected || forcePush ? 'border-[#f9e2af]/40' : 'border-surface'}`}
+              >
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={forcePush}
+                    disabled={pushing || !info.remoteHash}
+                    onChange={(e) => setForcePush(e.target.checked)}
+                    className="accent-[#f38ba8]"
+                  />
+                  Force push (--force-with-lease)
+                </label>
+                {(forcePush || rejected) && (
+                  <p className="flex items-start gap-2 text-sm text-[#f9e2af]">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
+                    Replaces remote history and may remove remote-only commits. Confirmation is required.
+                  </p>
+                )}
+                {!info.remoteHash && (
+                  <p className="text-xs text-sub">
+                    Fetch the remote branch and reopen this dialog to enable force push.
+                  </p>
+                )}
+              </div>
             )}
             {authNeeded && (
               <div className="space-y-3 rounded-lg border border-[#f9e2af]/40 bg-[#f9e2af]/5 p-3">
@@ -161,10 +213,13 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
           </button>
           <button
             onClick={push}
-            disabled={!canPush || pushing || (authNeeded && (!login.trim() || !password))}
-            className="rounded-md bg-[#4cc2ff] px-4 py-2 font-medium text-crust disabled:opacity-40"
+            disabled={
+              !canPush || pushing || (forcePush && !info?.remoteHash) || (authNeeded && (!login.trim() || !password))
+            }
+            className={`flex items-center gap-2 rounded-md px-4 py-2 font-medium text-crust disabled:opacity-40 ${forcePush ? 'bg-[#f38ba8]' : 'bg-[#4cc2ff]'}`}
           >
-            {pushing ? 'Pushing…' : authNeeded ? 'Retry push' : 'Push'}
+            {pushing ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Upload size={16} aria-hidden />}
+            {pushing ? 'Pushing…' : forcePush ? 'Force push' : authNeeded ? 'Retry push' : 'Push'}
           </button>
         </div>
       </section>

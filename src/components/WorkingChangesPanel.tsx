@@ -41,7 +41,26 @@ export function WorkingChangesPanel({
   const staged = status.filter((f) => !isConflict(f) && f.index !== ' ' && f.index !== '?');
   const unstaged = status.filter((f) => !isConflict(f) && (f.worktree !== ' ' || f.index === '?'));
   const busy = pending || generating || !!working;
+  const missingSummary = !summary.trim() && (!amend || !!description.trim());
   const current = refs.local.find((b) => b.current)?.name ?? 'detached HEAD';
+
+  const changeAmend = async (enabled: boolean) => {
+    if (!repoPath || busy) return;
+    if (!enabled) {
+      updateDraft({ amend: false });
+      return;
+    }
+    const cwd = repoPath;
+    setPending(true);
+    setError('');
+    try {
+      await useRepo.getState().prefillAmendDraft(cwd);
+    } catch (e) {
+      if (useRepo.getState().repoPath === cwd) setError(clean(e));
+    } finally {
+      setPending(false);
+    }
+  };
 
   const changeStage = async (action: 'stage' | 'unstage', files: FileStatus[]) => {
     if (!repoPath || !files.length || busy) return;
@@ -120,7 +139,7 @@ export function WorkingChangesPanel({
   };
 
   const submit = async () => {
-    if (!repoPath || !summary.trim() || busy || conflict.length || operation || (!staged.length && !amend)) return;
+    if (!repoPath || missingSummary || busy || conflict.length || operation || (!staged.length && !amend)) return;
     if (
       amend &&
       !(await askConfirm(
@@ -259,7 +278,7 @@ export function WorkingChangesPanel({
             type="checkbox"
             checked={amend}
             disabled={busy}
-            onChange={(e) => updateDraft({ amend: e.target.checked })}
+            onChange={(e) => void changeAmend(e.target.checked)}
             className="accent-[#4cc2ff]"
           />{' '}
           Amend previous commit
@@ -286,7 +305,7 @@ export function WorkingChangesPanel({
             value={summary}
             disabled={busy}
             onChange={(e) => updateDraft({ summary: e.target.value })}
-            placeholder="Commit summary"
+            placeholder={amend ? 'Commit summary (optional)' : 'Commit summary'}
             className="w-full rounded-md border border-surface bg-crust px-3 py-2 pr-12 outline-none focus:border-[#4cc2ff]"
           />
           <span className="absolute right-3 top-2.5 text-xs text-sub" title="Recommended summary length">
@@ -329,7 +348,7 @@ export function WorkingChangesPanel({
         </div>
         <button
           type="submit"
-          disabled={busy || !summary.trim() || !!operation || conflict.length > 0 || (!staged.length && !amend)}
+          disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}
           className="min-h-[40px] w-full rounded-md border border-[#a6e3a1]/60 bg-[#a6e3a1]/15 px-3 py-2 font-medium text-[#a6e3a1] hover:bg-[#a6e3a1]/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
         >
           {generating

@@ -88,7 +88,8 @@ gitApi.moveIndexHistory = (...a) => ipcRenderer.invoke('git:moveIndexHistory', .
     target: string,
     profile?: unknown,
     credentials?: { username: string; password: string },
-  ) => ipcRenderer.invoke('push:branch', repo, remote, branch, target, profile, credentials),
+    options?: { forceWithLease?: boolean; expectedRemoteHash?: string },
+  ) => ipcRenderer.invoke('push:branch', repo, remote, branch, target, profile, credentials, options),
 };
 
 // terminal: data arrives as events, so expose subscribe helpers that return an unsubscribe function

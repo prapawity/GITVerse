@@ -73,6 +73,7 @@ React component
 - `lib/graphLayout.ts` computes graph lanes independently of the React UI. Other library modules provide shared diff, conflict, ref-tree, and storage behavior.
 - History queries and pagination positions use the same local-branch, remote, tag, and HEAD scope. Agent refs are queried separately by namespace and shown as read-only recovery references in `AgentCheckpoints`, outside the commit graph; classification does not depend on commit-message text.
 - Visible-window polling and focus/visibility events refresh status and compare refs/operation state, reloading history only when those change. Silent reloads preserve the loaded history depth. Both push entry points share post-push fetching and local refresh, with distinct warnings if the fetch fails after a successful push.
+- The Push dialog keeps normal push as the default and requires separate confirmation for force push. `pushInfo` snapshots the target's remote-tracking hash; preload and main forward this fixed lease to `pushBranch`, which validates the hash and supplies `--force-with-lease=refs/heads/<target>:<hash>`. Background fetches cannot silently advance the confirmed lease. A missing hash requires fetching and reopening the dialog.
 
 ## Development and build
 

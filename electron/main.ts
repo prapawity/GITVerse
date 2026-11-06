@@ -160,6 +160,7 @@ ipcMain.handle(
     target: string,
     profile?: { id: string; kind: 'system' | 'ssh' | 'https'; username: string; sshKey: string },
     credentials?: { username: string; password: string },
+    options?: { forceWithLease?: boolean; expectedRemoteHash?: string },
   ) =>
     git.pushBranch(
       repo,
@@ -172,6 +173,7 @@ ipcMain.handle(
             ...profile,
             token: profile.kind === 'https' ? (readSecret(pushTokenKey(repo, profile.id)) ?? undefined) : undefined,
           },
+      options,
     ),
 );
 
