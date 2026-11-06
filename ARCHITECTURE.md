@@ -39,7 +39,8 @@ preview/               Browser preview with mock data and its own Vite setup
 scripts/               Electron branding helper
 release/               Packaged application artifacts
 dist/                  Renderer build output
-dist-electron/         Electron main/preload build output
+dist-electron/main/    Electron main build output
+dist-electron/preload/ Electron preload build output
 ```
 
 ## Runtime and data flow
@@ -56,6 +57,7 @@ React component
 
 - **Git and repository operations:** `electron/main.ts` registers Git IPC handlers that call `electron/git/git.ts`. The Git wrapper runs the system Git CLI from the main process; the renderer does not execute shell commands directly. Long-running changes are surfaced through store progress state, notifications, and conflict state.
 - **Preload boundary:** `electron/preload.ts` exposes the `gitApi` methods and event subscriptions via `contextBridge`. The renderer communicates through this API rather than importing Electron or Node APIs.
+- **Startup:** In Electron, the renderer refuses to mount the app if the preload storage bridge is missing, displaying recovery instructions without overwriting remembered repositories.
 - **AI:** Provider integrations live in `electron/ai/`. The main process handles provider requests and credentials; the renderer maintains the conversation and coordinates tool calls with the repository store, where user-facing approval and Git actions belong.
 - **Terminal:** `electron/terminal.ts` manages terminal processes. It prefers `node-pty`, with platform-specific fallbacks when the native module is unavailable. Terminal data and lifecycle events cross IPC.
 - **Persistence:** Zustand settings and remembered repository tabs use `src/lib/storage.ts`. In Electron, storage is bridged to a JSON key/value file in the app's user-data directory; browser preview can fall back to `localStorage`.
@@ -74,8 +76,12 @@ React component
 
 ## Development and build
 
+- ESLint uses `eslint.config.mjs` for JavaScript/TypeScript and React hook-ordering checks; Prettier and EditorConfig define formatting. CI runs lint and format checks alongside tests/builds.
+- `npm run security:audit` is a separate CI gate for high/critical dependency advisories. Dependabot targets `develop` with weekly npm and Actions updates.
+
 - `npm run dev` starts the Vite/Electron development workflow.
 - `npm run build` runs the TypeScript check and Vite production build.
-- `npm test` runs release-check and repository-discovery regression tests, including traversal beyond 5,000 folders and five levels.
+- `npm test` runs release-check, repository-discovery, history, and repository-store regression tests, including traversal beyond 5,000 folders and five levels, agent checkpoint separation, and post-push graph synchronization.
+- `npm run test:electron` builds and launches the real desktop app with a disposable repository and isolated user data. It verifies bridge APIs, folder-dialog IPC, remembered tabs across reload/restart, and missing-bridge feedback. CI runs the smoke script after its existing build.
 - `npm run dist` builds host-platform installers using `electron-builder.yml`; GitHub Actions builds all configured targets and creates a draft release. See [RELEASING.md](./RELEASING.md).
-- `vite.config.ts` configures the React and Electron plugins with relative renderer asset URLs for packaged `file://` loading; Electron main and preload bundles are emitted separately from the renderer.
+- `vite.config.ts` configures relative renderer asset URLs for packaged `file://` loading. Main and preload builds clean only their own output directories, avoiding concurrent development builds deleting each other's files. The package entry is `dist-electron/main/main.js`.

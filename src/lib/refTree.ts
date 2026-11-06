@@ -1,5 +1,8 @@
 /** Build a folder tree from slash-separated ref names ("origin/feature/x" -> origin > feature > x). */
-export interface RefLeaf { full: string; current?: boolean }
+export interface RefLeaf {
+  full: string;
+  current?: boolean;
+}
 export interface TreeNode {
   name: string; // this segment
   path: string; // segments up to and including this one, joined with "/"
@@ -32,10 +35,20 @@ export function buildTree(items: RefLeaf[]): TreeNode[] {
   return root.children;
 }
 
-export interface Row { node: TreeNode; depth: number; isFolder: boolean }
+export interface Row {
+  node: TreeNode;
+  depth: number;
+  isFolder: boolean;
+}
 
 /** Flatten to the rows that are currently visible. `forceOpen` expands everything (used while filtering). */
-export function visibleRows(nodes: TreeNode[], isOpen: (path: string) => boolean, forceOpen = false, depth = 0, out: Row[] = []): Row[] {
+export function visibleRows(
+  nodes: TreeNode[],
+  isOpen: (path: string) => boolean,
+  forceOpen = false,
+  depth = 0,
+  out: Row[] = [],
+): Row[] {
   for (const node of nodes) {
     const isFolder = node.children.length > 0;
     out.push({ node, depth, isFolder });

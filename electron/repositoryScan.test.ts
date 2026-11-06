@@ -15,8 +15,9 @@ test('finds repositories beyond five levels and 5,000 folders', async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'gitverse-scan-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (let start = 0; start < 5005; start += 100) {
-    await Promise.all(Array.from({ length: Math.min(100, 5005 - start) }, (_, i) =>
-      mkdir(path.join(root, `folder-${start + i}`))));
+    await Promise.all(
+      Array.from({ length: Math.min(100, 5005 - start) }, (_, i) => mkdir(path.join(root, `folder-${start + i}`))),
+    );
   }
   const deep = path.join(root, 'folder-0', ...Array.from({ length: 8 }, (_, i) => `level-${i}`));
   await mkdir(deep, { recursive: true });
@@ -35,7 +36,19 @@ test('skips hidden/dependency folders, finds worktrees and reports invalid repos
   t.after(() => rm(root, { recursive: true, force: true }));
   const repo = path.join(root, 'repo');
   await run('git', ['init', '--quiet', repo]);
-  await run('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '--no-gpg-sign', '-m', 'Initial']);
+  await run('git', [
+    '-C',
+    repo,
+    '-c',
+    'user.name=Test',
+    '-c',
+    'user.email=test@example.com',
+    'commit',
+    '--allow-empty',
+    '--no-gpg-sign',
+    '-m',
+    'Initial',
+  ]);
   const worktree = path.join(root, 'worktree');
   await run('git', ['-C', repo, 'worktree', 'add', '--quiet', '--detach', worktree]);
   for (const name of ['.hidden', 'node_modules', 'vendor', 'dist', 'build']) {

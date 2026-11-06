@@ -5,16 +5,37 @@ import { useRepo } from '../store/repoStore';
 
 const NAME = { rebase: 'Rebase', merge: 'Merge', 'cherry-pick': 'Cherry-pick', revert: 'Revert' } as const;
 const Chip = ({ children, tone }: { children: React.ReactNode; tone: 'branch' | 'commit' }) => (
-  <span className={`rounded px-1.5 py-0.5 font-medium ${tone === 'branch' ? 'bg-[#a855f7]/30 text-[#e9d5ff]' : 'bg-[#2dd4bf]/25 text-[#ccfbf1]'}`}>{children}</span>
+  <span
+    className={`rounded px-1.5 py-0.5 font-medium ${tone === 'branch' ? 'bg-[#a855f7]/30 text-[#e9d5ff]' : 'bg-[#2dd4bf]/25 text-[#ccfbf1]'}`}
+  >
+    {children}
+  </span>
 );
-const split = (p: string) => { const i = p.lastIndexOf('/'); return [p.slice(0, i + 1), p.slice(i + 1)]; };
+const split = (p: string) => {
+  const i = p.lastIndexOf('/');
+  return [p.slice(0, i + 1), p.slice(i + 1)];
+};
 
-function Section({ title, count, action, children }: { title: string; count: number; action?: React.ReactNode; children: React.ReactNode }) {
+function Section({
+  title,
+  count,
+  action,
+  children,
+}: {
+  title: string;
+  count: number;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <div className="border-b border-surface/60">
       <div className="flex items-center gap-2 px-4 py-2">
-        <button aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-h-[32px] flex-1 items-center gap-1.5 text-left text-[15px]">
+        <button
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="flex min-h-[32px] flex-1 items-center gap-1.5 text-left text-[15px]"
+        >
           {open ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />} {title} ({count})
         </button>
         {action}
@@ -37,21 +58,52 @@ export function ConflictPanel() {
   const original = op.message;
 
   const headline =
-    op.kind === 'rebase' ? <>Rebasing <Chip tone="branch">{op.head}</Chip> onto <Chip tone="commit">{op.onto}</Chip></> :
-    op.kind === 'merge' ? <>Merging <Chip tone="commit">{op.onto}</Chip> into <Chip tone="branch">{op.head}</Chip></> :
-    op.kind === 'cherry-pick' ? <>Cherry-picking <Chip tone="commit">{op.onto}</Chip> onto <Chip tone="branch">{op.head}</Chip></> :
-    <>Reverting <Chip tone="commit">{op.onto}</Chip> on <Chip tone="branch">{op.head}</Chip></>;
+    op.kind === 'rebase' ? (
+      <>
+        Rebasing <Chip tone="branch">{op.head}</Chip> onto <Chip tone="commit">{op.onto}</Chip>
+      </>
+    ) : op.kind === 'merge' ? (
+      <>
+        Merging <Chip tone="commit">{op.onto}</Chip> into <Chip tone="branch">{op.head}</Chip>
+      </>
+    ) : op.kind === 'cherry-pick' ? (
+      <>
+        Cherry-picking <Chip tone="commit">{op.onto}</Chip> onto <Chip tone="branch">{op.head}</Chip>
+      </>
+    ) : (
+      <>
+        Reverting <Chip tone="commit">{op.onto}</Chip> on <Chip tone="branch">{op.head}</Chip>
+      </>
+    );
 
   const markAll = () => op.files.forEach((f) => exec('resolveFile', f, 'mark'));
   const abort = async () => {
-    if (await askConfirm(`Abort ${name.toLowerCase()}`, `Stop the ${name.toLowerCase()} and put ${op.head} back exactly as it was before it started. Any conflict resolutions made so far are discarded.`, { label: `Abort ${name}`, danger: true }))
+    if (
+      await askConfirm(
+        `Abort ${name.toLowerCase()}`,
+        `Stop the ${name.toLowerCase()} and put ${op.head} back exactly as it was before it started. Any conflict resolutions made so far are discarded.`,
+        { label: `Abort ${name}`, danger: true },
+      )
+    )
       exec('opAbort', op.kind);
   };
   const skip = async () => {
-    if (await askConfirm('Skip this commit', 'Drop the commit that is being applied and move on to the next one.', { label: 'Skip commit' })) exec('opSkip', op.kind);
+    if (
+      await askConfirm('Skip this commit', 'Drop the commit that is being applied and move on to the next one.', {
+        label: 'Skip commit',
+      })
+    )
+      exec('opSkip', op.kind);
   };
-  const cont = () => exec('opContinue', op.kind, message.trim() && message.trim() !== original ? message.trim() : undefined);
-  const openExternal = async (f: string) => { try { await (window as any).gitApi.openFile(repoPath, f); } catch (e: any) { toast(e.message); } };
+  const cont = () =>
+    exec('opContinue', op.kind, message.trim() && message.trim() !== original ? message.trim() : undefined);
+  const openExternal = async (f: string) => {
+    try {
+      await (window as any).gitApi.openFile(repoPath, f);
+    } catch (e: any) {
+      toast(e.message);
+    }
+  };
 
   return (
     <section aria-label={`${name} conflicts`} className="flex h-full flex-col overflow-hidden">
@@ -68,18 +120,47 @@ export function ConflictPanel() {
         <Section
           title="Conflicted Files"
           count={left}
-          action={left > 0 && <button onClick={markAll} disabled={busy} title="Stage every conflicted file as it is now" className="min-h-[30px] rounded border border-[#f5a623]/70 px-2.5 text-[13px] text-[#f5c26b] hover:bg-[#f5a623]/15 disabled:opacity-40">Mark All Resolved</button>}
+          action={
+            left > 0 && (
+              <button
+                onClick={markAll}
+                disabled={busy}
+                title="Stage every conflicted file as it is now"
+                className="min-h-[30px] rounded border border-[#f5a623]/70 px-2.5 text-[13px] text-[#f5c26b] hover:bg-[#f5a623]/15 disabled:opacity-40"
+              >
+                Mark All Resolved
+              </button>
+            )
+          }
         >
           {!left && <div className="px-6 py-1 text-[13px] text-sub">No conflicts left.</div>}
           {op.files.map((f) => {
             const [dir, base] = split(f);
             return (
-              <div key={f} className={`group flex items-center ${conflictFile === f ? 'bg-[#4cc2ff]/20' : 'hover:bg-surface/40'}`}>
-                <button onClick={() => openConflict(f)} aria-pressed={conflictFile === f} className="flex min-h-[36px] min-w-0 flex-1 items-center gap-2 px-4 text-left" title={`Resolve ${f}`}>
+              <div
+                key={f}
+                className={`group flex items-center ${conflictFile === f ? 'bg-[#4cc2ff]/20' : 'hover:bg-surface/40'}`}
+              >
+                <button
+                  onClick={() => openConflict(f)}
+                  aria-pressed={conflictFile === f}
+                  className="flex min-h-[36px] min-w-0 flex-1 items-center gap-2 px-4 text-left"
+                  title={`Resolve ${f}`}
+                >
                   <AlertTriangle size={14} className="shrink-0 text-[#f5a623]" aria-hidden />
-                  <span className="truncate"><span className="text-sub">{dir}</span>{base}</span>
+                  <span className="truncate">
+                    <span className="text-sub">{dir}</span>
+                    {base}
+                  </span>
                 </button>
-                <button onClick={() => openExternal(f)} aria-label={`Open ${base} in editor`} title="Open in editor" className="mr-2 rounded p-1.5 text-sub opacity-0 hover:bg-surface hover:text-text focus:opacity-100 group-hover:opacity-100"><ExternalLink size={14} /></button>
+                <button
+                  onClick={() => openExternal(f)}
+                  aria-label={`Open ${base} in editor`}
+                  title="Open in editor"
+                  className="mr-2 rounded p-1.5 text-sub opacity-0 hover:bg-surface hover:text-text focus:opacity-100 group-hover:opacity-100"
+                >
+                  <ExternalLink size={14} />
+                </button>
               </div>
             );
           })}
@@ -92,8 +173,15 @@ export function ConflictPanel() {
             const I = f.status === 'A' ? FilePlus : f.status === 'D' ? FileMinus : FilePen;
             return (
               <div key={f.path} className="flex min-h-[32px] items-center gap-2 px-4" title={f.path}>
-                <I size={14} aria-hidden className={`shrink-0 ${f.status === 'A' ? 'text-[#a6e3a1]' : f.status === 'D' ? 'text-[#f38ba8]' : 'text-[#fab387]'}`} />
-                <span className="truncate"><span className="text-sub">{dir}</span>{base}</span>
+                <I
+                  size={14}
+                  aria-hidden
+                  className={`shrink-0 ${f.status === 'A' ? 'text-[#a6e3a1]' : f.status === 'D' ? 'text-[#f38ba8]' : 'text-[#fab387]'}`}
+                />
+                <span className="truncate">
+                  <span className="text-sub">{dir}</span>
+                  {base}
+                </span>
               </div>
             );
           })}
@@ -101,7 +189,9 @@ export function ConflictPanel() {
       </div>
 
       <div className="border-t border-surface p-4">
-        <label htmlFor="op-msg" className="mb-1 block text-[13px] text-sub">Commit message</label>
+        <label htmlFor="op-msg" className="mb-1 block text-[13px] text-sub">
+          Commit message
+        </label>
         <textarea
           id="op-msg"
           value={message}
@@ -110,7 +200,13 @@ export function ConflictPanel() {
           className="w-full resize-none rounded-md border border-surface bg-crust p-3 font-sans outline-none focus:border-[#4cc2ff]"
         />
         {op.kind !== 'merge' && (
-          <button onClick={skip} disabled={busy} className="mt-1 text-[13px] text-sub underline hover:text-text disabled:opacity-40">Skip this commit</button>
+          <button
+            onClick={skip}
+            disabled={busy}
+            className="mt-1 text-[13px] text-sub underline hover:text-text disabled:opacity-40"
+          >
+            Skip this commit
+          </button>
         )}
         <div className="mt-3 grid grid-cols-2 gap-3">
           <button
@@ -121,7 +217,11 @@ export function ConflictPanel() {
           >
             {op.kind === 'merge' ? 'Commit Merge' : `Continue ${name}`}
           </button>
-          <button onClick={abort} disabled={busy} className="min-h-[44px] rounded-md border border-[#f38ba8]/60 bg-[#f38ba8]/10 font-medium text-[#f38ba8] hover:bg-[#f38ba8]/20 disabled:opacity-40">
+          <button
+            onClick={abort}
+            disabled={busy}
+            className="min-h-[44px] rounded-md border border-[#f38ba8]/60 bg-[#f38ba8]/10 font-medium text-[#f38ba8] hover:bg-[#f38ba8]/20 disabled:opacity-40"
+          >
             Abort {name}
           </button>
         </div>

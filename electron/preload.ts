@@ -1,7 +1,51 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { ScanProgress } from '../src/shared/repositoryScan';
 
-const names = ['log', 'status', 'commit', 'checkout', 'checkoutRemote', 'stage', 'unstage', 'refs', 'historyPosition', 'commitDetail', 'commitFileDiff', 'workingFileDiff', 'fetch', 'pull', 'push', 'pushInfo', 'commitIdentity', 'setCommitIdentity', 'createBranch', 'stash', 'stashPop', 'reset', 'cherryPick', 'revert', 'rebaseOnto', 'createTag', 'branchAt', 'fileAt', 'worktreeAdd', 'remoteUrl', 'formatPatch', 'createAnnotatedTag', 'fileBlame', 'fileHistory', 'opState', 'opContinue', 'opAbort', 'opSkip', 'resolveFile', 'merge', 'deleteBranch', 'readWorkFile', 'writeWorkFile'];
+const names = [
+  'log',
+  'status',
+  'commit',
+  'checkout',
+  'checkoutRemote',
+  'stage',
+  'unstage',
+  'refs',
+  'historyPosition',
+  'commitDetail',
+  'commitFileDiff',
+  'workingFileDiff',
+  'fetch',
+  'pull',
+  'push',
+  'pushInfo',
+  'commitIdentity',
+  'setCommitIdentity',
+  'createBranch',
+  'stash',
+  'stashPop',
+  'reset',
+  'cherryPick',
+  'revert',
+  'rebaseOnto',
+  'createTag',
+  'branchAt',
+  'fileAt',
+  'worktreeAdd',
+  'remoteUrl',
+  'formatPatch',
+  'createAnnotatedTag',
+  'fileBlame',
+  'fileHistory',
+  'opState',
+  'opContinue',
+  'opAbort',
+  'opSkip',
+  'resolveFile',
+  'merge',
+  'deleteBranch',
+  'readWorkFile',
+  'writeWorkFile',
+];
 const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   openRepoDialog: () => ipcRenderer.invoke('repo:open'),
   cloneRepo: (url: unknown, destination: unknown) => ipcRenderer.invoke('repo:clone', url, destination),
@@ -13,7 +57,8 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   return () => ipcRenderer.removeListener('repo:cloneProgress', handler);
 };
 (gitApi as any).pathForFile = (file: File) => webUtils.getPathForFile(file);
-(gitApi as any).findRepositories = (folder: string, id: string) => ipcRenderer.invoke('repo:findRepositories', folder, id);
+(gitApi as any).findRepositories = (folder: string, id: string) =>
+  ipcRenderer.invoke('repo:findRepositories', folder, id);
 (gitApi as any).cancelScan = (id: string) => ipcRenderer.send('repo:cancelScan', id);
 (gitApi as any).onScanProgress = (cb: (id: string, progress: ScanProgress) => void) => {
   const handler = (_event: unknown, id: string, progress: ScanProgress) => cb(id, progress);
@@ -30,17 +75,26 @@ gitApi.agentCheckpoints = (...a) => ipcRenderer.invoke('git:agentCheckpoints', .
 gitApi.trackedStage = (...a) => ipcRenderer.invoke('git:trackedStage', ...a);
 gitApi.indexUndoState = (...a) => ipcRenderer.invoke('git:indexUndoState', ...a);
 gitApi.moveIndexHistory = (...a) => ipcRenderer.invoke('git:moveIndexHistory', ...a);
-(gitApi as any).setActiveIdentity = (identity: { name: string; email: string } | null) => ipcRenderer.invoke('profile:setIdentity', identity);
+(gitApi as any).setActiveIdentity = (identity: { name: string; email: string } | null) =>
+  ipcRenderer.invoke('profile:setIdentity', identity);
 (gitApi as any).pushProfiles = {
   tokenStatus: (repo: string, id: string) => ipcRenderer.invoke('push:tokenStatus', repo, id),
   setToken: (repo: string, id: string, token: string | null) => ipcRenderer.invoke('push:setToken', repo, id, token),
   chooseKey: () => ipcRenderer.invoke('push:chooseKey'),
-  push: (repo: string, remote: string, branch: string, target: string, profile?: unknown, credentials?: { username: string; password: string }) => ipcRenderer.invoke('push:branch', repo, remote, branch, target, profile, credentials),
+  push: (
+    repo: string,
+    remote: string,
+    branch: string,
+    target: string,
+    profile?: unknown,
+    credentials?: { username: string; password: string },
+  ) => ipcRenderer.invoke('push:branch', repo, remote, branch, target, profile, credentials),
 };
 
 // terminal: data arrives as events, so expose subscribe helpers that return an unsubscribe function
 (gitApi as any).term = {
-  spawn: (cwd: string, cols: number, rows: number, shell?: string) => ipcRenderer.invoke('term:spawn', cwd, cols, rows, shell),
+  spawn: (cwd: string, cols: number, rows: number, shell?: string) =>
+    ipcRenderer.invoke('term:spawn', cwd, cols, rows, shell),
   write: (id: number, data: string) => ipcRenderer.invoke('term:write', id, data),
   resize: (id: number, cols: number, rows: number) => ipcRenderer.invoke('term:resize', id, cols, rows),
   kill: (id: number) => ipcRenderer.invoke('term:kill', id),
@@ -77,8 +131,10 @@ const sub = <T extends unknown[]>(ch: string, cb: (...a: T) => void) => {
   abort: (reqId: number) => ipcRenderer.invoke('ai:abort', reqId),
   reset: (convId: number) => ipcRenderer.invoke('ai:reset', convId),
   toolResult: (callId: string, r: unknown) => ipcRenderer.invoke('ai:toolResult', callId, r),
-  resolveConflict: (provider: string, model: string | undefined, prompt: string, count: number) => ipcRenderer.invoke('ai:resolveConflict', provider, model, prompt, count),
-  commitMessage: (provider: string, model: string | undefined, diff: string) => ipcRenderer.invoke('ai:commitMessage', provider, model, diff),
+  resolveConflict: (provider: string, model: string | undefined, prompt: string, count: number) =>
+    ipcRenderer.invoke('ai:resolveConflict', provider, model, prompt, count),
+  commitMessage: (provider: string, model: string | undefined, diff: string) =>
+    ipcRenderer.invoke('ai:commitMessage', provider, model, diff),
   onDelta: (cb: (reqId: number, text: string) => void) => sub('ai:delta', cb),
   onToolCall: (cb: (call: unknown) => void) => sub('ai:toolcall', cb),
 };
@@ -87,8 +143,14 @@ const sub = <T extends unknown[]>(ch: string, cb: (...a: T) => void) => {
 const initialState: Record<string, string> = ipcRenderer.sendSync('state:load') ?? {};
 (gitApi as any).stateStorage = {
   getItem: (k: string) => initialState[k] ?? null,
-  setItem: (k: string, v: string) => { initialState[k] = v; ipcRenderer.send('state:save', k, v); },
-  removeItem: (k: string) => { delete initialState[k]; ipcRenderer.send('state:save', k, null); },
+  setItem: (k: string, v: string) => {
+    initialState[k] = v;
+    ipcRenderer.send('state:save', k, v);
+  },
+  removeItem: (k: string) => {
+    delete initialState[k];
+    ipcRenderer.send('state:save', k, null);
+  },
 };
 
 contextBridge.exposeInMainWorld('gitApi', gitApi);

@@ -23,7 +23,10 @@ export function newerRelease(payload: unknown, current: string): ReleaseUpdate |
   return { version, url: `${RELEASES_URL}/tag/${encodeURIComponent(release.tag_name)}` };
 }
 
-export async function checkForRelease(current: string, fetchRelease: typeof fetch = fetch): Promise<ReleaseUpdate | null> {
+export async function checkForRelease(
+  current: string,
+  fetchRelease: typeof fetch = fetch,
+): Promise<ReleaseUpdate | null> {
   const response = await fetchRelease(RELEASE_API, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'GITVerse', 'X-GitHub-Api-Version': '2022-11-28' },
     signal: AbortSignal.timeout(10_000),

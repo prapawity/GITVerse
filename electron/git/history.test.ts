@@ -14,16 +14,39 @@ test('separates agent checkpoint refs from branch history without matching commi
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
   await command('init', '--quiet');
-  await command('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '--no-gpg-sign', '-m', 'Agent host session legitimate branch commit');
+  await command(
+    '-c',
+    'user.name=Test',
+    '-c',
+    'user.email=test@example.com',
+    'commit',
+    '--allow-empty',
+    '--no-gpg-sign',
+    '-m',
+    'Agent host session legitimate branch commit',
+  );
   const head = await command('rev-parse', 'HEAD');
   await command('checkout', '--orphan', 'temporary-agent');
-  await command('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '--no-gpg-sign', '-m', 'Recovery snapshot');
+  await command(
+    '-c',
+    'user.name=Test',
+    '-c',
+    'user.email=test@example.com',
+    'commit',
+    '--allow-empty',
+    '--no-gpg-sign',
+    '-m',
+    'Recovery snapshot',
+  );
   const checkpoint = await command('rev-parse', 'HEAD');
   const ref = 'refs/agents/example/checkpoints/turn/0';
   await command('update-ref', ref, checkpoint);
   await command('checkout', '--detach', head);
   await command('branch', '-D', 'temporary-agent');
-  assert.deepEqual((await log(cwd)).map((commit) => commit.hash), [head]);
+  assert.deepEqual(
+    (await log(cwd)).map((commit) => commit.hash),
+    [head],
+  );
   assert.equal(await historyPosition(cwd, head), 0);
   await assert.rejects(historyPosition(cwd, checkpoint), /no longer in the repository history/);
   const checkpoints = await agentCheckpoints(cwd);

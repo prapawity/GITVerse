@@ -7,7 +7,11 @@ import { existsSync } from 'node:fs';
  * Prefers node-pty (real PTY with resize) when it is installed and rebuilt for Electron;
  * otherwise falls back to a small Python PTY bridge (no native modules needed).
  */
-interface Term { write(d: string): void; resize(c: number, r: number): void; kill(): void }
+interface Term {
+  write(d: string): void;
+  resize(c: number, r: number): void;
+  kill(): void;
+}
 
 // Reads stdin, forwards it to the PTY, and treats ESC ] GV ; cols ; rows BEL as a resize request.
 const PTY_BRIDGE = String.raw`
@@ -61,7 +65,9 @@ let pty: any = null;
 try {
   // optional dependency; kept external from the bundle
   pty = require('node-pty');
-} catch { /* fallback below */ }
+} catch {
+  /* fallback below */
+}
 
 const terms = new Map<number, Term>();
 let seq = 0;
@@ -75,14 +81,31 @@ function shellPath(custom?: string) {
 
 function start(sender: WebContents, cwd: string, cols: number, rows: number, customShell?: string): number {
   const id = ++seq;
-  const send = (ch: string, ...a: unknown[]) => { if (!sender.isDestroyed()) sender.send(ch, id, ...a); };
-  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', COLUMNS: String(cols), LINES: String(rows) } as Record<string, string>;
+  const send = (ch: string, ...a: unknown[]) => {
+    if (!sender.isDestroyed()) sender.send(ch, id, ...a);
+  };
+  const env = {
+    ...process.env,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    COLUMNS: String(cols),
+    LINES: String(rows),
+  } as Record<string, string>;
   const shell = shellPath(customShell);
 
   if (pty) {
-    const p = pty.spawn(shell, process.platform === 'win32' ? [] : ['-l'], { name: 'xterm-256color', cols, rows, cwd, env });
+    const p = pty.spawn(shell, process.platform === 'win32' ? [] : ['-l'], {
+      name: 'xterm-256color',
+      cols,
+      rows,
+      cwd,
+      env,
+    });
     p.onData((d: string) => send('term:data', d));
-    p.onExit(({ exitCode }: { exitCode: number }) => { terms.delete(id); send('term:exit', exitCode); });
+    p.onExit(({ exitCode }: { exitCode: number }) => {
+      terms.delete(id);
+      send('term:exit', exitCode);
+    });
     terms.set(id, { write: (d) => p.write(d), resize: (c, r) => p.resize(c, r), kill: () => p.kill() });
     return id;
   }
@@ -92,7 +115,10 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
     const p = spawn(shell, [], { cwd, env });
     p.stdout.on('data', (d: Buffer) => send('term:data', d.toString('utf8')));
     p.stderr.on('data', (d: Buffer) => send('term:data', d.toString('utf8')));
-    p.on('exit', (code) => { terms.delete(id); send('term:exit', code ?? 0); });
+    p.on('exit', (code) => {
+      terms.delete(id);
+      send('term:exit', code ?? 0);
+    });
     terms.set(id, { write: (d) => p.stdin.write(d), resize: () => {}, kill: () => p.kill() });
     return id;
   }
@@ -102,8 +128,13 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
   const p = spawn('python3', ['-c', PTY_BRIDGE, String(cols), String(rows), shell], { cwd, env });
   p.stdout.on('data', (d: Buffer) => send('term:data', d.toString('utf8')));
   p.stderr.on('data', (d: Buffer) => send('term:data', d.toString('utf8')));
-  p.on('exit', (code) => { terms.delete(id); send('term:exit', code ?? 0); });
-  p.on('error', (e) => send('term:data', `\r\n[GITVerse] could not start terminal (python3 is required): ${e.message}\r\n`));
+  p.on('exit', (code) => {
+    terms.delete(id);
+    send('term:exit', code ?? 0);
+  });
+  p.on('error', (e) =>
+    send('term:data', `\r\n[GITVerse] could not start terminal (python3 is required): ${e.message}\r\n`),
+  );
   terms.set(id, {
     write: (d) => p.stdin.write(d),
     resize: (c, r) => p.stdin.write(`\x1b]GV;${c};${r}\x07`),
@@ -114,8 +145,20 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
 
 export function registerTerminal() {
   ipcMain.handle('term:spawn', (e, cwd: string, cols: number, rows: number, shell?: string) =>
-    start(e.sender, cwd && existsSync(cwd) ? cwd : process.env.HOME || '/', Math.max(20, cols | 0), Math.max(5, rows | 0), shell));
+    start(
+      e.sender,
+      cwd && existsSync(cwd) ? cwd : process.env.HOME || '/',
+      Math.max(20, cols | 0),
+      Math.max(5, rows | 0),
+      shell,
+    ),
+  );
   ipcMain.handle('term:write', (_e, id: number, data: string) => terms.get(id)?.write(data));
-  ipcMain.handle('term:resize', (_e, id: number, c: number, r: number) => terms.get(id)?.resize(Math.max(20, c | 0), Math.max(5, r | 0)));
-  ipcMain.handle('term:kill', (_e, id: number) => { terms.get(id)?.kill(); terms.delete(id); });
+  ipcMain.handle('term:resize', (_e, id: number, c: number, r: number) =>
+    terms.get(id)?.resize(Math.max(20, c | 0), Math.max(5, r | 0)),
+  );
+  ipcMain.handle('term:kill', (_e, id: number) => {
+    terms.get(id)?.kill();
+    terms.delete(id);
+  });
 }

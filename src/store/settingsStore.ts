@@ -22,22 +22,62 @@ export interface Settings {
 }
 
 export interface FlowConfig {
-  feature: string; bugfix: string; release: string; hotfix: string; support: string; // prefixes, e.g. "feature/"
-  develop: string; main: string; // long-lived branch names
+  feature: string;
+  bugfix: string;
+  release: string;
+  hotfix: string;
+  support: string; // prefixes, e.g. "feature/"
+  develop: string;
+  main: string; // long-lived branch names
 }
 
-export interface PushProfile { id: string; name: string; kind: 'system' | 'ssh' | 'https'; username: string; sshKey: string }
-export interface IdentityProfile { id: string; name: string; authorName: string; email: string }
+export interface PushProfile {
+  id: string;
+  name: string;
+  kind: 'system' | 'ssh' | 'https';
+  username: string;
+  sshKey: string;
+}
+export interface IdentityProfile {
+  id: string;
+  name: string;
+  authorName: string;
+  email: string;
+}
 
 export const DEFAULTS: Settings = {
-  theme: 'dark', autoFetchMinutes: 1, autoPrune: true, initialCommits: 400, lazyLoad: true, showAll: false, rememberTabs: true,
-  termShell: '', termFontFamily: '', termFontSize: 13, termCursorBlink: true, termScrollback: 5000, conflictAutoScroll: true, aiProvider: 'claude', openaiModel: '', copilotModel: '',
+  theme: 'dark',
+  autoFetchMinutes: 1,
+  autoPrune: true,
+  initialCommits: 400,
+  lazyLoad: true,
+  showAll: false,
+  rememberTabs: true,
+  termShell: '',
+  termFontFamily: '',
+  termFontSize: 13,
+  termCursorBlink: true,
+  termScrollback: 5000,
+  conflictAutoScroll: true,
+  aiProvider: 'claude',
+  openaiModel: '',
+  copilotModel: '',
 };
 // Nerd Fonts first so powerline / oh-my-zsh prompt glyphs (agnoster, powerlevel10k, starship) render instead of boxes
-export const TERM_FONT_FALLBACK = '"MesloLGS NF", "MesloLGS Nerd Font", "MesloLGM Nerd Font", "Hack Nerd Font", "FiraCode Nerd Font", "JetBrainsMono Nerd Font", "SauceCodePro Nerd Font", Menlo, "SF Mono", Consolas, monospace';
-export const termFont = (custom: string) => (custom.trim() ? `${custom.trim()}, ${TERM_FONT_FALLBACK}` : TERM_FONT_FALLBACK);
+export const TERM_FONT_FALLBACK =
+  '"MesloLGS NF", "MesloLGS Nerd Font", "MesloLGM Nerd Font", "Hack Nerd Font", "FiraCode Nerd Font", "JetBrainsMono Nerd Font", "SauceCodePro Nerd Font", Menlo, "SF Mono", Consolas, monospace';
+export const termFont = (custom: string) =>
+  custom.trim() ? `${custom.trim()}, ${TERM_FONT_FALLBACK}` : TERM_FONT_FALLBACK;
 
-export const FLOW_DEFAULTS: FlowConfig = { feature: 'feature/', bugfix: 'bugfix/', release: 'release/', hotfix: 'hotfix/', support: 'support/', develop: 'develop', main: 'main' };
+export const FLOW_DEFAULTS: FlowConfig = {
+  feature: 'feature/',
+  bugfix: 'bugfix/',
+  release: 'release/',
+  hotfix: 'hotfix/',
+  support: 'support/',
+  develop: 'develop',
+  main: 'main',
+};
 
 interface Store extends Settings {
   flow: Record<string, Partial<FlowConfig>>; // per repository path
@@ -78,23 +118,28 @@ export const useSettings = create<Store>()(
       repoGroupRoots: {},
       setRepoGroup: (repo, group) => set((s) => ({ repoGroups: { ...s.repoGroups, [repo]: group } })),
       setRepoGroupRoot: (group, root) => set((s) => ({ repoGroupRoots: { ...s.repoGroupRoots, [group]: root } })),
-      deleteRepoGroup: (group) => set((s) => {
-        const repoGroups = Object.fromEntries(Object.entries(s.repoGroups).filter(([, name]) => name !== group));
-        const { [group]: _removed, ...repoGroupRoots } = s.repoGroupRoots;
-        return { repoGroups, repoGroupRoots };
-      }),
+      deleteRepoGroup: (group) =>
+        set((s) => {
+          const repoGroups = Object.fromEntries(Object.entries(s.repoGroups).filter(([, name]) => name !== group));
+          const { [group]: _removed, ...repoGroupRoots } = s.repoGroupRoots;
+          return { repoGroups, repoGroupRoots };
+        }),
       set: (k, v) => set({ [k]: v } as Partial<Store>),
       setFlow: (repo, patch) => set((s) => ({ flow: { ...s.flow, [repo]: { ...s.flow[repo], ...patch } } })),
       setPushProfiles: (repo, profiles) => set((s) => ({ pushProfiles: { ...s.pushProfiles, [repo]: profiles } })),
-      selectPushProfile: (repo, id) => set((s) => ({ selectedPushProfiles: { ...s.selectedPushProfiles, [repo]: id } })),
-      setIdentityProfiles: (repo, profiles) => set((s) => ({ identityProfiles: { ...s.identityProfiles, [repo]: profiles } })),
-      selectIdentityProfile: (repo, id) => set((s) => ({ selectedIdentityProfiles: { ...s.selectedIdentityProfiles, [repo]: id } })),
+      selectPushProfile: (repo, id) =>
+        set((s) => ({ selectedPushProfiles: { ...s.selectedPushProfiles, [repo]: id } })),
+      setIdentityProfiles: (repo, profiles) =>
+        set((s) => ({ identityProfiles: { ...s.identityProfiles, [repo]: profiles } })),
+      selectIdentityProfile: (repo, id) =>
+        set((s) => ({ selectedIdentityProfiles: { ...s.selectedIdentityProfiles, [repo]: id } })),
       setSharedIdentityProfiles: (profiles) => set({ sharedIdentityProfiles: profiles }),
       setActiveIdentityProfile: (id) => set({ activeIdentityProfile: id }),
       reset: () => set({ ...DEFAULTS }),
     }),
     {
-      name: 'gitverse.settings', storage: createJSONStorage(() => storage),
+      name: 'gitverse.settings',
+      storage: createJSONStorage(() => storage),
       merge: (persisted, current) => {
         const saved = persisted as Partial<Store> | undefined;
         const legacy = Object.values(saved?.identityProfiles ?? {}).flat();
@@ -105,7 +150,11 @@ export const useSettings = create<Store>()(
   ),
 );
 
-export const flowFor = (repo: string | null): FlowConfig => ({ ...FLOW_DEFAULTS, ...(repo ? useSettings.getState().flow[repo] : {}) });
+export const flowFor = (repo: string | null): FlowConfig => ({
+  ...FLOW_DEFAULTS,
+  ...(repo ? useSettings.getState().flow[repo] : {}),
+});
 
 /** Clamp user-typed numbers instead of trusting them. */
-export const clamp = (n: number, min: number, max: number, fallback: number) => (Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback);
+export const clamp = (n: number, min: number, max: number, fallback: number) =>
+  Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;

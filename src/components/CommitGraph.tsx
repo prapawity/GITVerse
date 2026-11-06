@@ -21,7 +21,10 @@ export const relTime = (iso: string) => {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
   if (s < 3600) return 'just now';
   const d = s / 86400;
-  if (d < 1) { const h = Math.floor(s / 3600); return h === 1 ? 'an hour ago' : `${h} hours ago`; }
+  if (d < 1) {
+    const h = Math.floor(s / 3600);
+    return h === 1 ? 'an hour ago' : `${h} hours ago`;
+  }
   if (d < 2) return 'yesterday';
   if (d < 7) return `${Math.floor(d)} days ago`;
   if (d < 14) return 'a week ago';
@@ -56,11 +59,19 @@ const matches = (r: GraphRow, q: string) => {
   q = q.toLowerCase();
   return c.hash.startsWith(q) || c.subject.toLowerCase().includes(q) || c.author.toLowerCase().includes(q);
 };
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+const initials = (n: string) =>
+  n
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || '?';
 
 function fit(ctx: CanvasRenderingContext2D, text: string, max: number) {
   if (ctx.measureText(text).width <= max) return text;
-  let lo = 0, hi = text.length;
+  let lo = 0,
+    hi = text.length;
   while (lo < hi) {
     const m = (lo + hi + 1) >> 1;
     if (ctx.measureText(text.slice(0, m) + '…').width <= max) lo = m;
@@ -70,7 +81,25 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number) {
 }
 
 /** Virtualised canvas modelled on GitKraken: BRANCH/TAG | GRAPH | COMMIT MESSAGE. */
-export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '', onSelect, onContextMenu, onDoubleClick, hasMore, loadingMore, onLoadMore, headHash, changeCount, stagedCount = 0, wipSelected, onSelectWip, navigate, onLocateCurrent }: Props) {
+export function CommitGraph({
+  layout,
+  selectedHash,
+  selectedHashes,
+  filter = '',
+  onSelect,
+  onContextMenu,
+  onDoubleClick,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  headHash,
+  changeCount,
+  stagedCount = 0,
+  wipSelected,
+  onSelectWip,
+  navigate,
+  onLocateCurrent,
+}: Props) {
   const light = useSettings((s) => s.theme === 'light');
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -97,7 +126,8 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
   const maxGScroll = Math.max(0, naturalW - graphW);
   const gs = Math.min(gScroll, maxGScroll);
   const gx = (lane: number) => REF_W + PAD + wipOffset + lane * LANE_W + LANE_W / 2 - gs;
-  const gL = REF_W, gR = REF_W + graphW;
+  const gL = REF_W,
+    gR = REF_W + graphW;
   const clampX = (x: number) => Math.max(gL, Math.min(gR, x));
   const msgX = REF_W + graphW + 10;
   const availMsg = Math.max(0, size.w - msgX - 12);
@@ -116,8 +146,17 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
     const index = rows.findIndex((row) => row.commit.hash === navigate.hash);
     if (index < 0 || !scrollRef.current) return;
     const laneX = PAD + wipOffset + rows[index].col * LANE_W + LANE_W / 2;
-    setGScroll((value) => laneX < value ? Math.max(0, laneX - PAD) : laneX > value + graphW ? Math.min(maxGScroll, laneX - graphW + PAD) : value);
-    scrollRef.current.scrollTo({ top: Math.max(0, (index + wipRows) * ROW_H - (scrollRef.current.clientHeight - ROW_H) / 2), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    setGScroll((value) =>
+      laneX < value
+        ? Math.max(0, laneX - PAD)
+        : laneX > value + graphW
+          ? Math.min(maxGScroll, laneX - graphW + PAD)
+          : value,
+    );
+    scrollRef.current.scrollTo({
+      top: Math.max(0, (index + wipRows) * ROW_H - (scrollRef.current.clientHeight - ROW_H) / 2),
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
   }, [navigate, layout.rows, filter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy history: ask for the next page when the user scrolls near the end of what is loaded.
@@ -222,7 +261,9 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
         for (const sg of row.segments) {
           ctx.strokeStyle = col(sg.color, light);
           ctx.beginPath();
-          const x1 = gx(sg.x1), x2 = gx(sg.x2), d = Math.sign(x2 - x1);
+          const x1 = gx(sg.x1),
+            x2 = gx(sg.x2),
+            d = Math.sign(x2 - x1);
           if (sg.x1 === sg.x2) {
             const [y1, y2] = sg.half === 'top' ? [top, mid] : [mid, top + ROW_H];
             ctx.moveTo(x1, y1);
@@ -279,7 +320,11 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
         const chipHeight = ref.current ? 26.4 : 22;
         ctx.roundRect(8, mid - chipHeight / 2, w, chipHeight, 3);
         ctx.fill();
-        if (ref.current) { ctx.strokeStyle = lane; ctx.lineWidth = 1; ctx.stroke(); }
+        if (ref.current) {
+          ctx.strokeStyle = lane;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
         ctx.fillStyle = light ? '#1d2939' : '#e8eef6';
         ctx.fillText(name, 16, mid + 0.5);
         let ix = 16 + ctx.measureText(name).width + 6;
@@ -346,7 +391,10 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
       ctx.font = FONT;
       const subjW = ctx.measureText(c.subject).width;
       const total = c.body ? subjW + 24 + ctx.measureText(c.body).width : subjW;
-      if (total > maxMsgW.current + 1) { maxMsgW.current = total; grew = true; }
+      if (total > maxMsgW.current + 1) {
+        maxMsgW.current = total;
+        grew = true;
+      }
       ctx.save();
       ctx.beginPath();
       ctx.rect(msgX, top, size.w - msgX, ROW_H); // clip so scrolled text never bleeds into the graph
@@ -374,7 +422,25 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
       }
     }
     if (grew) setMsgVer((v) => v + 1);
-  }, [rows, size, scrollTop, selectedHash, selectedHashes, hover, showLines, graphW, msgX, gs, ms, changeCount, stagedCount, wipSelected, wipRows, headIndex, light]);
+  }, [
+    rows,
+    size,
+    scrollTop,
+    selectedHash,
+    selectedHashes,
+    hover,
+    showLines,
+    graphW,
+    msgX,
+    gs,
+    ms,
+    changeCount,
+    stagedCount,
+    wipSelected,
+    wipRows,
+    headIndex,
+    light,
+  ]);
 
   useEffect(() => {
     const id = requestAnimationFrame(draw);
@@ -391,7 +457,9 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
   return (
     <div className="relative flex h-full w-full flex-col bg-[var(--graph)]">
       <div className="flex shrink-0 border-b border-surface bg-[var(--graph)]" style={{ height: HEAD_H }}>
-        <div className={headCls} style={{ width: REF_W }}>Branch / Tag</div>
+        <div className={headCls} style={{ width: REF_W }}>
+          Branch / Tag
+        </div>
         <div className={headCls + ' relative'} style={{ width: graphW }}>
           Graph
           <div
@@ -400,9 +468,14 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
             aria-orientation="vertical"
             className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-[#4cc2ff]/60"
             onMouseDown={(e) => {
-              const x0 = e.clientX, w0 = colW;
-              const move = (ev: MouseEvent) => setColW(Math.max(GRAPH_MIN, Math.min(size.w - REF_W - 200, w0 + ev.clientX - x0)));
-              const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+              const x0 = e.clientX,
+                w0 = colW;
+              const move = (ev: MouseEvent) =>
+                setColW(Math.max(GRAPH_MIN, Math.min(size.w - REF_W - 200, w0 + ev.clientX - x0)));
+              const up = () => {
+                window.removeEventListener('mousemove', move);
+                window.removeEventListener('mouseup', up);
+              };
               window.addEventListener('mousemove', move);
               window.addEventListener('mouseup', up);
             }}
@@ -425,102 +498,207 @@ export function CommitGraph({ layout, selectedHash, selectedHashes, filter = '',
           if (x > msgX) setMsgScroll(Math.max(0, Math.min(maxNow, ms + dx)));
           else if (maxGScroll) setGScroll((v) => Math.max(0, Math.min(maxGScroll, v + dx)));
         }}
-        onMouseMove={(e) => { setHover(rowAt(e)); setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left); }}
+        onMouseMove={(e) => {
+          setHover(rowAt(e));
+          setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left);
+        }}
         onMouseLeave={() => setHover(null)}
         onClick={(e) => {
           const i = rowAt(e);
-          if (i === -1) { anchor.current = null; onSelectWip(); return; }
+          if (i === -1) {
+            anchor.current = null;
+            onSelectWip();
+            return;
+          }
           if (i === null) return;
           const hash = rows[i].commit.hash;
           const start = rows.findIndex((row) => row.commit.hash === anchor.current);
-          if (e.shiftKey && start >= 0) onSelect(hash, rows.slice(Math.min(start, i), Math.max(start, i) + 1).map((row) => row.commit.hash));
-          else { anchor.current = hash; onSelect(hash, [hash]); }
+          if (e.shiftKey && start >= 0)
+            onSelect(
+              hash,
+              rows.slice(Math.min(start, i), Math.max(start, i) + 1).map((row) => row.commit.hash),
+            );
+          else {
+            anchor.current = hash;
+            onSelect(hash, [hash]);
+          }
         }}
-        onDoubleClick={(e) => { const i = rowAt(e); if (e.clientX - e.currentTarget.getBoundingClientRect().left >= REF_W || i === null || i < 0) return; const groups = groupRefs(rows[i].commit.refs); const ref = (groups.find((g) => g.ref.current) ?? groups[0])?.ref; if (ref) onDoubleClick?.(ref); }}
+        onDoubleClick={(e) => {
+          const i = rowAt(e);
+          if (e.clientX - e.currentTarget.getBoundingClientRect().left >= REF_W || i === null || i < 0) return;
+          const groups = groupRefs(rows[i].commit.refs);
+          const ref = (groups.find((g) => g.ref.current) ?? groups[0])?.ref;
+          if (ref) onDoubleClick?.(ref);
+        }}
         onContextMenu={(e) => {
           const i = rowAt(e);
           if (i === null || i < 0) return;
           e.preventDefault();
           const hash = rows[i].commit.hash;
-          if (!selectedHashes.includes(hash)) { anchor.current = hash; onSelect(hash, [hash]); }
+          if (!selectedHashes.includes(hash)) {
+            anchor.current = hash;
+            onSelect(hash, [hash]);
+          }
           onContextMenu?.(hash, e.clientX, e.clientY);
         }}
       >
         <div style={{ height: totalRows * ROW_H }} />
-        {wipRows > 0 && <button type="button" aria-label={`Local changes, ${changeCount} changed files, ${stagedCount} staged`} aria-pressed={wipSelected} onClick={(e) => { e.stopPropagation(); onSelectWip(); }} className="absolute left-0 top-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]" />}
-        {maxMsgScroll > 0 && (() => {
-          const track = availMsg;
-          const thumb = Math.max(36, (track * track) / (track + maxMsgScroll));
-          const left = msgX + (ms / maxMsgScroll) * (track - thumb);
-          const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-          return (
-            <div className="pointer-events-none sticky z-10 h-0" style={{ bottom: 8 }}>
-              <div
-                role="scrollbar"
-                aria-orientation="horizontal"
-                aria-label="Scroll commit messages"
-                aria-valuenow={Math.round(ms)}
-                aria-valuemin={0}
-                aria-valuemax={Math.round(maxMsgScroll)}
-                className="pointer-events-auto absolute h-2 cursor-grab rounded-full bg-white/30 hover:bg-white/50 active:cursor-grabbing"
-                style={{ left, width: thumb, top: -8 }}
-                onClick={stop} onDoubleClick={stop} onContextMenu={stop}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  const x0 = e.clientX, s0 = ms;
-                  const el = e.currentTarget;
-                  const move = (ev: PointerEvent) => setMsgScroll(Math.max(0, Math.min(maxMsgScroll, s0 + ((ev.clientX - x0) / Math.max(1, track - thumb)) * maxMsgScroll)));
-                  const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
-                  el.addEventListener('pointermove', move);
-                  el.addEventListener('pointerup', up);
-                }}
-              />
-            </div>
-          );
-        })()}
+        {wipRows > 0 && (
+          <button
+            type="button"
+            aria-label={`Local changes, ${changeCount} changed files, ${stagedCount} staged`}
+            aria-pressed={wipSelected}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectWip();
+            }}
+            className="absolute left-0 top-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]"
+          />
+        )}
+        {maxMsgScroll > 0 &&
+          (() => {
+            const track = availMsg;
+            const thumb = Math.max(36, (track * track) / (track + maxMsgScroll));
+            const left = msgX + (ms / maxMsgScroll) * (track - thumb);
+            const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+            return (
+              <div className="pointer-events-none sticky z-10 h-0" style={{ bottom: 8 }}>
+                <div
+                  role="scrollbar"
+                  aria-orientation="horizontal"
+                  aria-label="Scroll commit messages"
+                  aria-valuenow={Math.round(ms)}
+                  aria-valuemin={0}
+                  aria-valuemax={Math.round(maxMsgScroll)}
+                  className="pointer-events-auto absolute h-2 cursor-grab rounded-full bg-white/30 hover:bg-white/50 active:cursor-grabbing"
+                  style={{ left, width: thumb, top: -8 }}
+                  onClick={stop}
+                  onDoubleClick={stop}
+                  onContextMenu={stop}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    const x0 = e.clientX,
+                      s0 = ms;
+                    const el = e.currentTarget;
+                    const move = (ev: PointerEvent) =>
+                      setMsgScroll(
+                        Math.max(
+                          0,
+                          Math.min(maxMsgScroll, s0 + ((ev.clientX - x0) / Math.max(1, track - thumb)) * maxMsgScroll),
+                        ),
+                      );
+                    const up = () => {
+                      el.removeEventListener('pointermove', move);
+                      el.removeEventListener('pointerup', up);
+                    };
+                    el.addEventListener('pointermove', move);
+                    el.addEventListener('pointerup', up);
+                  }}
+                />
+              </div>
+            );
+          })()}
         {maxGScroll > 0 && (
           <div className="pointer-events-none sticky z-10 h-0" style={{ bottom: 8 }}>
-            <div className="absolute h-1.5 rounded-full bg-white/25" style={{ left: REF_W + (gs / naturalW) * graphW, width: (graphW / naturalW) * graphW }} />
+            <div
+              className="absolute h-1.5 rounded-full bg-white/25"
+              style={{ left: REF_W + (gs / naturalW) * graphW, width: (graphW / naturalW) * graphW }}
+            />
           </div>
         )}
         <canvas
           ref={canvasRef}
-          style={{ position: 'sticky', top: 0, width: size.w, height: size.h, marginTop: -totalRows * ROW_H, pointerEvents: 'none' }}
+          style={{
+            position: 'sticky',
+            top: 0,
+            width: size.w,
+            height: size.h,
+            marginTop: -totalRows * ROW_H,
+            pointerEvents: 'none',
+          }}
         />
       </div>
-      {headHash && (headIndex < 0 || (headIndex + wipRows + 1) * ROW_H <= scrollTop || (headIndex + wipRows) * ROW_H >= scrollTop + size.h) && (
-        <button onClick={onLocateCurrent} className={`absolute right-4 z-20 rounded-full border border-[#4cc2ff]/50 bg-[#26374a] px-3 py-1.5 text-xs font-medium text-[#bdeaff] shadow-lg hover:bg-[#34526e] ${headIndex >= 0 && (headIndex + wipRows + 1) * ROW_H <= scrollTop ? 'top-9' : 'bottom-4'}`}>
-          {headIndex < 0 ? (filter ? 'Current hidden by search' : 'Current not in loaded history') : (headIndex + wipRows + 1) * ROW_H <= scrollTop ? '↑ Current above' : '↓ Current below'} · Go to current
-        </button>
-      )}
+      {headHash &&
+        (headIndex < 0 ||
+          (headIndex + wipRows + 1) * ROW_H <= scrollTop ||
+          (headIndex + wipRows) * ROW_H >= scrollTop + size.h) && (
+          <button
+            onClick={onLocateCurrent}
+            className={`absolute right-4 z-20 rounded-full border border-[#4cc2ff]/50 bg-[#26374a] px-3 py-1.5 text-xs font-medium text-[#bdeaff] shadow-lg hover:bg-[#34526e] ${headIndex >= 0 && (headIndex + wipRows + 1) * ROW_H <= scrollTop ? 'top-9' : 'bottom-4'}`}
+          >
+            {headIndex < 0
+              ? filter
+                ? 'Current hidden by search'
+                : 'Current not in loaded history'
+              : (headIndex + wipRows + 1) * ROW_H <= scrollTop
+                ? '↑ Current above'
+                : '↓ Current below'}{' '}
+            · Go to current
+          </button>
+        )}
       {/* hovering the branch/tag column of any commit that has refs lists all of them with their full names */}
-      {hover !== null && hoverX < REF_W && rows[hover]?.commit.refs.length > 0 && (() => {
-        const refs = groupRefs(rows[hover].commit.refs);
-        const shown = refs.slice(0, 14);
-        // long names wrap onto extra lines, so estimate the height from the text length instead of a fixed row
-        const h = shown.reduce((n, g) => n + 8 + 19 * Math.max(1, Math.ceil((g.ref.name.length + g.remotes.join(', ').length) / 44)), 16) + (refs.length > shown.length ? 24 : 0);
-        const rowTop = HEAD_H + (hover + wipRows) * ROW_H - scrollTop;
-        const top = rowTop + ROW_H + h > size.h + HEAD_H ? Math.max(HEAD_H, rowTop - h) : rowTop + ROW_H;
-        const glyph = { remote: '☁', tag: '◆', local: '●', head: '●' } as const;
-        return (
-          <div role="tooltip" className="pointer-events-none absolute z-30 min-w-[220px] max-w-[min(480px,60vw)] rounded-lg border border-surface bg-mantle py-2 shadow-2xl" style={{ left: 8, top }}>
-            {shown.map(({ ref: r, remotes }) => (
-              <div key={r.kind + r.name} className={`flex items-start gap-2 px-3 py-[4px] text-[13px] leading-[19px] ${r.current ? 'font-semibold text-[#4cc2ff]' : ''}`}>
-                <span aria-hidden className="mt-px w-4 shrink-0 text-center text-[11px] text-sub">{glyph[r.kind]}</span>
-                <span className="min-w-0 break-all">{r.kind === 'head' ? 'Detached HEAD' : r.name}{remotes.length > 0 && <span className="ml-2 text-[11px] font-normal text-sub">☁ {remotes.join(', ')}</span>}</span>
-                <span className="ml-auto shrink-0 pl-3 text-[11px] text-sub">{r.current ? 'current' : r.kind}</span>
-              </div>
-            ))}
-            {refs.length > shown.length && <div className="px-3 pt-1 text-[12px] text-sub">+{refs.length - shown.length} more</div>}
-          </div>
-        );
-      })()}
+      {hover !== null &&
+        hoverX < REF_W &&
+        rows[hover]?.commit.refs.length > 0 &&
+        (() => {
+          const refs = groupRefs(rows[hover].commit.refs);
+          const shown = refs.slice(0, 14);
+          // long names wrap onto extra lines, so estimate the height from the text length instead of a fixed row
+          const h =
+            shown.reduce(
+              (n, g) => n + 8 + 19 * Math.max(1, Math.ceil((g.ref.name.length + g.remotes.join(', ').length) / 44)),
+              16,
+            ) + (refs.length > shown.length ? 24 : 0);
+          const rowTop = HEAD_H + (hover + wipRows) * ROW_H - scrollTop;
+          const top = rowTop + ROW_H + h > size.h + HEAD_H ? Math.max(HEAD_H, rowTop - h) : rowTop + ROW_H;
+          const glyph = { remote: '☁', tag: '◆', local: '●', head: '●' } as const;
+          return (
+            <div
+              role="tooltip"
+              className="pointer-events-none absolute z-30 min-w-[220px] max-w-[min(480px,60vw)] rounded-lg border border-surface bg-mantle py-2 shadow-2xl"
+              style={{ left: 8, top }}
+            >
+              {shown.map(({ ref: r, remotes }) => (
+                <div
+                  key={r.kind + r.name}
+                  className={`flex items-start gap-2 px-3 py-[4px] text-[13px] leading-[19px] ${r.current ? 'font-semibold text-[#4cc2ff]' : ''}`}
+                >
+                  <span aria-hidden className="mt-px w-4 shrink-0 text-center text-[11px] text-sub">
+                    {glyph[r.kind]}
+                  </span>
+                  <span className="min-w-0 break-all">
+                    {r.kind === 'head' ? 'Detached HEAD' : r.name}
+                    {remotes.length > 0 && (
+                      <span className="ml-2 text-[11px] font-normal text-sub">☁ {remotes.join(', ')}</span>
+                    )}
+                  </span>
+                  <span className="ml-auto shrink-0 pl-3 text-[11px] text-sub">{r.current ? 'current' : r.kind}</span>
+                </div>
+              ))}
+              {refs.length > shown.length && (
+                <div className="px-3 pt-1 text-[12px] text-sub">+{refs.length - shown.length} more</div>
+              )}
+            </div>
+          );
+        })()}
       {(loadingMore || (filter && hasMore)) && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center">
-          <div role="status" className="pointer-events-auto rounded-full border border-surface bg-mantle px-4 py-1.5 text-[13px] shadow-lg">
-            {loadingMore ? <span className="flex items-center gap-2"><Spinner size={14} className="text-[#4cc2ff]" /> Loading more commits…</span> : (
-              <>Searching {layout.rows.length} loaded commits · <button className="text-[#4cc2ff] underline" onClick={onLoadMore}>Load more</button></>
+          <div
+            role="status"
+            className="pointer-events-auto rounded-full border border-surface bg-mantle px-4 py-1.5 text-[13px] shadow-lg"
+          >
+            {loadingMore ? (
+              <span className="flex items-center gap-2">
+                <Spinner size={14} className="text-[#4cc2ff]" /> Loading more commits…
+              </span>
+            ) : (
+              <>
+                Searching {layout.rows.length} loaded commits ·{' '}
+                <button className="text-[#4cc2ff] underline" onClick={onLoadMore}>
+                  Load more
+                </button>
+              </>
             )}
           </div>
         </div>

@@ -27,7 +27,13 @@ function ToastCard({ t }: { t: Toast }) {
   const detail = t.detail?.trim();
   const long = !!detail && (detail.includes('\n') || detail.length > 110);
   const copy = async () => {
-    try { await navigator.clipboard.writeText(`${t.title}\n\n${detail ?? ''}`.trim()); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
+    try {
+      await navigator.clipboard.writeText(`${t.title}\n\n${detail ?? ''}`.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
   };
 
   return (
@@ -45,17 +51,34 @@ function ToastCard({ t }: { t: Toast }) {
           {detail && !long && <div className="mt-1 break-words text-[13px] text-sub">{detail}</div>}
           {detail && long && (
             <>
-              <button onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 flex items-center gap-1 text-[13px] text-sub hover:text-text">
-                {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />} {open ? 'Hide details' : 'Show details'}
+              <button
+                onClick={() => setOpen(!open)}
+                aria-expanded={open}
+                className="mt-1 flex items-center gap-1 text-[13px] text-sub hover:text-text"
+              >
+                {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}{' '}
+                {open ? 'Hide details' : 'Show details'}
               </button>
-              {open && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-crust p-2 font-mono text-[12px] text-sub">{detail}</pre>}
+              {open && (
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-crust p-2 font-mono text-[12px] text-sub">
+                  {detail}
+                </pre>
+              )}
             </>
           )}
           {t.kind === 'error' && detail && (
-            <button onClick={copy} className="mt-2 flex items-center gap-1.5 text-[13px] text-sub hover:text-text"><Copy size={13} aria-hidden /> {copied ? 'Copied' : 'Copy details'}</button>
+            <button onClick={copy} className="mt-2 flex items-center gap-1.5 text-[13px] text-sub hover:text-text">
+              <Copy size={13} aria-hidden /> {copied ? 'Copied' : 'Copy details'}
+            </button>
           )}
         </div>
-        <button onClick={() => dismiss(t.id)} aria-label="Dismiss" className="-mr-1 -mt-1 rounded p-1.5 text-sub hover:bg-surface hover:text-text"><X size={15} /></button>
+        <button
+          onClick={() => dismiss(t.id)}
+          aria-label="Dismiss"
+          className="-mr-1 -mt-1 rounded p-1.5 text-sub hover:bg-surface hover:text-text"
+        >
+          <X size={15} />
+        </button>
       </div>
     </div>
   );
@@ -74,8 +97,13 @@ export function Toasts() {
   }, [error]);
 
   return (
-    <div aria-label="Notifications" className="pointer-events-none fixed bottom-5 right-5 z-[130] flex w-[400px] max-w-[calc(100vw-2.5rem)] flex-col gap-2">
-      {toasts.map((t) => <ToastCard key={t.id} t={t} />)}
+    <div
+      aria-label="Notifications"
+      className="pointer-events-none fixed bottom-5 right-5 z-[130] flex w-[400px] max-w-[calc(100vw-2.5rem)] flex-col gap-2"
+    >
+      {toasts.map((t) => (
+        <ToastCard key={t.id} t={t} />
+      ))}
     </div>
   );
 }
@@ -92,12 +120,20 @@ export function BusyOverlay() {
   if (working) last.current = working;
   if (!show) return null;
   return (
-    <div role="alertdialog" aria-modal="true" aria-busy="true" aria-label={working ?? last.current} className="fade-in fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-[2px]">
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-busy="true"
+      aria-label={working ?? last.current}
+      className="fade-in fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-[2px]"
+    >
       <div className="flex w-[340px] flex-col items-center gap-4 rounded-xl border border-surface bg-[#262b36] px-8 py-8 shadow-2xl">
         <Spinner size={42} className="text-[#4cc2ff]" />
         <div className="text-center">
           <div className="text-[17px] font-semibold">{working ?? last.current}</div>
-          <div className="mt-1 text-[13px] text-sub">Please wait — the repository is being updated. Don't close the app.</div>
+          <div className="mt-1 text-[13px] text-sub">
+            Please wait — the repository is being updated. Don't close the app.
+          </div>
         </div>
       </div>
     </div>

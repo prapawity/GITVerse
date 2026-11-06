@@ -25,12 +25,12 @@ While the app is visible, repository status, refs, and operation state are check
 
 Download a package for your operating system from [GitHub Releases](https://github.com/prapawity/GITVerse/releases). Packages will appear after the first release is published.
 
-| Platform | Package |
-| --- | --- |
+| Platform            | Package                                   |
+| ------------------- | ----------------------------------------- |
 | macOS Apple Silicon | `mac-arm64.dmg` or `mac-arm64.zip` suffix |
-| macOS Intel | `mac-x64.dmg` or `mac-x64.zip` suffix |
-| Windows x64 | `win-x64.exe` suffix |
-| Linux x64 | `linux-x64.AppImage` suffix |
+| macOS Intel         | `mac-x64.dmg` or `mac-x64.zip` suffix     |
+| Windows x64         | `win-x64.exe` suffix                      |
+| Linux x64           | `linux-x64.AppImage` suffix               |
 
 Initial releases are unsigned and not notarized. macOS Gatekeeper and Windows SmartScreen may warn or block installation. Only install artifacts you trust; do not disable system-wide security protections. Linux AppImage support may require FUSE or extraction on your distribution.
 
@@ -40,7 +40,7 @@ Git must be installed separately and available to the app through `PATH`. Quit G
 
 Requirements:
 
-- Node.js 22.12 or newer and npm.
+- Node.js 22.13 or newer and npm.
 - System Git.
 - On macOS/Linux, `python3` for the terminal's default PTY bridge.
 - Windows runs the integrated terminal with plain pipes when optional `node-pty` is unavailable; full terminal editing/resize behavior is limited.
@@ -53,10 +53,29 @@ npm run dev
 ```
 
 ```bash
-npm test          # Release-check and repository-scan regression tests
+npm test         # Release checks, repository scanning, history, and store regressions
 npm run build    # TypeScript check and production bundles
+npm run test:electron  # Build, then test desktop startup, reload, and restored tabs
 npm run dist     # Build installers for the current host
 ```
+
+### Code quality and dependency security
+
+```bash
+npm run lint            # ESLint for TypeScript, JavaScript, and React hook ordering
+npm run lint:fix        # Apply safe ESLint fixes
+npm run format:check    # Verify Prettier formatting
+npm run format          # Format source, configs, and documentation
+npm run security:audit  # Audit all dependencies, failing on high/critical advisories
+```
+
+CI checks lint, formatting, tests, builds, and Electron startup/reload smoke tests. A separate dependency-security job runs the audit without auto-fixing or suppressing advisories. Dependabot proposes weekly npm and GitHub Actions updates against `develop`.
+
+Electron 45 and Vite 7 replace older vulnerable releases. Security overrides use patched Zod 4 for the Copilot SDK and minimatch 11 for affected build/lint dependencies; keep these overrides until upstream dependency ranges include the fixes. A clean install currently passes the audit, but rerun it before releases because advisories change.
+
+If a development reload reports a missing desktop connection, stop and restart `npm run dev`. Main and preload builds use separate output directories so rebuilding main cannot delete preload. The app shows a startup error instead of loading an empty session when the bridge is unavailable; saved repository tabs are not cleared.
+
+ESLint permits existing explicit `any` at legacy IPC boundaries; this is not full type-safety certification. Only the React hook-ordering rule is enabled initially, not the exhaustive-dependency or React compiler rule sets. Dependency audits do not replace code review, secret scanning, or signed releases.
 
 The app's `private` package flag prevents accidental npm publication; it does not prevent publishing source on GitHub under MIT.
 

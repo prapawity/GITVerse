@@ -5,8 +5,10 @@ import { useSettings } from './settingsStore';
 
 const api = () => (window as any).gitApi;
 // page size follows the user's settings: "show all" means one unbounded page, otherwise the initial-commits value
-const pageSize = () => { const s = useSettings.getState(); return s.showAll ? 1_000_000_000 : s.initialCommits; };
-const moreAvailable = (loaded: number) => { const s = useSettings.getState(); return !s.showAll && s.lazyLoad && loaded === s.initialCommits; };
+const pageSize = () => {
+  const s = useSettings.getState();
+  return s.showAll ? 1_000_000_000 : s.initialCommits;
+};
 
 interface RepoState {
   repoPath: string | null;
@@ -19,11 +21,20 @@ interface RepoState {
   graph: GraphLayout;
   status: FileStatus[];
   commitDrafts: Record<string, { summary: string; description: string; amend: boolean; signoff: boolean }>;
-  setCommitDraft: (repo: string, draft: { summary: string; description: string; amend: boolean; signoff: boolean } | null) => void;
+  setCommitDraft: (
+    repo: string,
+    draft: { summary: string; description: string; amend: boolean; signoff: boolean } | null,
+  ) => void;
   selectedHash: string | null;
   search: string;
   error: string | null;
-  refs: { local: { name: string; current: boolean; hash?: string }[]; remote: { name: string; hash?: string }[]; tags: { name: string }[]; stashes: { id: string; message: string }[]; headHash?: string | null };
+  refs: {
+    local: { name: string; current: boolean; hash?: string }[];
+    remote: { name: string; hash?: string }[];
+    tags: { name: string }[];
+    stashes: { id: string; message: string }[];
+    headHash?: string | null;
+  };
   detail: { hash: string; body: string; files: { status: string; path: string; oldPath?: string }[] } | null;
   busy: string | null;
   operation: {
@@ -72,8 +83,16 @@ interface RepoState {
   commit: (summary: string, description?: string, opts?: { amend?: boolean; signoff?: boolean }) => Promise<void>;
 }
 
-export interface Toast { id: number; kind: 'success' | 'error' | 'warning' | 'info'; title: string; detail?: string }
-export interface Activity extends Toast { time: number; repo: string | null }
+export interface Toast {
+  id: number;
+  kind: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  detail?: string;
+}
+export interface Activity extends Toast {
+  time: number;
+  repo: string | null;
+}
 type Meta = { blocking?: boolean; fail?: string; done?: string | (() => string | null) };
 
 export const useRepo = create<RepoState>((set, get) => {
@@ -91,7 +110,11 @@ export const useRepo = create<RepoState>((set, get) => {
       await fn();
       ok = true;
     } catch (e: any) {
-      get().notify('error', meta.fail ?? (label ? label.replace(/…$/, '') + ' failed' : 'Something went wrong'), clean(e?.message ?? e));
+      get().notify(
+        'error',
+        meta.fail ?? (label ? label.replace(/…$/, '') + ' failed' : 'Something went wrong'),
+        clean(e?.message ?? e),
+      );
     } finally {
       if (label) set((s) => (s.working === label ? { working: null, blocking: false } : {}));
     }
@@ -146,26 +169,47 @@ export const useRepo = create<RepoState>((set, get) => {
   const doneMsg = (name: string, args: unknown[], before: RepoState['operation']): string | null => {
     const op = get().operation;
     switch (name) {
-      case 'fetch': return 'Fetched from all remotes';
-      case 'pull': return 'Pulled the latest changes';
-      case 'push': return 'Pushed to remote';
-      case 'stash': return 'Changes stashed';
-      case 'stashPop': return 'Stash applied';
-      case 'reset': return `Reset (${args[1]}) to ${short(args[0])}`;
-      case 'squashCommits': return 'Commits squashed';
-      case 'cherryPick': return `Cherry-picked ${short(args[0])}`;
-      case 'cherryPickMany': return 'Cherry-picked selected commits';
-      case 'revert': return `Reverted ${short(args[0])}`;
-      case 'rebaseOnto': return `Rebased onto ${short(args[0])}`;
-      case 'merge': return `Merged ${args[0]}`;
-      case 'deleteBranch': return `Deleted branch “${args[0]}”`;
-      case 'createTag': case 'createAnnotatedTag': return `Tag “${args[0]}” created`;
-      case 'branchAt': return `Branch “${args[0]}” created and checked out`;
-      case 'worktreeAdd': return 'Worktree created';
-      case 'opContinue': return !op && before ? `${KIND[before.kind]} completed` : 'Continued — more conflicts to resolve';
-      case 'opAbort': return before ? `${KIND[before.kind]} aborted` : 'Aborted';
-      case 'opSkip': return 'Commit skipped';
-      default: return null;
+      case 'fetch':
+        return 'Fetched from all remotes';
+      case 'pull':
+        return 'Pulled the latest changes';
+      case 'push':
+        return 'Pushed to remote';
+      case 'stash':
+        return 'Changes stashed';
+      case 'stashPop':
+        return 'Stash applied';
+      case 'reset':
+        return `Reset (${args[1]}) to ${short(args[0])}`;
+      case 'squashCommits':
+        return 'Commits squashed';
+      case 'cherryPick':
+        return `Cherry-picked ${short(args[0])}`;
+      case 'cherryPickMany':
+        return 'Cherry-picked selected commits';
+      case 'revert':
+        return `Reverted ${short(args[0])}`;
+      case 'rebaseOnto':
+        return `Rebased onto ${short(args[0])}`;
+      case 'merge':
+        return `Merged ${args[0]}`;
+      case 'deleteBranch':
+        return `Deleted branch “${args[0]}”`;
+      case 'createTag':
+      case 'createAnnotatedTag':
+        return `Tag “${args[0]}” created`;
+      case 'branchAt':
+        return `Branch “${args[0]}” created and checked out`;
+      case 'worktreeAdd':
+        return 'Worktree created';
+      case 'opContinue':
+        return !op && before ? `${KIND[before.kind]} completed` : 'Continued — more conflicts to resolve';
+      case 'opAbort':
+        return before ? `${KIND[before.kind]} aborted` : 'Aborted';
+      case 'opSkip':
+        return 'Commit skipped';
+      default:
+        return null;
     }
   };
 
@@ -178,11 +222,13 @@ export const useRepo = create<RepoState>((set, get) => {
     graph: { rows: [], maxLanes: 0 },
     status: [],
     commitDrafts: {},
-    setCommitDraft: (repo, draft) => set((s) => {
-      const commitDrafts = { ...s.commitDrafts };
-      if (draft) commitDrafts[repo] = draft; else delete commitDrafts[repo];
-      return { commitDrafts };
-    }),
+    setCommitDraft: (repo, draft) =>
+      set((s) => {
+        const commitDrafts = { ...s.commitDrafts };
+        if (draft) commitDrafts[repo] = draft;
+        else delete commitDrafts[repo];
+        return { commitDrafts };
+      }),
     selectedHash: null,
     search: '',
     error: null,
@@ -205,84 +251,160 @@ export const useRepo = create<RepoState>((set, get) => {
     indexRedo: false,
     refreshIndexHistory: async () => {
       const cwd = get().repoPath;
-      if (!cwd) { set({ indexUndo: false, indexRedo: false }); return; }
-      try { const result = await api().indexUndoState(cwd); if (get().repoPath === cwd) set({ indexUndo: result.undo, indexRedo: result.redo }); }
-      catch { if (get().repoPath === cwd) set({ indexUndo: false, indexRedo: false }); }
+      if (!cwd) {
+        set({ indexUndo: false, indexRedo: false });
+        return;
+      }
+      try {
+        const result = await api().indexUndoState(cwd);
+        if (get().repoPath === cwd) set({ indexUndo: result.undo, indexRedo: result.redo });
+      } catch {
+        if (get().repoPath === cwd) set({ indexUndo: false, indexRedo: false });
+      }
     },
     moveIndexHistory: async (direction) => {
       const cwd = get().repoPath;
       if (!cwd || get().working) return;
-      await guard(async () => {
-        await api().moveIndexHistory(cwd, direction);
-        if (get().repoPath === cwd) { await get().refreshStatus(); }
-      }, direction === 'undo' ? 'Undoing staging…' : 'Redoing staging…', { fail: `${direction === 'undo' ? 'Undo' : 'Redo'} failed`, done: direction === 'undo' ? 'Staging action undone' : 'Staging action redone' });
+      await guard(
+        async () => {
+          await api().moveIndexHistory(cwd, direction);
+          if (get().repoPath === cwd) {
+            await get().refreshStatus();
+          }
+        },
+        direction === 'undo' ? 'Undoing staging…' : 'Redoing staging…',
+        {
+          fail: `${direction === 'undo' ? 'Undo' : 'Redo'} failed`,
+          done: direction === 'undo' ? 'Staging action undone' : 'Staging action redone',
+        },
+      );
       if (get().repoPath === cwd) await get().refreshIndexHistory();
     },
-    recordActivity: (kind, title, detail, repo) => set((s) => ({ activity: [{ id: ++toastSeq, kind, title, detail, time: Date.now(), repo: repo === undefined ? s.repoPath : repo }, ...s.activity].slice(0, 200) })),
+    recordActivity: (kind, title, detail, repo) =>
+      set((s) => ({
+        activity: [
+          { id: ++toastSeq, kind, title, detail, time: Date.now(), repo: repo === undefined ? s.repoPath : repo },
+          ...s.activity,
+        ].slice(0, 200),
+      })),
     clearActivity: () => set({ activity: [] }),
     notify: (kind, title, detail) => {
       const id = ++toastSeq;
-      set((s) => ({ toasts: [...s.toasts.slice(-3), { id, kind, title, detail }], activity: [{ id, kind, title, detail, time: Date.now(), repo: s.repoPath }, ...s.activity].slice(0, 200) })); // keep at most 4 on screen
+      set((s) => ({
+        toasts: [...s.toasts.slice(-3), { id, kind, title, detail }],
+        activity: [{ id, kind, title, detail, time: Date.now(), repo: s.repoPath }, ...s.activity].slice(0, 200),
+      })); // keep at most 4 on screen
       return id;
     },
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-    toast: (msg) => { get().notify('success', msg); },
+    toast: (msg) => {
+      get().notify('success', msg);
+    },
 
     closeRepo: (path) => {
       const rest = get().recentRepos.filter((r) => r !== path);
       set({ recentRepos: rest });
       if (get().repoPath === path) {
         if (rest[0]) get().openRepo(rest[0]);
-        else set({ repoPath: null, commits: [], graph: { rows: [], maxLanes: 0 }, status: [], detail: null, selectedHash: null, refs: { local: [], remote: [], tags: [], stashes: [] }, operation: null, conflictView: false, conflictFile: null, hasMore: false, loadingMore: false, loading: false, indexUndo: false, indexRedo: false });
+        else
+          set({
+            repoPath: null,
+            commits: [],
+            graph: { rows: [], maxLanes: 0 },
+            status: [],
+            detail: null,
+            selectedHash: null,
+            refs: { local: [], remote: [], tags: [], stashes: [] },
+            operation: null,
+            conflictView: false,
+            conflictFile: null,
+            hasMore: false,
+            loadingMore: false,
+            loading: false,
+            indexUndo: false,
+            indexRedo: false,
+          });
       }
     },
 
     action: (name) => {
       let stopped = false;
       const before = get().operation;
-      return guard(async () => {
-        set({ busy: name });
-        const cwd = get().repoPath;
-        try {
-          stopped = await attempt(() => (name === 'fetch' ? api().fetch(cwd, useSettings.getState().autoPrune) : api()[name](cwd)));
-          if (name === 'push' && cwd) await get().syncAfterPush(cwd);
-          else if (get().repoPath === cwd) await get().refresh();
-        } finally {
-          set({ busy: null });
-        }
-      }, OPS[name].label, { blocking: OPS[name].blocking, fail: OPS[name].fail, done: () => (stopped ? null : doneMsg(name, [], before)) });
+      return guard(
+        async () => {
+          set({ busy: name });
+          const cwd = get().repoPath;
+          try {
+            stopped = await attempt(() =>
+              name === 'fetch' ? api().fetch(cwd, useSettings.getState().autoPrune) : api()[name](cwd),
+            );
+            if (name === 'push' && cwd) await get().syncAfterPush(cwd);
+            else if (get().repoPath === cwd) await get().refresh();
+          } finally {
+            set({ busy: null });
+          }
+        },
+        OPS[name].label,
+        {
+          blocking: OPS[name].blocking,
+          fail: OPS[name].fail,
+          done: () => (stopped ? null : doneMsg(name, [], before)),
+        },
+      );
     },
 
     exec: (name, ...args) => {
       let stopped = false;
       const before = get().operation;
       const op = OPS[name] ?? { label: 'Working…', fail: 'Action failed' };
-      return guard(async () => {
-        stopped = await attempt(() => api()[name](get().repoPath, ...args));
-        await get().refresh();
-      }, op.label, { blocking: op.blocking, fail: op.fail, done: () => (stopped ? null : doneMsg(name, args, before)) });
+      return guard(
+        async () => {
+          stopped = await attempt(() => api()[name](get().repoPath, ...args));
+          await get().refresh();
+        },
+        op.label,
+        { blocking: op.blocking, fail: op.fail, done: () => (stopped ? null : doneMsg(name, args, before)) },
+      );
     },
 
     createBranch: (name) =>
-      guard(async () => {
-        await api().createBranch(get().repoPath, name);
-        await get().refresh();
-      }, 'Creating branch…', { blocking: true, fail: 'Could not create branch', done: `Branch “${name}” created and checked out` }),
+      guard(
+        async () => {
+          await api().createBranch(get().repoPath, name);
+          await get().refresh();
+        },
+        'Creating branch…',
+        { blocking: true, fail: 'Could not create branch', done: `Branch “${name}” created and checked out` },
+      ),
 
     openRepo: (p) =>
-      guard(async () => {
-        const path = p ?? (await api().openRepoDialog());
-        if (!path) return;
-        // switching repos: drop the previous repo's data so the skeleton shows instead of stale history
-        const switching = path !== get().repoPath;
-        set((s) => ({
-          repoPath: path,
-          recentRepos: s.recentRepos.includes(path) ? s.recentRepos : [...s.recentRepos, path],
-          ...(switching ? { commits: [], graph: { rows: [], maxLanes: 0 }, status: [], detail: null, selectedHash: null, hasMore: false, refs: { local: [], remote: [], tags: [], stashes: [] } } : {}),
-        }));
-        await get().refresh();
-        await get().refreshIndexHistory();
-      }, 'Opening repository…', { fail: 'Could not open the repository' }),
+      guard(
+        async () => {
+          const path = p ?? (await api().openRepoDialog());
+          if (!path) return;
+          // switching repos: drop the previous repo's data so the skeleton shows instead of stale history
+          const switching = path !== get().repoPath;
+          set((s) => ({
+            repoPath: path,
+            recentRepos: s.recentRepos.includes(path) ? s.recentRepos : [...s.recentRepos, path],
+            ...(switching
+              ? {
+                  commits: [],
+                  graph: { rows: [], maxLanes: 0 },
+                  status: [],
+                  detail: null,
+                  selectedHash: null,
+                  hasMore: false,
+                  refs: { local: [], remote: [], tags: [], stashes: [] },
+                }
+              : {}),
+          }));
+          await get().refresh();
+          await get().refreshIndexHistory();
+        },
+        'Opening repository…',
+        { fail: 'Could not open the repository' },
+      ),
 
     refreshStatus: async () => {
       const cwd = get().repoPath;
@@ -292,28 +414,44 @@ export const useRepo = create<RepoState>((set, get) => {
       try {
         const [status, refs, operation] = await Promise.all([api().status(cwd), api().refs(cwd), api().opState(cwd)]);
         if (get().repoPath !== cwd || get().commits !== before.commits) return;
-        const historyChanged = JSON.stringify(refs) !== JSON.stringify(before.refs) || JSON.stringify(operation) !== JSON.stringify(before.operation);
+        const historyChanged =
+          JSON.stringify(refs) !== JSON.stringify(before.refs) ||
+          JSON.stringify(operation) !== JSON.stringify(before.operation);
         set({ status });
         if (historyChanged) {
           await get().refresh(true);
           if (get().repoPath === cwd && JSON.stringify(get().refs) === JSON.stringify(refs)) {
-            get().notify('info', 'Repository changed outside GITVerse', 'Reloaded history, branch references and working changes.');
+            get().notify(
+              'info',
+              'Repository changed outside GITVerse',
+              'Reloaded history, branch references and working changes.',
+            );
           }
         } else await get().refreshIndexHistory();
         statusErrorReported = false;
       } catch (error) {
         if (get().repoPath === cwd && !statusErrorReported) {
-          get().notify('warning', 'Could not refresh repository', clean(error instanceof Error ? error.message : error));
+          get().notify(
+            'warning',
+            'Could not refresh repository',
+            clean(error instanceof Error ? error.message : error),
+          );
           statusErrorReported = true;
         }
-      } finally { checkingStatus = false; }
+      } finally {
+        checkingStatus = false;
+      }
     },
 
     syncAfterPush: async (cwd) => {
       try {
         await api().fetch(cwd, useSettings.getState().autoPrune);
       } catch (error) {
-        get().notify('warning', 'Push succeeded, but fetching remote updates failed', clean(error instanceof Error ? error.message : error));
+        get().notify(
+          'warning',
+          'Push succeeded, but fetching remote updates failed',
+          clean(error instanceof Error ? error.message : error),
+        );
       }
       if (get().repoPath === cwd) await get().refresh(true);
     },
@@ -325,28 +463,54 @@ export const useRepo = create<RepoState>((set, get) => {
       try {
         await api().fetch(cwd, useSettings.getState().autoPrune);
         if (get().repoPath === cwd && !get().working) await get().refresh(true);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     },
 
     refresh: (silent) =>
-      guard(async () => {
-        const cwd = get().repoPath;
-        if (!cwd) return;
-        if (!silent) set({ loading: true });
-        try {
-          const limit = Math.max(pageSize(), silent ? get().commits.length : 0);
-          const [commits, status, refs, operation] = await Promise.all([api().log(cwd, limit, 0), api().status(cwd), api().refs(cwd), api().opState(cwd)]);
-          if (get().repoPath !== cwd) return; // switched repos while waiting
-          const was = get().operation;
-          // entering a conflicted state brings the conflict workflow forward; leaving it tidies up
-          const extra = operation && !was ? { conflictView: true } : !operation ? { conflictView: false, conflictFile: null } : {};
-          if (operation && get().conflictFile && !operation.files.includes(get().conflictFile!)) Object.assign(extra, { conflictFile: null });
-          set({ ...extra, commits, status, refs, operation, graph: layoutGraph(commits), hasMore: useSettings.getState().lazyLoad && !useSettings.getState().showAll && commits.length === limit, loadingMore: false });
-          await get().refreshIndexHistory();
-        } finally {
-          set({ loading: false });
-        }
-      }, undefined, { fail: 'Could not read the repository' }),
+      guard(
+        async () => {
+          const cwd = get().repoPath;
+          if (!cwd) return;
+          if (!silent) set({ loading: true });
+          try {
+            const limit = Math.max(pageSize(), silent ? get().commits.length : 0);
+            const [commits, status, refs, operation] = await Promise.all([
+              api().log(cwd, limit, 0),
+              api().status(cwd),
+              api().refs(cwd),
+              api().opState(cwd),
+            ]);
+            if (get().repoPath !== cwd) return; // switched repos while waiting
+            const was = get().operation;
+            // entering a conflicted state brings the conflict workflow forward; leaving it tidies up
+            const extra =
+              operation && !was
+                ? { conflictView: true }
+                : !operation
+                  ? { conflictView: false, conflictFile: null }
+                  : {};
+            if (operation && get().conflictFile && !operation.files.includes(get().conflictFile!))
+              Object.assign(extra, { conflictFile: null });
+            set({
+              ...extra,
+              commits,
+              status,
+              refs,
+              operation,
+              graph: layoutGraph(commits),
+              hasMore: useSettings.getState().lazyLoad && !useSettings.getState().showAll && commits.length === limit,
+              loadingMore: false,
+            });
+            await get().refreshIndexHistory();
+          } finally {
+            set({ loading: false });
+          }
+        },
+        undefined,
+        { fail: 'Could not read the repository' },
+      ),
 
     // Fetch the next page of history on demand instead of loading the whole repo up front.
     loadMore: async () => {
@@ -371,7 +535,10 @@ export const useRepo = create<RepoState>((set, get) => {
       const { repoPath: cwd, commits, loadingMore, hasMore } = get();
       if (!cwd) return false;
       if (commits.some((c) => c.hash === hash)) return true;
-      if (loadingMore) { get().notify('info', 'History is loading', 'Try navigating again when loading completes.'); return false; }
+      if (loadingMore) {
+        get().notify('info', 'History is loading', 'Try navigating again when loading completes.');
+        return false;
+      }
       set({ loadingMore: true });
       try {
         const index: number = await api().historyPosition(cwd, hash);
@@ -381,7 +548,8 @@ export const useRepo = create<RepoState>((set, get) => {
           if (get().commits.some((c) => c.hash === hash)) return true;
           throw new Error('History changed while loading. Try again.');
         }
-        if (!loaded.some((c) => c.hash === hash)) throw new Error('The branch moved while loading. Refresh and try again.');
+        if (!loaded.some((c) => c.hash === hash))
+          throw new Error('The branch moved while loading. Refresh and try again.');
         set({ commits: loaded, graph: layoutGraph(loaded), hasMore });
         return true;
       } catch (e: any) {
@@ -396,31 +564,49 @@ export const useRepo = create<RepoState>((set, get) => {
       set({ selectedHash: hash, detail: null, conflictView: false, conflictFile: null });
       const cwd = get().repoPath;
       if (hash && cwd)
-        api().commitDetail(cwd, hash).then((d: any) => {
-          if (get().selectedHash === hash && get().repoPath === cwd) set({ detail: { hash, ...d } });
-        }).catch((e: Error) => {
-          // settle the spinner with an empty result so the panel never loads forever
-          if (get().selectedHash === hash && get().repoPath === cwd) { get().notify('error', 'Could not load commit details', clean(e.message)); set({ detail: { hash, body: '', files: [] } }); }
-        });
+        api()
+          .commitDetail(cwd, hash)
+          .then((d: any) => {
+            if (get().selectedHash === hash && get().repoPath === cwd) set({ detail: { hash, ...d } });
+          })
+          .catch((e: Error) => {
+            // settle the spinner with an empty result so the panel never loads forever
+            if (get().selectedHash === hash && get().repoPath === cwd) {
+              get().notify('error', 'Could not load commit details', clean(e.message));
+              set({ detail: { hash, body: '', files: [] } });
+            }
+          });
     },
     setSearch: (search) => set({ search }),
 
     checkout: (ref) =>
-      guard(async () => {
-        await api().checkout(get().repoPath, ref);
-        await get().refresh();
-      }, 'Checking out…', { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}”` }),
+      guard(
+        async () => {
+          await api().checkout(get().repoPath, ref);
+          await get().refresh();
+        },
+        'Checking out…',
+        { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}”` },
+      ),
 
     checkoutRemote: (ref) =>
-      guard(async () => {
-        await api().checkoutRemote(get().repoPath, ref);
-        await get().refresh();
-      }, 'Checking out…', { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}” in detached HEAD mode` }),
+      guard(
+        async () => {
+          await api().checkoutRemote(get().repoPath, ref);
+          await get().refresh();
+        },
+        'Checking out…',
+        { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}” in detached HEAD mode` },
+      ),
 
     commit: (summary, description, opts) =>
-      guard(async () => {
-        await api().commit(get().repoPath, summary, description, opts);
-        await get().refresh();
-      }, 'Committing…', { blocking: true, fail: 'Commit failed', done: 'Commit created' }),
+      guard(
+        async () => {
+          await api().commit(get().repoPath, summary, description, opts);
+          await get().refresh();
+        },
+        'Committing…',
+        { blocking: true, fail: 'Commit failed', done: 'Commit created' },
+      ),
   };
 });

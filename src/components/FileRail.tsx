@@ -11,12 +11,26 @@ export function FileRail({ onExpand }: { onExpand: () => void }) {
     { icon: Tag, label: 'Tags', n: refs.tags.length },
   ];
   return (
-    <nav aria-label="Repository" className="flex h-full w-[56px] shrink-0 flex-col items-center gap-1 border-r border-surface bg-mantle py-3">
-      <button aria-label="Expand sidebar" title="Expand sidebar" onClick={onExpand} className="mb-2 flex h-10 w-10 items-center justify-center rounded-md text-sub hover:bg-surface hover:text-text">
+    <nav
+      aria-label="Repository"
+      className="flex h-full w-[56px] shrink-0 flex-col items-center gap-1 border-r border-surface bg-mantle py-3"
+    >
+      <button
+        aria-label="Expand sidebar"
+        title="Expand sidebar"
+        onClick={onExpand}
+        className="mb-2 flex h-10 w-10 items-center justify-center rounded-md text-sub hover:bg-surface hover:text-text"
+      >
         <PanelLeftOpen size={20} />
       </button>
       {items.map(({ icon: I, label, n }) => (
-        <button key={label} aria-label={`${label}: ${n}`} title={`${label} (${n})`} onClick={onExpand} className="flex min-h-[48px] w-11 flex-col items-center justify-center rounded-md text-sub hover:bg-surface hover:text-text">
+        <button
+          key={label}
+          aria-label={`${label}: ${n}`}
+          title={`${label} (${n})`}
+          onClick={onExpand}
+          className="flex min-h-[48px] w-11 flex-col items-center justify-center rounded-md text-sub hover:bg-surface hover:text-text"
+        >
           <I size={19} aria-hidden />
           <span className="text-[11px] font-semibold text-[#4cc2ff]">{n}</span>
         </button>

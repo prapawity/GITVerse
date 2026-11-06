@@ -4,9 +4,21 @@ import { useRepo } from './repoStore';
 import type { Commit } from '../shared/types';
 
 const refs = (hash: string) => ({
-  local: [{ name: 'main', current: true, hash }], remote: [], tags: [], stashes: [], headHash: hash,
+  local: [{ name: 'main', current: true, hash }],
+  remote: [],
+  tags: [],
+  stashes: [],
+  headHash: hash,
 });
-const commit = (hash: string): Commit => ({ hash, parents: [], refs: [], subject: hash, author: 'Test', email: 'test@example.com', date: new Date().toISOString() });
+const commit = (hash: string): Commit => ({
+  hash,
+  parents: [],
+  refs: [],
+  subject: hash,
+  author: 'Test',
+  email: 'test@example.com',
+  date: new Date().toISOString(),
+});
 let calls: string[];
 let backend: Record<string, (...args: unknown[]) => Promise<unknown>>;
 
@@ -16,13 +28,30 @@ beforeEach(() => {
     status: async () => [],
     refs: async () => refs('new'),
     opState: async () => null,
-    log: async () => { calls.push('log'); return [commit('new')]; },
-    fetch: async () => { calls.push('fetch'); },
-    push: async () => { calls.push('push'); },
+    log: async () => {
+      calls.push('log');
+      return [commit('new')];
+    },
+    fetch: async () => {
+      calls.push('fetch');
+    },
+    push: async () => {
+      calls.push('push');
+    },
     indexUndoState: async () => ({ undo: false, redo: false }),
   };
   Object.defineProperty(globalThis, 'window', { configurable: true, value: { gitApi: backend } });
-  useRepo.setState({ repoPath: '/repo', commits: [commit('old')], status: [], refs: refs('old'), operation: null, working: null, loading: false, toasts: [], activity: [] });
+  useRepo.setState({
+    repoPath: '/repo',
+    commits: [commit('old')],
+    status: [],
+    refs: refs('old'),
+    operation: null,
+    working: null,
+    loading: false,
+    toasts: [],
+    activity: [],
+  });
 });
 
 test('external commits refresh history, references and staged changes with feedback', async () => {
@@ -49,14 +78,22 @@ test('push fetches remote references before reloading the graph', async () => {
 });
 
 test('fetch failure after a successful push warns but still refreshes local history', async () => {
-  backend.fetch = async () => { calls.push('fetch'); throw new Error('Offline'); };
+  backend.fetch = async () => {
+    calls.push('fetch');
+    throw new Error('Offline');
+  };
   await useRepo.getState().syncAfterPush('/repo');
   assert.deepEqual(calls, ['fetch', 'log']);
-  assert.ok(useRepo.getState().toasts.some((toast) => toast.kind === 'warning' && toast.title.includes('Push succeeded')));
+  assert.ok(
+    useRepo.getState().toasts.some((toast) => toast.kind === 'warning' && toast.title.includes('Push succeeded')),
+  );
 });
 
 test('poll results are ignored when the repository changes', async () => {
-  backend.status = async () => { useRepo.setState({ repoPath: '/another' }); return []; };
+  backend.status = async () => {
+    useRepo.setState({ repoPath: '/another' });
+    return [];
+  };
   await useRepo.getState().refreshStatus();
   assert.equal(useRepo.getState().commits[0].hash, 'old');
   assert.deepEqual(calls, []);
@@ -82,7 +119,9 @@ test('silent refresh keeps the loaded history depth', async () => {
 });
 
 test('failed history refresh never reports that external changes were reloaded', async () => {
-  backend.log = async () => { throw new Error('Cannot read history'); };
+  backend.log = async () => {
+    throw new Error('Cannot read history');
+  };
   await useRepo.getState().refreshStatus();
   assert.ok(useRepo.getState().toasts.some((toast) => toast.kind === 'error'));
   assert.ok(!useRepo.getState().toasts.some((toast) => toast.kind === 'info'));

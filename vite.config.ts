@@ -7,8 +7,20 @@ export default defineConfig({
   plugins: [
     react(),
     electron({
-      main: { entry: 'electron/main.ts', vite: { build: { emptyOutDir: true, rollupOptions: { external: ['node-pty', '@github/copilot-sdk'] } } } },
-      preload: { input: 'electron/preload.ts' },
+      main: {
+        entry: 'electron/main.ts',
+        vite: {
+          build: {
+            outDir: 'dist-electron/main',
+            emptyOutDir: true,
+            rollupOptions: { external: ['node-pty', '@github/copilot-sdk'] },
+          },
+        },
+      },
+      preload: {
+        input: 'electron/preload.ts',
+        vite: { build: { outDir: 'dist-electron/preload', emptyOutDir: true } },
+      },
     }),
   ],
 });

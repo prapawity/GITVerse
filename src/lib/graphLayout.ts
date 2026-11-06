@@ -6,8 +6,8 @@ import type { Commit, GraphLayout, GraphRow, Segment } from '../shared/types';
  * Every row emits segments for its top half (lines arriving) and bottom half (lines leaving).
  */
 export function layoutGraph(commits: Commit[]): GraphLayout {
-  let lanes: (string | null)[] = [];
-  let colors: number[] = [];
+  const lanes: (string | null)[] = [];
+  const colors: number[] = [];
   let nextColor = 0;
   let maxLanes = 0;
   const rows: GraphRow[] = [];

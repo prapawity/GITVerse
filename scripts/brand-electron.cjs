@@ -15,8 +15,20 @@ try {
   const plist = path.join(app, 'Contents', 'Info.plist');
   if (!existsSync(plist)) process.exit(0);
   const buddy = (...a) => execFileSync('/usr/libexec/PlistBuddy', [...a, plist], { encoding: 'utf8' }).trim();
-  const get = (k) => { try { return buddy('-c', `Print :${k}`); } catch { return null; } };
-  const set = (k, v) => { try { buddy('-c', `Set :${k} ${v}`); } catch { buddy('-c', `Add :${k} string ${v}`); } };
+  const get = (k) => {
+    try {
+      return buddy('-c', `Print :${k}`);
+    } catch {
+      return null;
+    }
+  };
+  const set = (k, v) => {
+    try {
+      buddy('-c', `Set :${k} ${v}`);
+    } catch {
+      buddy('-c', `Add :${k} string ${v}`);
+    }
+  };
 
   if (get('CFBundleName') === NAME && get('CFBundleDisplayName') === NAME) process.exit(0); // already done
   set('CFBundleName', NAME);

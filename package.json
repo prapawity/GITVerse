@@ -11,15 +11,21 @@
     "url": "https://github.com/prapawity/GITVerse.git"
   },
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.13"
   },
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main/main.js",
   "scripts": {
     "predev": "node scripts/brand-electron.cjs",
     "postinstall": "node scripts/brand-electron.cjs",
     "dev": "vite",
     "build": "tsc && vite build",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "npm run lint -- --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "security:audit": "npm audit --audit-level=high --registry=https://registry.npmjs.org",
     "test": "tsx --test electron/updates.test.ts electron/repositoryScan.test.ts electron/git/history.test.ts src/store/repoStore.test.ts",
+    "test:electron": "npm run build && node scripts/smoke-electron.cjs",
     "dist": "npm run build && electron-builder --publish never"
   },
   "dependencies": {
@@ -37,18 +43,31 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/semver": "^7.7.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.4.0",
-    "electron": "^33.0.0",
+    "electron": "^45.2.3",
     "electron-builder": "^26.0.12",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-config-prettier": "^10.1.0",
+    "globals": "^16.5.0",
     "postcss": "^8.4.0",
+    "prettier": "^3.6.0",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.6.0",
     "tsx": "^4.20.0",
-    "vite": "^5.4.0",
+    "typescript-eslint": "^8.46.0",
+    "vite": "^7.3.7",
     "vite-plugin-electron": "^0.28.0"
+  },
+  "overrides": {
+    "@github/copilot-sdk": {
+      "zod": "$zod"
+    },
+    "minimatch@>=7 <11.0.1": "^11.0.5"
   }
 }

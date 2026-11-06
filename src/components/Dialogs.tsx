@@ -41,7 +41,13 @@ function Shell({ title, onCancel, children }: { title: string; onCancel: () => v
   }, [onCancel]);
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/55 pt-[15vh]" onMouseDown={onCancel}>
-      <div role="dialog" aria-modal="true" aria-label={title} className="w-[460px] max-w-[92vw] rounded-lg border border-surface bg-mantle p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="w-[460px] max-w-[92vw] rounded-lg border border-surface bg-mantle p-5 shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <h2 className="mb-3 text-[16px] font-semibold">{title}</h2>
         {children}
       </div>
@@ -49,7 +55,15 @@ function Shell({ title, onCancel, children }: { title: string; onCancel: () => v
   );
 }
 
-function FlowDialog({ branches, source, resolve }: { branches: string[]; source: string; resolve: (v: string | null) => void }) {
+function FlowDialog({
+  branches,
+  source,
+  resolve,
+}: {
+  branches: string[];
+  source: string;
+  resolve: (v: string | null) => void;
+}) {
   const close = useDialog((s) => s.close);
   const FLOW = useMemo(() => makeFlow(flowFor(useRepo.getState().repoPath)), []);
   const [type, setType] = useState<(typeof FLOW)[number]>(FLOW[0]);
@@ -58,29 +72,60 @@ function FlowDialog({ branches, source, resolve }: { branches: string[]; source:
   const full = `${type.prefix}${clean}`;
   const exists = branches.includes(full);
   const err = !clean ? 'Enter a branch name' : exists ? `Branch "${full}" already exists` : '';
-  const done = (v: string | null) => { resolve(v); close(); };
+  const done = (v: string | null) => {
+    resolve(v);
+    close();
+  };
 
   return (
     <Shell title="Create branch (Git Flow)" onCancel={() => done(null)}>
       <div role="radiogroup" aria-label="Branch type" className="mb-3 grid grid-cols-3 gap-2">
         {FLOW.map((t) => (
-          <button key={t.id || 'plain'} role="radio" aria-checked={type === t} onClick={() => setType(t)}
-            className={`rounded border px-2 py-2 text-left ${type === t ? 'border-[#4cc2ff] bg-[#4cc2ff]/15' : 'border-surface hover:bg-surface/50'}`}>
-            <div className="font-medium" style={{ color: t.color }}>{t.id || 'plain'}</div>
+          <button
+            key={t.id || 'plain'}
+            role="radio"
+            aria-checked={type === t}
+            onClick={() => setType(t)}
+            className={`rounded border px-2 py-2 text-left ${type === t ? 'border-[#4cc2ff] bg-[#4cc2ff]/15' : 'border-surface hover:bg-surface/50'}`}
+          >
+            <div className="font-medium" style={{ color: t.color }}>
+              {t.id || 'plain'}
+            </div>
             <div className="text-[12px] text-sub">{t.hint}</div>
           </button>
         ))}
       </div>
-      <label className="mb-1 block text-[12px] text-sub" htmlFor="bn">Name</label>
-      <input id="bn" autoFocus value={name} onChange={(e) => setName(e.target.value)}
+      <label className="mb-1 block text-[12px] text-sub" htmlFor="bn">
+        Name
+      </label>
+      <input
+        id="bn"
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && !err && done(full)}
-        placeholder="e.g. DEMO-18562-demo-ui" aria-invalid={!!err && !!name} aria-describedby="bn-err"
-        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]" />
-      <div id="bn-err" className="mt-1 min-h-[18px] text-[12px] text-[#f38ba8]">{name && err}</div>
-      <p className="mt-2 text-[13px] text-sub">New branch will start at <span className="break-all font-medium text-text">{source}</span>.</p>
+        placeholder="e.g. DEMO-18562-demo-ui"
+        aria-invalid={!!err && !!name}
+        aria-describedby="bn-err"
+        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
+      />
+      <div id="bn-err" className="mt-1 min-h-[18px] text-[12px] text-[#f38ba8]">
+        {name && err}
+      </div>
+      <p className="mt-2 text-[13px] text-sub">
+        New branch will start at <span className="break-all font-medium text-text">{source}</span>.
+      </p>
       <div className="mt-4 flex justify-end gap-2">
-        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>Cancel</button>
-        <button disabled={!!err} className={`${btn} bg-[#4cc2ff] text-crust disabled:opacity-40`} onClick={() => done(full)}>Create branch</button>
+        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>
+          Cancel
+        </button>
+        <button
+          disabled={!!err}
+          className={`${btn} bg-[#4cc2ff] text-crust disabled:opacity-40`}
+          onClick={() => done(full)}
+        >
+          Create branch
+        </button>
       </div>
     </Shell>
   );
@@ -91,30 +136,60 @@ export function DialogHost() {
   const [text, setText] = useState('');
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => setText(''), [req]);
-  useEffect(() => { if (req?.kind === 'confirm') ref.current?.focus(); }, [req]);
+  useEffect(() => {
+    if (req?.kind === 'confirm') ref.current?.focus();
+  }, [req]);
   if (!req) return null;
   if (req.kind === 'flow') return <FlowDialog branches={req.branches} source={req.source} resolve={req.resolve} />;
   if (req.kind === 'confirm') {
-    const done = (v: boolean) => { req.resolve(v); close(); };
+    const done = (v: boolean) => {
+      req.resolve(v);
+      close();
+    };
     return (
       <Shell title={req.title} onCancel={() => done(false)}>
         <p className="mb-4 text-sub">{req.message}</p>
         <div className="flex justify-end gap-2">
-          <button className={`${btn} hover:bg-surface/60`} onClick={() => done(false)}>Cancel</button>
-          <button ref={ref} className={`${btn} ${req.danger ? 'bg-[#f38ba8]' : 'bg-[#4cc2ff]'} text-crust`} onClick={() => done(true)}>{req.label ?? 'Confirm'}</button>
+          <button className={`${btn} hover:bg-surface/60`} onClick={() => done(false)}>
+            Cancel
+          </button>
+          <button
+            ref={ref}
+            className={`${btn} ${req.danger ? 'bg-[#f38ba8]' : 'bg-[#4cc2ff]'} text-crust`}
+            onClick={() => done(true)}
+          >
+            {req.label ?? 'Confirm'}
+          </button>
         </div>
       </Shell>
     );
   }
-  const done = (v: string | null) => { req.resolve(v); close(); };
+  const done = (v: string | null) => {
+    req.resolve(v);
+    close();
+  };
   return (
     <Shell title={req.title} onCancel={() => done(null)}>
-      <input autoFocus value={text} placeholder={req.placeholder} aria-label={req.title} onChange={(e) => setText(e.target.value)}
+      <input
+        autoFocus
+        value={text}
+        placeholder={req.placeholder}
+        aria-label={req.title}
+        onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && text.trim() && done(text.trim())}
-        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]" />
+        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
+      />
       <div className="mt-4 flex justify-end gap-2">
-        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>Cancel</button>
-        <button disabled={!text.trim()} className={`${btn} bg-[#4cc2ff] text-crust disabled:opacity-40`} onClick={() => done(text.trim())}>OK</button>
+        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>
+          Cancel
+        </button>
+        <button
+          disabled={!text.trim()}
+          className={`${btn} bg-[#4cc2ff] text-crust disabled:opacity-40`}
+          onClick={() => done(text.trim())}
+        >
+          OK
+        </button>
       </div>
     </Shell>
   );

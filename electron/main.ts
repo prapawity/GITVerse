@@ -16,9 +16,13 @@ try {
   const saved = JSON.parse(loadState(app.getPath('userData'))['gitverse.settings'] ?? '{}').state;
   const profile = saved?.sharedIdentityProfiles?.find((p: { id: string }) => p.id === saved.activeIdentityProfile);
   if (profile) git.setActiveIdentity({ name: profile.authorName, email: profile.email });
-} catch { /* use Git configuration if saved settings cannot be read */ }
+} catch {
+  /* use Git configuration if saved settings cannot be read */
+}
 
-ipcMain.handle('profile:setIdentity', (_e, identity: { name: string; email: string } | null) => git.setActiveIdentity(identity));
+ipcMain.handle('profile:setIdentity', (_e, identity: { name: string; email: string } | null) =>
+  git.setActiveIdentity(identity),
+);
 
 const handlers = {
   log: git.log,
@@ -89,9 +93,15 @@ registerTerminal();
 registerAi();
 
 // persisted UI state (settings, open tabs): read synchronously at startup so the renderer can hydrate before first paint
-ipcMain.on('state:load', (e) => { e.returnValue = loadState(app.getPath('userData')); });
+ipcMain.on('state:load', (e) => {
+  e.returnValue = loadState(app.getPath('userData'));
+});
 ipcMain.on('state:save', (_e, key: string, value: string | null) => {
-  try { saveKey(app.getPath('userData'), String(key), value == null ? null : String(value)); } catch { /* disk full / read-only: keep running */ }
+  try {
+    saveKey(app.getPath('userData'), String(key), value == null ? null : String(value));
+  } catch {
+    /* disk full / read-only: keep running */
+  }
 });
 
 ipcMain.handle('repo:open', async () => {
@@ -105,7 +115,8 @@ ipcMain.on('repo:cancelScan', (event, id: string) => {
   if (scan?.id === id) scan.controller.abort();
 });
 ipcMain.handle('repo:findRepositories', async (event, folder: string, id: string) => {
-  if (typeof id !== 'string' || !id || scans.has(event.sender.id)) throw new Error('A folder scan is already running or the request is invalid.');
+  if (typeof id !== 'string' || !id || scans.has(event.sender.id))
+    throw new Error('A folder scan is already running or the request is invalid.');
   const controller = new AbortController();
   const senderId = event.sender.id;
   const abort = () => controller.abort();
@@ -122,17 +133,47 @@ ipcMain.handle('repo:findRepositories', async (event, folder: string, id: string
 });
 
 ipcMain.handle('repo:clone', (event, url: string, destination: string) =>
-  git.clone(url, destination, (message) => { if (!event.sender.isDestroyed()) event.sender.send('repo:cloneProgress', message); }));
+  git.clone(url, destination, (message) => {
+    if (!event.sender.isDestroyed()) event.sender.send('repo:cloneProgress', message);
+  }),
+);
 
-const pushTokenKey = (repo: string, id: string) => `push.token.${createHash('sha256').update(JSON.stringify([repo, id])).digest('hex')}`;
+const pushTokenKey = (repo: string, id: string) =>
+  `push.token.${createHash('sha256')
+    .update(JSON.stringify([repo, id]))
+    .digest('hex')}`;
 ipcMain.handle('push:tokenStatus', (_e, repo: string, id: string) => !!readSecret(pushTokenKey(repo, id)));
-ipcMain.handle('push:setToken', (_e, repo: string, id: string, token: string | null) => writeSecret(pushTokenKey(repo, id), token?.trim() || null));
+ipcMain.handle('push:setToken', (_e, repo: string, id: string, token: string | null) =>
+  writeSecret(pushTokenKey(repo, id), token?.trim() || null),
+);
 ipcMain.handle('push:chooseKey', async () => {
   const result = await dialog.showOpenDialog({ properties: ['openFile'], title: 'Choose SSH private key' });
   return result.canceled ? null : result.filePaths[0];
 });
-ipcMain.handle('push:branch', (_e, repo: string, remote: string, branch: string, target: string, profile?: { id: string; kind: 'system' | 'ssh' | 'https'; username: string; sshKey: string }, credentials?: { username: string; password: string }) =>
-  git.pushBranch(repo, remote, branch, target, credentials ? { kind: 'https', username: credentials.username, token: credentials.password } : profile && { ...profile, token: profile.kind === 'https' ? readSecret(pushTokenKey(repo, profile.id)) ?? undefined : undefined }));
+ipcMain.handle(
+  'push:branch',
+  (
+    _e,
+    repo: string,
+    remote: string,
+    branch: string,
+    target: string,
+    profile?: { id: string; kind: 'system' | 'ssh' | 'https'; username: string; sshKey: string },
+    credentials?: { username: string; password: string },
+  ) =>
+    git.pushBranch(
+      repo,
+      remote,
+      branch,
+      target,
+      credentials
+        ? { kind: 'https', username: credentials.username, token: credentials.password }
+        : profile && {
+            ...profile,
+            token: profile.kind === 'https' ? (readSecret(pushTokenKey(repo, profile.id)) ?? undefined) : undefined,
+          },
+    ),
+);
 
 app.whenReady().then(() => {
   let checking = false;
@@ -154,7 +195,11 @@ app.whenReady().then(() => {
         });
         if (response === 0) await shell.openExternal(update.url);
       } else if (manual) {
-        await dialog.showMessageBox(win, { type: 'info', message: 'No newer stable release is available.', detail: `Current version: ${app.getVersion()}` });
+        await dialog.showMessageBox(win, {
+          type: 'info',
+          message: 'No newer stable release is available.',
+          detail: `Current version: ${app.getVersion()}`,
+        });
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -173,26 +218,36 @@ app.whenReady().then(() => {
       checking = false;
     }
   };
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
-    { role: 'fileMenu' as const },
-    { role: 'editMenu' as const },
-    { role: 'viewMenu' as const },
-    { role: 'windowMenu' as const },
-    { role: 'help' as const, submenu: [
-      { label: 'Check for Updates…', click: () => { void checkUpdates(true); } },
-    ] },
-  ]));
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+      { role: 'fileMenu' as const },
+      { role: 'editMenu' as const },
+      { role: 'viewMenu' as const },
+      { role: 'windowMenu' as const },
+      {
+        role: 'help' as const,
+        submenu: [
+          {
+            label: 'Check for Updates…',
+            click: () => {
+              void checkUpdates(true);
+            },
+          },
+        ],
+      },
+    ]),
+  );
   const win = new BrowserWindow({
     title: 'GITVerse',
     width: 1500,
     height: 900,
     backgroundColor: '#1e1e2e',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true },
+    webPreferences: { preload: path.join(__dirname, '../preload/preload.js'), contextIsolation: true },
   });
   win.webContents.once('did-finish-load', () => {
     if (app.isPackaged) void checkUpdates(false);
   });
   if (process.env.VITE_DEV_SERVER_URL) win.loadURL(process.env.VITE_DEV_SERVER_URL);
-  else win.loadFile(path.join(__dirname, '../dist/index.html'));
+  else win.loadFile(path.join(__dirname, '../../dist/index.html'));
 });
