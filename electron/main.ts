@@ -12,6 +12,9 @@ import { scanRepositories } from './repositoryScan';
 
 // name shown in the macOS menu bar, About box and dock (a packaged build also gets it from productName)
 app.setName('GITVerse');
+const appIcon = app.isPackaged
+  ? path.join(process.resourcesPath, 'icon.png')
+  : path.join(__dirname, '../../resources/icon.png');
 
 try {
   const saved = JSON.parse(loadState(app.getPath('userData'))['gitverse.settings'] ?? '{}').state;
@@ -186,6 +189,7 @@ ipcMain.handle(
 );
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin') app.dock?.setIcon(appIcon);
   let startupUpdate: Promise<AppUpdateCheck> | null = null;
   let manualUpdate: Promise<AppUpdateCheck> | null = null;
   const requestUpdate = () => {
@@ -269,6 +273,7 @@ app.whenReady().then(() => {
   );
   const win = new BrowserWindow({
     title: 'GITVerse',
+    icon: appIcon,
     width: 1500,
     height: 900,
     backgroundColor: '#1e1e2e',
