@@ -37,16 +37,18 @@ The Push dialog offers **Force push (--force-with-lease)** for intentionally rew
 
 ## Download
 
-Download a package for your operating system from [GitHub Releases](https://github.com/prapawity/GITVerse/releases). Packages will appear after the first release is published.
+Download the latest published installer from [GitHub Releases](https://github.com/prapawity/GITVerse/releases/latest). Choose the file for your OS and CPU below; draft releases are not downloadable from the latest-release page.
 
 | Platform            | Package                                   |
 | ------------------- | ----------------------------------------- |
 | macOS Apple Silicon | `mac-arm64.dmg` or `mac-arm64.zip` suffix |
 | macOS Intel         | `mac-x64.dmg` or `mac-x64.zip` suffix     |
 | Windows x64         | `win-x64.exe` suffix                      |
-| Linux x64           | `linux-x64.AppImage` suffix               |
+| Linux x64           | `linux-x86_64.AppImage` suffix            |
 
-Initial releases are unsigned and not notarized. macOS Gatekeeper and Windows SmartScreen may warn or block installation. Only install artifacts you trust; do not disable system-wide security protections. Linux AppImage support may require FUSE or extraction on your distribution.
+On macOS, open the DMG and drag GITVerse to Applications (or unzip the ZIP). On Windows, run the EXE installer. On Linux, make the AppImage executable (`chmod +x GITVerse-*.AppImage`) and launch it; AppImage support may require FUSE or extraction on your distribution.
+
+Initial releases are unsigned and not notarized. macOS Gatekeeper and Windows SmartScreen may warn or block installation. Only install artifacts you trust; do not disable system-wide security protections.
 
 Git must be installed separately and available to the app through `PATH`. Quit GITVerse before replacing/upgrading an installation.
 

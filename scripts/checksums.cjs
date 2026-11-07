@@ -8,7 +8,8 @@ if (!/^(mac-(arm64|x64)|win-x64|linux-x64)$/.test(label ?? '')) {
 }
 const dir = path.join(__dirname, '..', 'release');
 const { version } = require('../package.json');
-const prefix = `GITVerse-${version}-${label}.`;
+const artifactPlatform = label === 'linux-x64' ? 'linux-x86_64' : label;
+const prefix = `GITVerse-${version}-${artifactPlatform}.`;
 const files = readdirSync(dir)
   .filter((name) => name.startsWith(prefix) && /\.(dmg|zip|exe|AppImage)$/.test(name))
   .sort();
