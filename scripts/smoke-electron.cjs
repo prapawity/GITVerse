@@ -196,29 +196,47 @@ if (!process.versions.electron) {
           const rect = graph.getBoundingClientRect();
           const original = CanvasRenderingContext2D.prototype.stroke;
           let glows = 0;
+          let clearing = false;
+          let clearRender = false;
           CanvasRenderingContext2D.prototype.stroke = function (...args) {
-            if (this.canvas === canvas && this.shadowBlur === 8) glows++;
+            if (this.canvas === canvas) {
+              if (clearing && args[0] instanceof Path2D && this.lineWidth === 2) clearRender = true;
+              if (this.shadowBlur === 8) glows++;
+            }
             return original.apply(this, args);
           };
           const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           let found = false;
+          let hitX = rect.left;
+          let hitY = rect.top;
           for (const x of [170, 186, 202, 218]) {
             for (const y of [4, 10, 24, 30, 34, 38, 52, 58, 62, 66, 80, 86, 90, 94]) {
               glows = 0;
               const options = {bubbles: true, clientX: rect.left + x, clientY: rect.top + y};
               graph.dispatchEvent(new MouseEvent('mousemove', options));
               await frame();
-              if (glows) { found = true; break; }
+              if (glows) {
+                found = true;
+                hitX = options.clientX;
+                hitY = options.clientY;
+                break;
+              }
             }
             if (found) break;
           }
           glows = 0;
-          graph.dispatchEvent(
-            new MouseEvent('mousemove', {bubbles: true, clientX: rect.right - 20, clientY: rect.top + 10}),
-          );
+          clearing = true;
+          graph.dispatchEvent(new MouseEvent('mouseout', {
+            bubbles: true,
+            clientX: hitX,
+            clientY: hitY,
+            relatedTarget: document.body,
+          }));
+          for (let attempt = 0; attempt < 30 && !clearRender; attempt++)
+            await new Promise(resolve => setTimeout(resolve, 20));
           await frame();
           CanvasRenderingContext2D.prototype.stroke = original;
-          return {found, cleared: glows === 0};
+          return {found, cleared: clearRender && glows === 0};
         })()`);
         assert.deepEqual(graphSelection, { found: true, cleared: true }, 'Graph line hover highlights and clears');
         const tabs = await win.webContents.executeJavaScript(
