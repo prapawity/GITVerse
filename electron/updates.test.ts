@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkAppUpdate, checkForRelease, isReleaseDownloadUrl, newerRelease, RELEASES_URL } from './updates';
+import {
+  checkAppUpdate,
+  checkForRelease,
+  isReleaseDownloadUrl,
+  listReleases,
+  newerRelease,
+  RELEASES_URL,
+} from './updates';
 
 const release = (tag_name: string) => ({ tag_name, draft: false, prerelease: false });
 
@@ -57,6 +64,40 @@ test('requests only the configured repository with a timeout and no redirects', 
 
 test('handles a repository without releases', async () => {
   assert.equal(await checkForRelease('1.0.0', async () => new Response(null, { status: 404 })), null);
+});
+
+test('lists stable versions in order and constructs trusted download links', async () => {
+  const versions = await listReleases(async (url, options) => {
+    assert.equal(url, 'https://api.github.com/repos/prapawity/GITVerse/releases?per_page=100&page=1');
+    assert.equal(options?.redirect, 'error');
+    return Response.json([
+      { ...release('v1.2.0'), html_url: 'https://example.com' },
+      release('v1.10.0'),
+      release('v2.0.0-beta.1'),
+      { ...release('v3.0.0'), draft: true },
+      release('not-a-version'),
+    ]);
+  });
+  assert.deepEqual(versions, [
+    { version: '1.10.0', url: `${RELEASES_URL}/tag/v1.10.0` },
+    { version: '1.2.0', url: `${RELEASES_URL}/tag/v1.2.0` },
+  ]);
+});
+
+test('loads older releases from the next page', async () => {
+  const requested: string[] = [];
+  const versions = await listReleases(async (url) => {
+    requested.push(String(url));
+    return Response.json(
+      requested.length === 1
+        ? Array.from({ length: 100 }, (_, index) => release(`v1.0.${index + 1}`))
+        : [release('v1.0.0')],
+    );
+  });
+  assert.equal(requested.length, 2);
+  assert.match(requested[1], /page=2$/);
+  assert.equal(versions.length, 101);
+  assert.equal(versions.at(-1)?.version, '1.0.0');
 });
 
 test('development update checks never call the network', async () => {

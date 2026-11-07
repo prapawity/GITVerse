@@ -205,7 +205,31 @@ export const checkout = (cwd: string, ref: string) => git(cwd, ['checkout', ref]
 export async function checkoutRemote(cwd: string, ref: string) {
   const slash = ref.indexOf('/');
   if (slash < 1 || slash === ref.length - 1) throw new Error('Invalid remote branch.');
-  return git(cwd, ['switch', '--detach', '--', `refs/remotes/${ref}`]);
+  const remoteRef = `refs/remotes/${ref}`;
+  await git(cwd, ['show-ref', '--verify', '--quiet', remoteRef]);
+  const name = ref.slice(slash + 1);
+  const branches = (await git(cwd, ['for-each-ref', '--format=%(refname:lstrip=2)%09%(upstream)', 'refs/heads/']))
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [branch, upstream] = line.split('\t');
+      return { branch, upstream };
+    });
+  const tracking = branches.filter((branch) => branch.upstream === remoteRef);
+  const matching = tracking.find((branch) => branch.branch === name);
+  if (!matching && tracking.length > 1)
+    throw new Error(`Multiple local branches track ${ref}. Select the local branch to check out.`);
+  const existing = matching ?? tracking[0] ?? branches.find((branch) => branch.branch === name);
+  if (existing) {
+    if (existing.upstream && existing.upstream !== remoteRef)
+      throw new Error(
+        `Local branch ${existing.branch} tracks a different remote branch. Select a local branch instead.`,
+      );
+    await git(cwd, ['switch', '--', existing.branch]);
+    return existing.branch;
+  }
+  await git(cwd, ['switch', '--track', '-c', name, '--', remoteRef]);
+  return name;
 }
 const conflicted = (f: FileStatus) => ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(f.index + f.worktree);
 export async function stage(cwd: string, paths: string[]) {
@@ -849,6 +873,31 @@ export const createTag = (cwd: string, name: string, hash: string) => git(cwd, [
 export const branchAt = (cwd: string, name: string, hash: string) => git(cwd, ['checkout', '-b', name, hash]);
 export const fileAt = (cwd: string, hash: string, path: string) => git(cwd, ['show', `${hash}:${path}`]);
 
+const MAX_BLOB_BYTES = 50 * 1024 * 1024;
+export async function fileBlobAt(cwd: string, hash: string, filePath: string): Promise<string> {
+  const { stdout } = await run('git', ['show', `${hash}:${filePath}`], {
+    cwd,
+    encoding: 'buffer',
+    maxBuffer: MAX_BLOB_BYTES,
+  }).catch((e: any) => {
+    throw new Error(
+      e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'File is too large to preview (over 50 MB).' : e.message,
+      { cause: e },
+    );
+  });
+  return stdout.toString('base64');
+}
+export async function workingFileBlob(cwd: string, filePath: string): Promise<string> {
+  const root = await realpath(cwd);
+  const full = path.resolve(root, filePath);
+  if (path.relative(root, full).startsWith('..') || path.isAbsolute(path.relative(root, full)))
+    throw new Error('File is outside the repository.');
+  const info = await lstat(full);
+  if (!info.isFile()) throw new Error('Only regular files can be previewed.');
+  if (info.size > MAX_BLOB_BYTES) throw new Error('File is too large to preview (over 50 MB).');
+  return (await readFile(full)).toString('base64');
+}
+
 export const worktreeAdd = (cwd: string, path: string, hash: string) =>
   git(cwd, ['worktree', 'add', '--detach', path, hash]);
 export const remoteUrl = async (cwd: string) => (await git(cwd, ['remote', 'get-url', 'origin'])).trim();
@@ -1042,3 +1091,14 @@ export const merge = (cwd: string, ref: string, noFf = true, ffOnly = false) =>
   git(cwd, ['merge', ...(ffOnly ? ['--ff-only'] : noFf ? ['--no-ff'] : []), '--no-edit', ref], { GIT_EDITOR: 'true' });
 /** Safe delete only: refuses to drop a branch that is not fully merged. */
 export const deleteBranch = (cwd: string, name: string) => git(cwd, ['branch', '-d', name]);
+export const deleteRemoteBranch = async (cwd: string, name: string) => {
+  const slash = name.indexOf('/');
+  const remote = name.slice(0, slash);
+  const branch = name.slice(slash + 1);
+  if (slash < 1 || !branch || name.includes('\0') || remote.startsWith('-') || branch.startsWith('-'))
+    throw new Error('Invalid remote branch.');
+  if (!(await git(cwd, ['remote'])).split('\n').includes(remote))
+    throw new Error('The selected remote no longer exists.');
+  await git(cwd, ['check-ref-format', '--branch', branch]);
+  await git(cwd, ['push', '--delete', '--', remote, branch]);
+};

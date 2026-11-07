@@ -71,6 +71,7 @@ interface RepoState {
   action: (name: 'fetch' | 'pull' | 'push' | 'stash' | 'stashPop', ...args: unknown[]) => Promise<void>;
   createBranch: (name: string) => Promise<void>;
   exec: (name: string, ...args: unknown[]) => Promise<void>;
+  deleteBothBranches: (local: string, remote: string) => Promise<void>;
 
   openRepo: (path?: string) => Promise<void>;
   refresh: (silent?: boolean) => Promise<void>;
@@ -159,6 +160,7 @@ export const useRepo = create<RepoState>((set, get) => {
     resolveFile: { label: 'Resolving…', fail: 'Could not resolve file' },
     merge: { label: 'Merging…', fail: 'Merge failed', blocking: true },
     deleteBranch: { label: 'Deleting branch…', fail: 'Could not delete the branch' },
+    deleteRemoteBranch: { label: 'Deleting remote branch…', fail: 'Could not delete the remote branch' },
     createTag: { label: 'Creating tag…', fail: 'Could not create tag' },
     createAnnotatedTag: { label: 'Creating tag…', fail: 'Could not create tag' },
     branchAt: { label: 'Creating branch…', fail: 'Could not create branch', blocking: true },
@@ -196,6 +198,8 @@ export const useRepo = create<RepoState>((set, get) => {
         return `Merged ${args[0]}`;
       case 'deleteBranch':
         return `Deleted branch “${args[0]}”`;
+      case 'deleteRemoteBranch':
+        return `Deleted remote branch “${args[0]}”`;
       case 'createTag':
       case 'createAnnotatedTag':
         return `Tag “${args[0]}” created`;
@@ -387,6 +391,20 @@ export const useRepo = create<RepoState>((set, get) => {
         },
         op.label,
         { blocking: op.blocking, fail: op.fail, done: () => (stopped ? null : doneMsg(name, args, before)) },
+      );
+    },
+
+    deleteBothBranches: (local, remote) => {
+      const cwd = get().repoPath;
+      if (!cwd) return Promise.resolve();
+      return guard(
+        async () => {
+          await api().deleteBranch(cwd, local);
+          await api().deleteRemoteBranch(cwd, remote);
+          await get().refresh();
+        },
+        'Deleting both branches…',
+        { blocking: true, fail: 'Could not delete both branches', done: `Deleted local and remote branch “${local}”` },
       );
     },
 
@@ -616,15 +634,17 @@ export const useRepo = create<RepoState>((set, get) => {
         { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}”` },
       ),
 
-    checkoutRemote: (ref) =>
-      guard(
+    checkoutRemote: (ref) => {
+      let branch = '';
+      return guard(
         async () => {
-          await api().checkoutRemote(get().repoPath, ref);
+          branch = await api().checkoutRemote(get().repoPath, ref);
           await get().refresh();
         },
         'Checking out…',
-        { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}” in detached HEAD mode` },
-      ),
+        { blocking: true, fail: 'Checkout failed', done: () => `Checked out local branch “${branch}”` },
+      );
+    },
 
     commit: (summary, description, opts) =>
       guard(

@@ -1,6 +1,6 @@
-import { gt, prerelease, valid } from 'semver';
+import { gt, prerelease, rcompare, valid } from 'semver';
 import { z } from 'zod';
-import type { AppUpdateCheck } from '../src/shared/updates';
+import type { AppUpdateCheck, ReleaseUpdate } from '../src/shared/updates';
 
 export const RELEASES_URL = 'https://github.com/prapawity/GITVerse/releases';
 const RELEASE_API = 'https://api.github.com/repos/prapawity/GITVerse/releases/latest';
@@ -10,9 +10,32 @@ const releaseSchema = z.object({
   prerelease: z.boolean(),
 });
 
-export interface ReleaseUpdate {
-  version: string;
-  url: string;
+export async function listReleases(fetchRelease: typeof fetch = fetch): Promise<ReleaseUpdate[]> {
+  const releases: ReleaseUpdate[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const response = await fetchRelease(
+      `https://api.github.com/repos/prapawity/GITVerse/releases?per_page=100&page=${page}`,
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'GITVerse',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        signal: AbortSignal.timeout(10_000),
+        redirect: 'error',
+      },
+    );
+    if (response.status === 404) break;
+    if (!response.ok) throw new Error(`GitHub release list failed (HTTP ${response.status}).`);
+    const entries = z.array(releaseSchema).parse(await response.json());
+    for (const release of entries) {
+      const version = valid(release.tag_name);
+      if (version && !release.draft && !release.prerelease && !prerelease(version))
+        releases.push({ version, url: `${RELEASES_URL}/tag/${encodeURIComponent(release.tag_name)}` });
+    }
+    if (entries.length < 100) break;
+  }
+  return releases.sort((a, b) => rcompare(a.version, b.version));
 }
 
 export function isReleaseDownloadUrl(value: unknown): value is string {

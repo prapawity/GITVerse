@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GraphLayout, GraphRow, RefLabel } from '../shared/types';
+import type { GraphLayout, GraphRow, RefLabel, Segment } from '../shared/types';
 import { groupRefs } from '../lib/refGroups';
 import { Spinner } from './Loading';
 import { useSettings } from '../store/settingsStore';
@@ -40,7 +40,7 @@ interface Props {
   selectedHashes: string[];
   filter?: string;
   onSelect: (hash: string, hashes: string[]) => void;
-  onContextMenu?: (hash: string, x: number, y: number) => void;
+  onContextMenu?: (hash: string, x: number, y: number, ref?: { name: string; kind: 'local' | 'remote' }) => void;
   onDoubleClick?: (ref: RefLabel) => void;
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -85,6 +85,28 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number) {
   return text.slice(0, lo) + '…';
 }
 
+function segmentPath(segment: Segment, x1: number, x2: number, top: number) {
+  const path = new Path2D();
+  const mid = top + ROW_H / 2;
+  const direction = Math.sign(x2 - x1);
+  const radius = 6;
+  if (x1 === x2) {
+    path.moveTo(x1, segment.half === 'top' ? top : mid);
+    path.lineTo(x2, segment.half === 'top' ? mid : top + ROW_H);
+  } else if (segment.half === 'top') {
+    path.moveTo(x1, top);
+    path.lineTo(x1, mid - radius);
+    path.quadraticCurveTo(x1, mid, x1 + direction * radius, mid);
+    path.lineTo(x2, mid);
+  } else {
+    path.moveTo(x1, mid);
+    path.lineTo(x2 - direction * radius, mid);
+    path.quadraticCurveTo(x2, mid, x2, mid + radius);
+    path.lineTo(x2, top + ROW_H);
+  }
+  return path;
+}
+
 /** Virtualised canvas modelled on GitKraken: BRANCH/TAG | GRAPH | COMMIT MESSAGE. */
 export function CommitGraph({
   layout,
@@ -112,6 +134,8 @@ export function CommitGraph({
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [hover, setHover] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
+  const [hoveredLane, setHoveredLane] = useState<{ layout: GraphLayout; color: number } | null>(null);
+  const highlightedLane = hoveredLane?.layout === layout ? hoveredLane.color : null;
   const [scrollTop, setScrollTop] = useState(0);
   const [msgScroll, setMsgScroll] = useState(0);
   const maxMsgW = useRef(0); // widest message drawn so far; drives the horizontal scroll range
@@ -276,34 +300,16 @@ export function CommitGraph({
       }
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
-      const r = 6;
       for (let i = first; i <= last; i++) {
         const row = rows[i];
         const top = (i + wipRows) * ROW_H - scrollTop;
-        const mid = top + ROW_H / 2;
         for (const sg of row.segments) {
           ctx.setLineDash(sg.stash ? [4, 4] : []);
           ctx.strokeStyle = col(sg.color, light);
-          ctx.beginPath();
-          const x1 = gx(sg.x1),
-            x2 = gx(sg.x2),
-            d = Math.sign(x2 - x1);
-          if (sg.x1 === sg.x2) {
-            const [y1, y2] = sg.half === 'top' ? [top, mid] : [mid, top + ROW_H];
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-          } else if (sg.half === 'top') {
-            ctx.moveTo(x1, top);
-            ctx.lineTo(x1, mid - r);
-            ctx.quadraticCurveTo(x1, mid, x1 + d * r, mid);
-            ctx.lineTo(x2, mid);
-          } else {
-            ctx.moveTo(x1, mid);
-            ctx.lineTo(x2 - d * r, mid);
-            ctx.quadraticCurveTo(x2, mid, x2, mid + r);
-            ctx.lineTo(x2, top + ROW_H);
-          }
-          ctx.stroke();
+          ctx.lineWidth = sg.color === highlightedLane ? 3 : 2;
+          ctx.shadowColor = sg.color === highlightedLane ? col(sg.color, light) : 'transparent';
+          ctx.shadowBlur = sg.color === highlightedLane ? 8 : 0;
+          ctx.stroke(segmentPath(sg, gx(sg.x1), gx(sg.x2), top));
         }
       }
       ctx.setLineDash([]);
@@ -484,6 +490,7 @@ export function CommitGraph({
     wipRows,
     headIndex,
     light,
+    highlightedLane,
   ]);
 
   useEffect(() => {
@@ -495,6 +502,29 @@ export function CommitGraph({
     const rect = scrollRef.current!.getBoundingClientRect();
     const i = Math.floor((e.clientY - rect.top + scrollTop) / ROW_H) - wipRows;
     return i >= -wipRows && i < rows.length ? i : null;
+  };
+
+  const laneAt = (e: React.MouseEvent, i: number | null) => {
+    const rect = scrollRef.current!.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (!showLines || i === null || i < 0 || x < gL || x > gR) return null;
+    const row = rows[i];
+    const y = e.clientY - rect.top;
+    const mid = (i + wipRows) * ROW_H - scrollTop + ROW_H / 2;
+    if (Math.hypot(x - gx(row.col), y - mid) <= AV + 2) return row.color;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return null;
+    ctx.save();
+    ctx.resetTransform();
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.setLineDash([]);
+    const top = mid - ROW_H / 2;
+    const lane = [...row.segments]
+      .reverse()
+      .find((segment) => ctx.isPointInStroke(segmentPath(segment, gx(segment.x1), gx(segment.x2), top), x, y))?.color;
+    ctx.restore();
+    return lane ?? null;
   };
 
   const headCls = 'px-3 text-[11px] font-mono uppercase tracking-wider text-sub flex items-center';
@@ -543,10 +573,19 @@ export function CommitGraph({
           else if (maxGScroll) setGScroll((v) => Math.max(0, Math.min(maxGScroll, v + dx)));
         }}
         onMouseMove={(e) => {
-          setHover(rowAt(e));
+          const i = rowAt(e);
+          setHover(i);
           setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left);
+          const color = laneAt(e, i);
+          setHoveredLane((current) =>
+            color === null ? null : current?.layout === layout && current.color === color ? current : { layout, color },
+          );
         }}
-        onMouseLeave={() => setHover(null)}
+        onMouseLeave={(e) => {
+          if (e.relatedTarget instanceof Element && e.relatedTarget.closest('[data-branch-tooltip]')) return;
+          setHover(null);
+          setHoveredLane(null);
+        }}
         onClick={(e) => {
           const i = rowAt(e);
           if (i === -1) {
@@ -717,43 +756,70 @@ export function CommitGraph({
         hoverX < REF_W &&
         rows[hover]?.commit.refs.length > 0 &&
         (() => {
-          const refs = groupRefs(rows[hover].commit.refs);
-          const shown = refs.slice(0, 14);
-          // long names wrap onto extra lines, so estimate the height from the text length instead of a fixed row
-          const h =
-            shown.reduce(
-              (n, g) => n + 8 + 19 * Math.max(1, Math.ceil((g.ref.name.length + g.remotes.join(', ').length) / 44)),
-              16,
-            ) + (refs.length > shown.length ? 24 : 0);
+          const shown = rows[hover].commit.refs;
+          const h = Math.min(
+            window.innerHeight * 0.6,
+            shown.reduce((n, ref) => n + 8 + 19 * Math.max(1, Math.ceil(ref.name.length / 44)), 16),
+          );
           const rowTop = HEAD_H + (hover + wipRows) * ROW_H - scrollTop;
           const top = rowTop + ROW_H + h > size.h + HEAD_H ? Math.max(HEAD_H, rowTop - h) : rowTop + ROW_H;
           const glyph = { remote: '☁', tag: '◆', local: '●', head: '●' } as const;
           return (
             <div
-              role="tooltip"
-              className="pointer-events-none absolute z-30 min-w-[220px] max-w-[min(480px,60vw)] rounded-lg border border-surface bg-mantle py-2 shadow-2xl"
+              role="group"
+              aria-label="Branches and tags on this commit"
+              data-branch-tooltip
+              className="absolute z-30 max-h-[60vh] min-w-[220px] max-w-[min(480px,60vw)] overflow-y-auto rounded-lg border border-surface bg-mantle py-2 shadow-2xl"
               style={{ left: 8, top }}
+              onMouseLeave={(e) => {
+                if (e.relatedTarget instanceof Node && scrollRef.current?.contains(e.relatedTarget)) return;
+                setHover(null);
+                setHoveredLane(null);
+              }}
             >
-              {shown.map(({ ref: r, remotes }) => (
-                <div
-                  key={r.kind + r.name}
-                  className={`flex items-start gap-2 px-3 py-[4px] text-[13px] leading-[19px] ${r.current ? 'font-semibold text-[#4cc2ff]' : ''}`}
-                >
-                  <span aria-hidden className="mt-px w-4 shrink-0 text-center text-[11px] text-sub">
-                    {glyph[r.kind]}
-                  </span>
-                  <span className="min-w-0 break-all">
-                    {r.kind === 'head' ? 'Detached HEAD' : r.name}
-                    {remotes.length > 0 && (
-                      <span className="ml-2 text-[11px] font-normal text-sub">☁ {remotes.join(', ')}</span>
-                    )}
-                  </span>
-                  <span className="ml-auto shrink-0 pl-3 text-[11px] text-sub">{r.current ? 'current' : r.kind}</span>
-                </div>
-              ))}
-              {refs.length > shown.length && (
-                <div className="px-3 pt-1 text-[12px] text-sub">+{refs.length - shown.length} more</div>
-              )}
+              {shown.map((r) => {
+                const content = (
+                  <>
+                    <span aria-hidden className="mt-px w-4 shrink-0 text-center text-[11px] text-sub">
+                      {glyph[r.kind]}
+                    </span>
+                    <span className="min-w-0 break-all">{r.kind === 'head' ? 'Detached HEAD' : r.name}</span>
+                    <span className="ml-auto shrink-0 pl-3 text-[11px] text-sub">{r.current ? 'current' : r.kind}</span>
+                  </>
+                );
+                return r.kind === 'local' || r.kind === 'remote' ? (
+                  <button
+                    key={r.kind + r.name}
+                    type="button"
+                    aria-label={`Open actions for ${r.kind} branch ${r.name}`}
+                    className={`flex w-full items-start gap-2 px-3 py-[4px] text-left text-[13px] leading-[19px] hover:bg-[#4cc2ff]/15 ${r.current ? 'font-semibold text-[#4cc2ff]' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onContextMenu?.(rows[hover].commit.hash, e.clientX, e.clientY, {
+                        name: r.name,
+                        kind: r.kind as 'local' | 'remote',
+                      });
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onContextMenu?.(rows[hover].commit.hash, e.clientX, e.clientY, {
+                        name: r.name,
+                        kind: r.kind as 'local' | 'remote',
+                      });
+                    }}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div
+                    key={r.kind + r.name}
+                    className="flex items-start gap-2 px-3 py-[4px] text-[13px] leading-[19px]"
+                  >
+                    {content}
+                  </div>
+                );
+              })}
             </div>
           );
         })()}

@@ -781,6 +781,13 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
           <>
             <h1 className="mb-4 text-[28px] font-semibold">General</h1>
             <Row
+              label="Check for updates automatically"
+              htmlFor="auto-update"
+              hint="Check for a new stable release when GITVerse starts."
+            >
+              <Check id="auto-update" checked={st.autoCheckUpdates} onChange={set('autoCheckUpdates')} />
+            </Row>
+            <Row
               label="Auto-Fetch Interval"
               htmlFor="af"
               hint="In minutes, between 0 and 60 (0 disables auto-fetch). Fetches from every remote in the background."

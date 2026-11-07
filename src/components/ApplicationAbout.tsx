@@ -3,6 +3,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { version } from '../../package.json';
 import type { AppUpdateCheck } from '../shared/updates';
 import { UpdateNotice } from './UpdateNotice';
+import { ReleasePicker } from './ReleasePicker';
 
 export function ApplicationAbout() {
   const [environment, setEnvironment] = useState<{ enabled: boolean; currentVersion: string } | null>(null);
@@ -10,6 +11,7 @@ export function ApplicationAbout() {
   const [update, setUpdate] = useState<Extract<AppUpdateCheck, { kind: 'optional' }> | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showVersions, setShowVersions] = useState(false);
   useEffect(() => {
     let active = true;
     const updates = (window as any).gitApi?.updates;
@@ -64,6 +66,12 @@ export function ApplicationAbout() {
           {checking ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <RefreshCw size={16} aria-hidden />}
           {checking ? 'Checking...' : 'Check for Update'}
         </button>
+        <button
+          onClick={() => setShowVersions(true)}
+          className="mt-3 min-h-[40px] rounded-md border border-surface px-4 py-2 text-sm hover:bg-surface/60"
+        >
+          Download another version
+        </button>
         {environment && !environment.enabled && <p className="mt-3 text-sm text-sub">Development build</p>}
         {message && (
           <p role="status" className="mt-3 text-sm text-sub">
@@ -77,6 +85,9 @@ export function ApplicationAbout() {
         )}
       </div>
       {update && <UpdateNotice update={update} onLater={() => setUpdate(null)} />}
+      {showVersions && (
+        <ReleasePicker currentVersion={environment?.currentVersion ?? version} onClose={() => setShowVersions(false)} />
+      )}
     </section>
   );
 }
