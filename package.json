@@ -1,7 +1,7 @@
 {
   "name": "gitverse",
   "productName": "GITVerse",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A desktop Git client with commit graphs, conflict tools, and optional AI assistance.",
   "author": "GITVerse contributors",
