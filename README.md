@@ -44,7 +44,7 @@ Download the latest published installer from [GitHub Releases](https://github.co
 | macOS Apple Silicon | `mac-arm64.dmg` or `mac-arm64.zip` suffix |
 | macOS Intel         | `mac-x64.dmg` or `mac-x64.zip` suffix     |
 | Windows x64         | `win-x64.exe` suffix                      |
-| Linux x64           | `linux-x64.AppImage` suffix               |
+| Linux x64           | `linux-x86_64.AppImage` suffix            |
 
 On macOS, open the DMG and drag GITVerse to Applications (or unzip the ZIP). On Windows, run the EXE installer. On Linux, make the AppImage executable (`chmod +x GITVerse-*.AppImage`) and launch it; AppImage support may require FUSE or extraction on your distribution.
 
