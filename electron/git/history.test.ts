@@ -5,7 +5,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { agentCheckpoints, commit, deleteRemoteBranch, historyPosition, log, pushBranch, pushInfo } from './git';
+import {
+  agentCheckpoints,
+  checkoutRemote,
+  commit,
+  deleteRemoteBranch,
+  historyPosition,
+  log,
+  pushBranch,
+  pushInfo,
+} from './git';
 
 const run = promisify(execFile);
 
@@ -161,4 +170,55 @@ test('deletes a remote branch without affecting its local counterpart', async (t
   await assert.rejects(command(remote, 'rev-parse', 'refs/heads/feature'));
   assert.equal(await command(cwd, 'rev-parse', 'refs/heads/feature'), await command(cwd, 'rev-parse', 'main'));
   await assert.rejects(command(cwd, 'rev-parse', 'refs/remotes/origin/feature'));
+});
+
+test('checking out a remote uses a tracking branch and preserves its local history', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-checkout-remote-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const cwd = path.join(dir, 'local');
+  const remote = path.join(dir, 'remote.git');
+  const peer = path.join(dir, 'peer');
+  const command = async (repo: string, ...args: string[]) => (await run('git', args, { cwd: repo })).stdout.trim();
+  await command(dir, 'init', '--bare', '--initial-branch=main', remote);
+  await command(dir, 'init', '--initial-branch=main', cwd);
+  await command(cwd, 'config', 'user.name', 'Test');
+  await command(cwd, 'config', 'user.email', 'test@example.com');
+  await command(cwd, 'commit', '--allow-empty', '-m', 'Initial');
+  await command(cwd, 'remote', 'add', 'origin', remote);
+  await command(cwd, 'push', 'origin', 'main');
+  await command(cwd, 'push', 'origin', 'main:feature');
+  await command(cwd, 'fetch', 'origin');
+
+  assert.equal(await checkoutRemote(cwd, 'origin/feature'), 'feature');
+  assert.equal(await command(cwd, 'branch', '--show-current'), 'feature');
+  assert.equal(await command(cwd, 'rev-parse', '--abbrev-ref', 'feature@{upstream}'), 'origin/feature');
+  const localHead = await command(cwd, 'rev-parse', 'feature');
+  await command(cwd, 'switch', 'main');
+  await command(dir, 'clone', remote, peer);
+  await command(peer, 'switch', 'feature');
+  await command(
+    peer,
+    '-c',
+    'user.name=Peer',
+    '-c',
+    'user.email=peer@example.com',
+    'commit',
+    '--allow-empty',
+    '-m',
+    'Remote change',
+  );
+  await command(peer, 'push');
+  await command(cwd, 'fetch', 'origin');
+  assert.notEqual(await command(cwd, 'rev-parse', 'origin/feature'), localHead);
+  assert.equal(await checkoutRemote(cwd, 'origin/feature'), 'feature');
+  assert.equal(await command(cwd, 'rev-parse', 'HEAD'), localHead);
+  assert.equal(await command(cwd, 'branch', '--show-current'), 'feature');
+
+  await command(cwd, 'switch', 'main');
+  await command(cwd, 'push', 'origin', 'main:conflict');
+  await command(cwd, 'fetch', 'origin');
+  await command(cwd, 'branch', 'conflict');
+  await command(cwd, 'branch', '--set-upstream-to=origin/main', 'conflict');
+  await assert.rejects(checkoutRemote(cwd, 'origin/conflict'), /tracks a different remote branch/);
+  assert.equal(await command(cwd, 'branch', '--show-current'), 'main');
 });

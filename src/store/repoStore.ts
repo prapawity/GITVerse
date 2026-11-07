@@ -634,15 +634,17 @@ export const useRepo = create<RepoState>((set, get) => {
         { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}”` },
       ),
 
-    checkoutRemote: (ref) =>
-      guard(
+    checkoutRemote: (ref) => {
+      let branch = '';
+      return guard(
         async () => {
-          await api().checkoutRemote(get().repoPath, ref);
+          branch = await api().checkoutRemote(get().repoPath, ref);
           await get().refresh();
         },
         'Checking out…',
-        { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}” in detached HEAD mode` },
-      ),
+        { blocking: true, fail: 'Checkout failed', done: () => `Checked out local branch “${branch}”` },
+      );
+    },
 
     commit: (summary, description, opts) =>
       guard(
