@@ -189,6 +189,38 @@ if (!process.versions.electron) {
         win.webContents.reload();
         await loaded;
         await checkRestored();
+        win.webContents.setBackgroundThrottling(false);
+        const graphSelection = await win.webContents.executeJavaScript(`(async () => {
+          const canvas = document.querySelector('canvas');
+          const graph = canvas.parentElement;
+          const rect = graph.getBoundingClientRect();
+          const original = CanvasRenderingContext2D.prototype.stroke;
+          let glows = 0;
+          CanvasRenderingContext2D.prototype.stroke = function (...args) {
+            if (this.canvas === canvas && this.shadowBlur === 8) glows++;
+            return original.apply(this, args);
+          };
+          const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          let found = false;
+          for (const x of [170, 186, 202, 218]) {
+            for (const y of [4, 10, 24, 30, 34, 38, 52, 58, 62, 66, 80, 86, 90, 94]) {
+              glows = 0;
+              const options = {bubbles: true, clientX: rect.left + x, clientY: rect.top + y};
+              graph.dispatchEvent(new MouseEvent('mousemove', options));
+              await frame();
+              if (glows) { found = true; break; }
+            }
+            if (found) break;
+          }
+          glows = 0;
+          graph.dispatchEvent(
+            new MouseEvent('mousemove', {bubbles: true, clientX: rect.right - 20, clientY: rect.top + 10}),
+          );
+          await frame();
+          CanvasRenderingContext2D.prototype.stroke = original;
+          return {found, cleared: glows === 0};
+        })()`);
+        assert.deepEqual(graphSelection, { found: true, cleared: true }, 'Graph line hover highlights and clears');
         const tabs = await win.webContents.executeJavaScript(
           `JSON.parse(window.gitApi.stateStorage.getItem('gitverse.tabs'))`,
         );
@@ -199,7 +231,7 @@ if (!process.versions.electron) {
           await unbridged.webContents.executeJavaScript(`document.querySelector('h1')?.textContent`),
           'GITVerse could not start',
         );
-        console.log('Electron smoke run passed');
+        console.log('Electron smoke run passed: repository restore, graph hover highlight/clear, and bridge.');
         clearTimeout(timeout);
         app.exit(0);
       } catch (error) {
