@@ -3,3 +3,7 @@ export type AppUpdateCheck =
   | { kind: 'current'; currentVersion: string }
   | { kind: 'optional'; currentVersion: string; version: string; url: string }
   | { kind: 'error'; currentVersion: string; message: string };
+export interface ReleaseUpdate {
+  version: string;
+  url: string;
+}

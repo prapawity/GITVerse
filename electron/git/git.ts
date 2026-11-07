@@ -1042,3 +1042,14 @@ export const merge = (cwd: string, ref: string, noFf = true, ffOnly = false) =>
   git(cwd, ['merge', ...(ffOnly ? ['--ff-only'] : noFf ? ['--no-ff'] : []), '--no-edit', ref], { GIT_EDITOR: 'true' });
 /** Safe delete only: refuses to drop a branch that is not fully merged. */
 export const deleteBranch = (cwd: string, name: string) => git(cwd, ['branch', '-d', name]);
+export const deleteRemoteBranch = async (cwd: string, name: string) => {
+  const slash = name.indexOf('/');
+  const remote = name.slice(0, slash);
+  const branch = name.slice(slash + 1);
+  if (slash < 1 || !branch || name.includes('\0') || remote.startsWith('-') || branch.startsWith('-'))
+    throw new Error('Invalid remote branch.');
+  if (!(await git(cwd, ['remote'])).split('\n').includes(remote))
+    throw new Error('The selected remote no longer exists.');
+  await git(cwd, ['check-ref-format', '--branch', branch]);
+  await git(cwd, ['push', '--delete', '--', remote, branch]);
+};

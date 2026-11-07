@@ -50,6 +50,7 @@ const names = [
   'resolveFile',
   'merge',
   'deleteBranch',
+  'deleteRemoteBranch',
   'readWorkFile',
   'writeWorkFile',
 ];
@@ -68,6 +69,8 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   environment: () => ipcRenderer.invoke('updates:environment'),
   startup: () => ipcRenderer.invoke('updates:startup'),
   check: () => ipcRenderer.invoke('updates:check'),
+  list: () => ipcRenderer.invoke('updates:list'),
+  openReleaseList: () => ipcRenderer.invoke('updates:openReleaseList'),
   openDownloads: (url: string) => ipcRenderer.invoke('updates:openDownloads', url),
 };
 (gitApi as any).findRepositories = (folder: string, id: string) =>

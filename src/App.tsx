@@ -892,13 +892,19 @@ export default function App() {
                             setSelectedHashes(hashes.filter((id) => !refs.stashes.some((entry) => entry.hash === id)));
                             select(hash);
                           }}
-                          onContextMenu={(hash, x, y) => {
+                          onContextMenu={(hash, x, y, ref) => {
                             const stash = refs.stashes.find((entry) => entry.hash === hash);
                             if (stash) {
                               showStash(stash);
                               return;
                             }
-                            setCtx({ hash, x, y, hashes: selectedHashes.includes(hash) ? selectedHashes : [hash] });
+                            setCtx({
+                              hash,
+                              x,
+                              y,
+                              ref,
+                              hashes: selectedHashes.includes(hash) ? selectedHashes : [hash],
+                            });
                           }}
                           onDoubleClick={(r) => {
                             if (!r.current && r.kind === 'local') checkout(r.name);

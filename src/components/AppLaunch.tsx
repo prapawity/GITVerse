@@ -4,6 +4,8 @@ import { useRepo } from '../store/repoStore';
 import { version } from '../../package.json';
 import { LaunchScreen } from './LaunchScreen';
 import { UpdateNotice } from './UpdateNotice';
+import { ReleasePicker } from './ReleasePicker';
+import { useSettings } from '../store/settingsStore';
 
 export function AppLaunch({ children }: { children: React.ReactNode }) {
   const [result, setResult] = useState<AppUpdateCheck | null>(null);
@@ -11,17 +13,20 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
   const [accepted, setAccepted] = useState(false);
   const [fading, setFading] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
   const loading = useRepo((state) => state.loading);
   useEffect(() => {
     let active = true;
-    const delay = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 2500;
+    const delay = 2500;
     const timer = setTimeout(() => {
       if (active) setElapsed(true);
     }, delay);
     const updates = (window as any).gitApi?.updates;
-    const check: Promise<AppUpdateCheck> = updates?.startup
-      ? updates.startup()
-      : Promise.resolve({ kind: 'development', currentVersion: version });
+    const check: Promise<AppUpdateCheck> = !useSettings.getState().autoCheckUpdates
+      ? Promise.resolve({ kind: 'current', currentVersion: version })
+      : updates?.startup
+        ? updates.startup()
+        : Promise.resolve({ kind: 'development', currentVersion: version });
     check
       .then((value) => {
         if (active) setResult(value);
@@ -35,7 +40,11 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
     };
   }, []);
   const ready =
-    elapsed && !loading && result && (accepted || result.kind === 'current' || result.kind === 'development');
+    elapsed &&
+    !loading &&
+    !showVersions &&
+    result &&
+    (accepted || result.kind === 'current' || result.kind === 'development');
   useEffect(() => {
     if (!ready) return;
     setFading(true);
@@ -80,9 +89,13 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
               <button onClick={() => setAccepted(true)}>Continue</button>
             </>
           )}
+          {!fading && <button onClick={() => setShowVersions(true)}>Download another version</button>}
         </LaunchScreen>
       )}
-      {elapsed && !loading && result?.kind === 'optional' && !accepted && (
+      {showVersions && (
+        <ReleasePicker currentVersion={result?.currentVersion ?? version} onClose={() => setShowVersions(false)} />
+      )}
+      {elapsed && !loading && !showVersions && result?.kind === 'optional' && !accepted && (
         <UpdateNotice update={result} onLater={() => setAccepted(true)} />
       )}
     </>

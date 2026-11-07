@@ -6,6 +6,7 @@ export interface Settings {
   theme: 'dark' | 'midnight' | 'graphite' | 'light';
   autoFetchMinutes: number; // 0 disables
   autoPrune: boolean;
+  autoCheckUpdates: boolean;
   fetchMode: 'all' | 'ff' | 'ff-only' | 'rebase';
   initialCommits: number;
   lazyLoad: boolean;
@@ -50,6 +51,7 @@ export const DEFAULTS: Settings = {
   theme: 'dark',
   autoFetchMinutes: 1,
   autoPrune: true,
+  autoCheckUpdates: true,
   fetchMode: 'all',
   initialCommits: 400,
   lazyLoad: true,
