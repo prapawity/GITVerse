@@ -87,7 +87,7 @@ function SplitHunk({
   const right = useRef<HTMLDivElement>(null);
   const syncing = useRef(false);
   const rows = useMemo(() => toSplit(lines), [lines]);
-  const link = (from: React.RefObject<HTMLDivElement>, to: React.RefObject<HTMLDivElement>) => () => {
+  const link = (from: React.RefObject<HTMLDivElement | null>, to: React.RefObject<HTMLDivElement | null>) => () => {
     if (syncing.current) {
       syncing.current = false;
       return;
