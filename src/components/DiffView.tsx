@@ -7,6 +7,7 @@ import { CodeSkeleton, ListSkeleton, Spinner } from './Loading';
 import type { ChangedFile } from './DetailsPanel';
 import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
+import { isJsonFile, isSvgFile, JsonPreview, MediaPreview, mediaType } from './MediaPreview';
 
 const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-[#f38ba8]/[0.14]', ctx: '' } as const;
 const SIGN = { add: '+', del: '−', ctx: '' } as const;
@@ -151,6 +152,19 @@ export function DiffView({
   const working = useRepo((state) => state.working);
   const operation = useRepo((state) => state.operation);
   const isMd = /\.(md|markdown)$/i.test(file.path);
+  const isJson = isJsonFile(file.path);
+  const isSvg = isSvgFile(file.path) && !readOnlySnapshot;
+  const hasPreview = isMd || isJson || isSvg;
+  const canPreviewMedia = !readOnlySnapshot && !!mediaType(file.path);
+  const loadAfterBlob =
+    file.status === 'D'
+      ? null
+      : () => (area ? api().workingFileBlob(repoPath, file.path) : api().fileBlobAt(repoPath, hash, file.path));
+  const beforePath = file.oldPath ?? file.path;
+  const loadBeforeBlob =
+    file.status === 'A' || area === 'untracked' || file.untracked
+      ? null
+      : () => api().fileBlobAt(repoPath, area ? 'HEAD' : `${hash}^`, beforePath);
   const key = [repoPath, hash, file.path, file.oldPath, area, revision, discardRevision, readOnlySnapshot];
   const context = JSON.stringify([repoPath, file.path, area]);
   const activeContext = useRef(context);
@@ -160,9 +174,9 @@ export function DiffView({
     setMode('diff');
     setBlame(false);
     setHistory(false);
-    setView(isMd ? 'preview' : 'code');
+    setView(hasPreview ? 'preview' : 'code');
     setDiscardError('');
-  }, [hash, file.path, isMd]);
+  }, [hash, file.path, hasPreview]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('[role="dialog"]') && onClose();
     window.addEventListener('keydown', h);
@@ -348,8 +362,8 @@ export function DiffView({
               </button>
             </div>
           )}
-          {mode === 'file' && isMd && (
-            <div role="group" aria-label="Markdown" className={grp}>
+          {mode === 'file' && hasPreview && (
+            <div role="group" aria-label={isMd ? 'Markdown' : isJson ? 'JSON' : 'SVG'} className={grp}>
               <button aria-pressed={view === 'code'} className={seg(view === 'code')} onClick={() => setView('code')}>
                 Code
               </button>
@@ -358,7 +372,7 @@ export function DiffView({
                 className={seg(view === 'preview')}
                 onClick={() => setView('preview')}
               >
-                Preview
+                {isJson ? 'Formatted' : 'Preview'}
               </button>
             </div>
           )}
@@ -409,7 +423,10 @@ export function DiffView({
           {err(discardError)}
           {mode === 'diff' && !diff && <CodeSkeleton label="Loading changes…" />}
           {mode === 'diff' && err(diff?.error)}
-          {mode === 'diff' && parsed?.binary && (
+          {mode === 'diff' && parsed?.binary && canPreviewMedia && (
+            <MediaPreview path={file.path} loadAfter={loadAfterBlob} loadBefore={loadBeforeBlob} deps={key} />
+          )}
+          {mode === 'diff' && parsed?.binary && !canPreviewMedia && (
             <div className="p-4 text-sub">Binary file — no text diff available.</div>
           )}
           {mode === 'diff' && parsed && !parsed.binary && !parsed.hunks.length && (
@@ -445,7 +462,13 @@ export function DiffView({
           {mode === 'file' && !content && <CodeSkeleton label="Loading file…" lines={18} />}
           {mode === 'file' && err(content?.error)}
           {mode === 'file' && content?.data != null && view === 'preview' && isMd && <Markdown text={content.data} />}
-          {mode === 'file' && content?.data != null && !(view === 'preview' && isMd) && (
+          {mode === 'file' && content?.data != null && view === 'preview' && isJson && (
+            <JsonPreview text={content.data} />
+          )}
+          {mode === 'file' && view === 'preview' && isSvg && (
+            <MediaPreview path={file.path} loadAfter={loadAfterBlob} deps={key} />
+          )}
+          {mode === 'file' && content?.data != null && !(view === 'preview' && hasPreview) && (
             <div className="min-w-max py-2">
               {blame && !blameRes && (
                 <div role="status" className="flex items-center gap-2 px-4 pb-2 font-sans text-sub">

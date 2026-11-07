@@ -873,6 +873,31 @@ export const createTag = (cwd: string, name: string, hash: string) => git(cwd, [
 export const branchAt = (cwd: string, name: string, hash: string) => git(cwd, ['checkout', '-b', name, hash]);
 export const fileAt = (cwd: string, hash: string, path: string) => git(cwd, ['show', `${hash}:${path}`]);
 
+const MAX_BLOB_BYTES = 50 * 1024 * 1024;
+export async function fileBlobAt(cwd: string, hash: string, filePath: string): Promise<string> {
+  const { stdout } = await run('git', ['show', `${hash}:${filePath}`], {
+    cwd,
+    encoding: 'buffer',
+    maxBuffer: MAX_BLOB_BYTES,
+  }).catch((e: any) => {
+    throw new Error(
+      e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'File is too large to preview (over 50 MB).' : e.message,
+      { cause: e },
+    );
+  });
+  return stdout.toString('base64');
+}
+export async function workingFileBlob(cwd: string, filePath: string): Promise<string> {
+  const root = await realpath(cwd);
+  const full = path.resolve(root, filePath);
+  if (path.relative(root, full).startsWith('..') || path.isAbsolute(path.relative(root, full)))
+    throw new Error('File is outside the repository.');
+  const info = await lstat(full);
+  if (!info.isFile()) throw new Error('Only regular files can be previewed.');
+  if (info.size > MAX_BLOB_BYTES) throw new Error('File is too large to preview (over 50 MB).');
+  return (await readFile(full)).toString('base64');
+}
+
 export const worktreeAdd = (cwd: string, path: string, hash: string) =>
   git(cwd, ['worktree', 'add', '--detach', path, hash]);
 export const remoteUrl = async (cwd: string) => (await git(cwd, ['remote', 'get-url', 'origin'])).trim();
