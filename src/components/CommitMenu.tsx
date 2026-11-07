@@ -42,7 +42,7 @@ export function CommitMenu({
   onPush: () => void;
   onClose: () => void;
 }) {
-  const { repoPath, exec, checkout, checkoutRemote, toast, track, refs, graph, action } = useRepo();
+  const { repoPath, exec, deleteBothBranches, checkout, checkoutRemote, toast, track, refs, graph, action } = useRepo();
   const [open, setOpen] = useState<number | null>(null);
   const short = hash.slice(0, 7);
 
@@ -66,6 +66,31 @@ export function CommitMenu({
     (displayed && (displayed.ref.kind === 'local' || displayed.ref.kind === 'remote') ? displayed.ref : undefined);
   const refName = ref?.name;
   const isCurrent = ref?.kind === 'local' && refName === current;
+  const localName = ref?.kind === 'remote' ? refName!.slice(refName!.indexOf('/') + 1) : refName;
+  const pairedLocal = localName && refs.local.find((branch) => branch.name === localName);
+  const pairedRemote =
+    pairedLocal &&
+    (ref?.kind === 'remote'
+      ? refs.remote.find((branch) => branch.name === refName)
+      : (refs.remote.find((branch) => branch.name === `origin/${pairedLocal.name}`) ??
+        refs.remote.find((branch) => branch.name.endsWith(`/${pairedLocal.name}`))));
+  const sameTip = !!pairedLocal && !!pairedRemote && pairedLocal.hash === pairedRemote.hash;
+  const deleteLocal = (name: string) =>
+    sure(
+      'Delete local branch',
+      `Delete local branch ${name}? Git will refuse if it is not fully merged.`,
+      'Delete local',
+      () => exec('deleteBranch', name),
+      true,
+    );
+  const deleteRemote = (name: string) =>
+    sure(
+      'Delete remote branch',
+      `Delete remote branch ${name} from its origin? This cannot be undone.`,
+      'Delete remote',
+      () => exec('deleteRemoteBranch', name),
+      true,
+    );
   const branchItems: Item[] =
     ref && refName
       ? [
@@ -105,21 +130,27 @@ export function CommitMenu({
               if (n) exec('branchAt', n, hash);
             },
           },
-          ...(ref.kind === 'local' && !isCurrent
+          ...(sameTip && !pairedLocal.current
             ? [
+                { label: `Delete local ${pairedLocal.name}`, danger: true, run: deleteLocal(pairedLocal.name) },
+                { label: `Delete remote ${pairedRemote.name}`, danger: true, run: deleteRemote(pairedRemote.name) },
                 {
-                  label: `Delete ${refName}`,
+                  label: `Delete both ${pairedLocal.name}`,
                   danger: true,
                   run: sure(
-                    'Delete branch',
-                    `Delete local branch ${refName}? Git will refuse if it is not fully merged.`,
-                    'Delete',
-                    () => exec('deleteBranch', refName),
+                    'Delete both branches',
+                    `Delete local branch ${pairedLocal.name} and remote branch ${pairedRemote.name}? The local branch is checked first and must be fully merged. If remote deletion fails afterwards, the local branch will already be deleted.`,
+                    'Delete both',
+                    () => deleteBothBranches(pairedLocal.name, pairedRemote.name),
                     true,
                   ),
                 },
               ]
-            : []),
+            : ref.kind === 'local' && !isCurrent
+              ? [{ label: `Delete ${refName}`, danger: true, run: deleteLocal(refName) }]
+              : ref.kind === 'remote'
+                ? [{ label: `Delete remote ${refName}`, danger: true, run: deleteRemote(refName) }]
+                : []),
           {
             label: 'Copy branch name',
             run: attempt(async () => {
