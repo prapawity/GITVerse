@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GraphLayout, GraphRow, RefLabel } from '../shared/types';
+import type { GraphLayout, GraphRow, RefLabel, Segment } from '../shared/types';
 import { groupRefs } from '../lib/refGroups';
 import { Spinner } from './Loading';
 import { useSettings } from '../store/settingsStore';
@@ -85,6 +85,28 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number) {
   return text.slice(0, lo) + '…';
 }
 
+function segmentPath(segment: Segment, x1: number, x2: number, top: number) {
+  const path = new Path2D();
+  const mid = top + ROW_H / 2;
+  const direction = Math.sign(x2 - x1);
+  const radius = 6;
+  if (x1 === x2) {
+    path.moveTo(x1, segment.half === 'top' ? top : mid);
+    path.lineTo(x2, segment.half === 'top' ? mid : top + ROW_H);
+  } else if (segment.half === 'top') {
+    path.moveTo(x1, top);
+    path.lineTo(x1, mid - radius);
+    path.quadraticCurveTo(x1, mid, x1 + direction * radius, mid);
+    path.lineTo(x2, mid);
+  } else {
+    path.moveTo(x1, mid);
+    path.lineTo(x2 - direction * radius, mid);
+    path.quadraticCurveTo(x2, mid, x2, mid + radius);
+    path.lineTo(x2, top + ROW_H);
+  }
+  return path;
+}
+
 /** Virtualised canvas modelled on GitKraken: BRANCH/TAG | GRAPH | COMMIT MESSAGE. */
 export function CommitGraph({
   layout,
@@ -112,6 +134,8 @@ export function CommitGraph({
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [hover, setHover] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
+  const [hoveredLane, setHoveredLane] = useState<{ layout: GraphLayout; color: number } | null>(null);
+  const highlightedLane = hoveredLane?.layout === layout ? hoveredLane.color : null;
   const [scrollTop, setScrollTop] = useState(0);
   const [msgScroll, setMsgScroll] = useState(0);
   const maxMsgW = useRef(0); // widest message drawn so far; drives the horizontal scroll range
@@ -276,34 +300,16 @@ export function CommitGraph({
       }
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
-      const r = 6;
       for (let i = first; i <= last; i++) {
         const row = rows[i];
         const top = (i + wipRows) * ROW_H - scrollTop;
-        const mid = top + ROW_H / 2;
         for (const sg of row.segments) {
           ctx.setLineDash(sg.stash ? [4, 4] : []);
           ctx.strokeStyle = col(sg.color, light);
-          ctx.beginPath();
-          const x1 = gx(sg.x1),
-            x2 = gx(sg.x2),
-            d = Math.sign(x2 - x1);
-          if (sg.x1 === sg.x2) {
-            const [y1, y2] = sg.half === 'top' ? [top, mid] : [mid, top + ROW_H];
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-          } else if (sg.half === 'top') {
-            ctx.moveTo(x1, top);
-            ctx.lineTo(x1, mid - r);
-            ctx.quadraticCurveTo(x1, mid, x1 + d * r, mid);
-            ctx.lineTo(x2, mid);
-          } else {
-            ctx.moveTo(x1, mid);
-            ctx.lineTo(x2 - d * r, mid);
-            ctx.quadraticCurveTo(x2, mid, x2, mid + r);
-            ctx.lineTo(x2, top + ROW_H);
-          }
-          ctx.stroke();
+          ctx.lineWidth = sg.color === highlightedLane ? 3 : 2;
+          ctx.shadowColor = sg.color === highlightedLane ? col(sg.color, light) : 'transparent';
+          ctx.shadowBlur = sg.color === highlightedLane ? 8 : 0;
+          ctx.stroke(segmentPath(sg, gx(sg.x1), gx(sg.x2), top));
         }
       }
       ctx.setLineDash([]);
@@ -484,6 +490,7 @@ export function CommitGraph({
     wipRows,
     headIndex,
     light,
+    highlightedLane,
   ]);
 
   useEffect(() => {
@@ -495,6 +502,29 @@ export function CommitGraph({
     const rect = scrollRef.current!.getBoundingClientRect();
     const i = Math.floor((e.clientY - rect.top + scrollTop) / ROW_H) - wipRows;
     return i >= -wipRows && i < rows.length ? i : null;
+  };
+
+  const laneAt = (e: React.MouseEvent, i: number | null) => {
+    const rect = scrollRef.current!.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (!showLines || i === null || i < 0 || x < gL || x > gR) return null;
+    const row = rows[i];
+    const y = e.clientY - rect.top;
+    const mid = (i + wipRows) * ROW_H - scrollTop + ROW_H / 2;
+    if (Math.hypot(x - gx(row.col), y - mid) <= AV + 2) return row.color;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return null;
+    ctx.save();
+    ctx.resetTransform();
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.setLineDash([]);
+    const top = mid - ROW_H / 2;
+    const lane = [...row.segments]
+      .reverse()
+      .find((segment) => ctx.isPointInStroke(segmentPath(segment, gx(segment.x1), gx(segment.x2), top), x, y))?.color;
+    ctx.restore();
+    return lane ?? null;
   };
 
   const headCls = 'px-3 text-[11px] font-mono uppercase tracking-wider text-sub flex items-center';
@@ -543,10 +573,18 @@ export function CommitGraph({
           else if (maxGScroll) setGScroll((v) => Math.max(0, Math.min(maxGScroll, v + dx)));
         }}
         onMouseMove={(e) => {
-          setHover(rowAt(e));
+          const i = rowAt(e);
+          setHover(i);
           setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left);
+          const color = laneAt(e, i);
+          setHoveredLane((current) =>
+            color === null ? null : current?.layout === layout && current.color === color ? current : { layout, color },
+          );
         }}
-        onMouseLeave={() => setHover(null)}
+        onMouseLeave={() => {
+          setHover(null);
+          setHoveredLane(null);
+        }}
         onClick={(e) => {
           const i = rowAt(e);
           if (i === -1) {

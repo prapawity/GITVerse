@@ -2,6 +2,9 @@ appId: io.github.prapawity.gitverse
 productName: GITVerse
 directories:
   output: release
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
 files:
   - dist/**/*
   - dist-electron/main/**/*
@@ -11,18 +14,21 @@ files:
 asar: true
 artifactName: GITVerse-${version}-${os}-${arch}.${ext}
 mac:
+  icon: resources/icon.icns
   category: public.app-category.developer-tools
   identity: null
   target:
     - dmg
     - zip
 win:
+  icon: resources/icon.ico
   target:
     - nsis
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
 linux:
+  icon: src/assets/gitverse-mark.svg
   category: Development
   maintainer: prapawity
   target:
