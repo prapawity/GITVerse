@@ -205,7 +205,31 @@ export const checkout = (cwd: string, ref: string) => git(cwd, ['checkout', ref]
 export async function checkoutRemote(cwd: string, ref: string) {
   const slash = ref.indexOf('/');
   if (slash < 1 || slash === ref.length - 1) throw new Error('Invalid remote branch.');
-  return git(cwd, ['switch', '--detach', '--', `refs/remotes/${ref}`]);
+  const remoteRef = `refs/remotes/${ref}`;
+  await git(cwd, ['show-ref', '--verify', '--quiet', remoteRef]);
+  const name = ref.slice(slash + 1);
+  const branches = (await git(cwd, ['for-each-ref', '--format=%(refname:lstrip=2)%09%(upstream)', 'refs/heads/']))
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [branch, upstream] = line.split('\t');
+      return { branch, upstream };
+    });
+  const tracking = branches.filter((branch) => branch.upstream === remoteRef);
+  const matching = tracking.find((branch) => branch.branch === name);
+  if (!matching && tracking.length > 1)
+    throw new Error(`Multiple local branches track ${ref}. Select the local branch to check out.`);
+  const existing = matching ?? tracking[0] ?? branches.find((branch) => branch.branch === name);
+  if (existing) {
+    if (existing.upstream && existing.upstream !== remoteRef)
+      throw new Error(
+        `Local branch ${existing.branch} tracks a different remote branch. Select a local branch instead.`,
+      );
+    await git(cwd, ['switch', '--', existing.branch]);
+    return existing.branch;
+  }
+  await git(cwd, ['switch', '--track', '-c', name, '--', remoteRef]);
+  return name;
 }
 const conflicted = (f: FileStatus) => ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(f.index + f.worktree);
 export async function stage(cwd: string, paths: string[]) {
