@@ -35,12 +35,13 @@ GitHub's latest-release API only sees published releases. Do not mark the releas
 
 ## Current update behavior
 
-- A packaged app checks `https://api.github.com/repos/prapawity/GITVerse/releases/latest` once after its window loads; the Help menu supports manual checks.
+- A packaged release app checks `https://api.github.com/repos/prapawity/GITVerse/releases/latest` during the animated launch screen and caches that startup result. Settings > Application / About and the Help menu support manual checks. Development/unpackaged builds disable update controls and skip all update-check requests.
 - Semantic versions are compared, ignoring draft/prerelease releases and build metadata.
 - Requests have a timeout; failures are visible and do not prevent app use. GitHub API limits can affect unauthenticated checks.
 - A newer release triggers a confirmation dialog. Confirmation opens the configured repository's release page in the browser, never a server-provided arbitrary URL.
 - Users choose the correct OS/architecture artifact, quit the app, and install it themselves. Existing app user-data should be preserved; back up important state before upgrading.
 - There is no background installer, binary execution, or in-place replacement.
+- All available updates are optional; launch failures offer Retry/Continue. Mandatory minimum-version blocking requires a separately defined, authoritative version-policy API and is not implemented in this optional-update iteration.
 
 ## Future automatic installation
 

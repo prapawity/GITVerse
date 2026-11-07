@@ -6,6 +6,7 @@ import {
   ArchiveRestore,
   Archive,
   ArrowDownToLine,
+  ChevronDown,
   Download,
   FolderOpen,
   GitBranch,
@@ -19,7 +20,7 @@ import {
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { CommitGraph } from './components/CommitGraph';
 import { CommitMenu } from './components/CommitMenu';
-import { askConfirm, askFlow, DialogHost } from './components/Dialogs';
+import { askConfirm, askFlow, askText, DialogHost } from './components/Dialogs';
 import { DetailsPanel, type ChangedFile } from './components/DetailsPanel';
 import { DiffView } from './components/DiffView';
 import { BusyOverlay, Toasts } from './components/Feedback';
@@ -44,6 +45,7 @@ import { WorkingChangesPanel, type WorkingFile } from './components/WorkingChang
 import { useRepo } from './store/repoStore';
 import { AgentCheckpoints } from './components/AgentCheckpoints';
 import type { ScanProgress, ScanResult } from './shared/repositoryScan';
+import type { StashRef } from './shared/types';
 
 let restored = false;
 const Handle = () => <PanelResizeHandle className="w-px bg-surface transition-colors hover:bg-[#4cc2ff]" />;
@@ -116,7 +118,7 @@ export default function App() {
   const [selectedHashes, setSelectedHashes] = useState<string[]>([]);
   const [file, setFile] = useState<ChangedFile | null>(null);
   const [workingView, setWorkingView] = useState(true);
-  const [stashView, setStashView] = useState<{ id: string; message: string } | null>(null);
+  const [stashView, setStashView] = useState<StashRef | null>(null);
   const [workingFile, setWorkingFile] = useState<WorkingFile | null>(null);
   const [workingRevision, setWorkingRevision] = useState(0);
   const [navigation, setNavigation] = useState<{ hash: string; id: number } | null>(null);
@@ -138,6 +140,7 @@ export default function App() {
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [pushRepo, setPushRepo] = useState<string | null>(null);
   const autoFetchMinutes = useSettings((s) => s.autoFetchMinutes);
+  const fetchMode = useSettings((s) => s.fetchMode);
   const { indexUndo, indexRedo, moveIndexHistory } = useRepo();
   const theme = useSettings((s) => s.theme);
   const repoGroups = useSettings((s) => s.repoGroups);
@@ -217,9 +220,43 @@ export default function App() {
     useRepo.setState({ conflictView: false, conflictFile: null });
     void refreshStatus();
   };
+  const showStash = (stash: StashRef) => {
+    setFile(null);
+    setWorkingFile(null);
+    setWorkingView(false);
+    setSelectedHashes([]);
+    setCtx(null);
+    setStashView(stash);
+    useRepo.setState({ selectedHash: stash.hash ?? null, detail: null, conflictView: false, conflictFile: null });
+    if (stash.hash) setNavigation({ hash: stash.hash, id: ++navigationSeq.current });
+  };
+  useEffect(() => {
+    if (!stashView) return;
+    const live = refs.stashes.find((stash) =>
+      stashView.hash ? stash.hash === stashView.hash : stash.id === stashView.id,
+    );
+    if (live && live !== stashView) setStashView(live);
+    else if (!live) {
+      setStashView(null);
+      setFile(null);
+      setSelectedHashes([]);
+      useRepo.setState({ selectedHash: null, detail: null });
+    }
+  }, [refs.stashes, stashView]);
   const refreshWorking = async () => {
+    const cwd = repoPath;
     await refreshStatus();
+    if (useRepo.getState().repoPath !== cwd) return;
     setWorkingRevision((v) => v + 1);
+    setWorkingFile((current) => {
+      if (!current) return null;
+      const entry = useRepo.getState().status.find((file) => file.path === current.path);
+      if (!entry) return null;
+      if (current.area === 'untracked' && entry.index !== '?') return null;
+      if (current.area === 'staged' && (entry.index === ' ' || entry.index === '?')) return null;
+      if (current.area === 'unstaged' && entry.worktree === ' ') return null;
+      return current;
+    });
   };
   const branch = refs.local.find((b) => b.current)?.name;
   const headHash =
@@ -248,6 +285,12 @@ export default function App() {
   }, [repoPath, headHash, status.length, loading, loadingMore, graph.rows, ensureCommitVisible]);
 
   const navigateToHash = async (hash: string) => {
+    const stash = useRepo.getState().refs.stashes.find((entry) => entry.hash === hash);
+    if (stash) {
+      setSearch('');
+      showStash(stash);
+      return;
+    }
     const id = ++navigationSeq.current;
     const cwd = repoPath;
     setFile(null);
@@ -481,11 +524,13 @@ export default function App() {
       {/* repo tabs */}
       <div className="flex items-center border-b border-surface bg-crust">
         <div
-          className="flex items-center gap-2 border-r border-surface px-4 text-[14px] font-bold tracking-wide"
+          className="flex items-center gap-2 border-r border-surface px-4 text-[14px] font-bold"
           aria-label="GITVerse"
         >
-          <GitBranch size={16} className="text-[#4cc2ff]" aria-hidden /> GIT
-          <span className="text-[#4cc2ff]">Verse</span>
+          <img src={new URL('./assets/gitverse-mark.svg', import.meta.url).href} width={24} height={24} alt="" />
+          <span>
+            GIT<span className="font-medium text-[#a78bfa]">Verse</span>
+          </span>
         </div>
         {recentRepos.map((r, index) => {
           const group = repoGroups[r] || '';
@@ -619,19 +664,47 @@ export default function App() {
             <div className="mx-3 h-9 w-px bg-surface" aria-hidden />
             <div className="flex">
               <ToolBtn
-                icon={<Download size={22} />}
-                label="Fetch"
-                disabled={dis}
-                busy={busy === 'fetch'}
-                onClick={() => action('fetch')}
-              />
-              <ToolBtn
                 icon={<ArrowDownToLine size={22} />}
-                label="Pull"
+                label={fetchMode === 'all' ? 'Fetch' : 'Pull'}
                 disabled={dis}
-                busy={busy === 'pull'}
-                onClick={() => action('pull')}
+                busy={busy === 'fetch' || busy === 'pull'}
+                onClick={() => action('fetch', fetchMode)}
               />
+              <details className="group relative">
+                <summary
+                  aria-label="Choose fetch or pull mode"
+                  className="flex h-full min-h-[52px] w-5 cursor-pointer list-none items-center justify-center hover:bg-surface/60"
+                >
+                  <ChevronDown size={14} aria-hidden />
+                </summary>
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full z-50 w-64 rounded border border-surface bg-mantle p-1 shadow-xl"
+                >
+                  {(
+                    [
+                      ['all', 'Fetch All'],
+                      ['ff', 'Pull (fast-forward if possible)'],
+                      ['ff-only', 'Pull (fast-forward only)'],
+                      ['rebase', 'Pull (rebase)'],
+                    ] as const
+                  ).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      role="menuitemradio"
+                      aria-checked={fetchMode === mode}
+                      onClick={(event) => {
+                        useSettings.getState().set('fetchMode', mode);
+                        event.currentTarget.closest('details')?.removeAttribute('open');
+                      }}
+                      className={`block w-full rounded px-3 py-2 text-left text-[13px] hover:bg-surface ${fetchMode === mode ? 'bg-[#a6e3a1]/20' : ''}`}
+                    >
+                      {fetchMode === mode ? '● ' : '○ '}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </details>
               <ToolBtn
                 icon={<Upload size={22} />}
                 label="Push"
@@ -651,7 +724,10 @@ export default function App() {
                 label="Stash"
                 disabled={dis}
                 busy={busy === 'stash'}
-                onClick={() => action('stash')}
+                onClick={async () => {
+                  const message = await askText('Name this stash', 'e.g. Before refactoring');
+                  if (message) await action('stash', message);
+                }}
               />
               <ToolBtn
                 icon={<ArchiveRestore size={22} />}
@@ -732,13 +808,8 @@ export default function App() {
                   <Sidebar
                     onNavigate={navigateBranch}
                     onTag={(name) => void navigateTag(name)}
-                    onStash={(stash) => {
-                      setFile(null);
-                      setWorkingFile(null);
-                      setWorkingView(false);
-                      setSelectedHashes([]);
-                      setStashView(stash);
-                    }}
+                    onStash={showStash}
+                    selectedStashHash={stashView?.hash}
                     onContext={(kind, name, x, y) => {
                       const hash = refs[kind].find((ref) => ref.name === name)?.hash;
                       if (hash) setCtx({ x, y, hash, ref: { kind, name } });
@@ -764,8 +835,8 @@ export default function App() {
                     <div className="min-h-0 flex-1">
                       {conflictFile ? (
                         <MergeTool path={conflictFile} />
-                      ) : stashView && repoPath ? (
-                        <StashView repo={repoPath} stash={stashView} onClose={() => setStashView(null)} />
+                      ) : stashView && file && repoPath ? (
+                        <StashView repo={repoPath} stash={stashView} file={file} onClose={() => setFile(null)} />
                       ) : workingFile && workingView && repoPath ? (
                         <DiffView
                           repoPath={repoPath}
@@ -773,6 +844,7 @@ export default function App() {
                           file={workingFile}
                           area={workingFile.area}
                           revision={workingRevision}
+                          onRefresh={refreshWorking}
                           onClose={() => setWorkingFile(null)}
                         />
                       ) : file && repoPath && selectedHash ? (
@@ -809,15 +881,25 @@ export default function App() {
                             if (headHash) void navigateToHash(headHash);
                           }}
                           onSelect={(hash, hashes) => {
+                            const stash = refs.stashes.find((entry) => entry.hash === hash);
+                            if (stash) {
+                              showStash(stash);
+                              return;
+                            }
                             setWorkingView(false);
                             setWorkingFile(null);
                             setStashView(null);
-                            setSelectedHashes(hashes);
+                            setSelectedHashes(hashes.filter((id) => !refs.stashes.some((entry) => entry.hash === id)));
                             select(hash);
                           }}
-                          onContextMenu={(hash, x, y) =>
-                            setCtx({ hash, x, y, hashes: selectedHashes.includes(hash) ? selectedHashes : [hash] })
-                          }
+                          onContextMenu={(hash, x, y) => {
+                            const stash = refs.stashes.find((entry) => entry.hash === hash);
+                            if (stash) {
+                              showStash(stash);
+                              return;
+                            }
+                            setCtx({ hash, x, y, hashes: selectedHashes.includes(hash) ? selectedHashes : [hash] });
+                          }}
                           onDoubleClick={(r) => {
                             if (!r.current && r.kind === 'local') checkout(r.name);
                             else if (r.kind === 'remote') checkoutRemote(r.name);
@@ -859,17 +941,7 @@ export default function App() {
               {operation && conflictView ? (
                 <ConflictPanel />
               ) : stashView ? (
-                <div className="p-4">
-                  <div className="text-sm text-sub">Stash</div>
-                  <div className="mt-2 font-semibold">{stashView.id}</div>
-                  <p className="mt-2 break-words text-sm text-sub">{stashView.message}</p>
-                  <button
-                    onClick={() => setStashView(null)}
-                    className="mt-4 rounded border border-surface px-3 py-2 text-sm hover:bg-surface/50"
-                  >
-                    Back to history
-                  </button>
-                </div>
+                <DetailsPanel stash={stashView} file={file} onSelectFile={setFile} />
               ) : workingView && repoPath ? (
                 <WorkingChangesPanel
                   selected={workingFile}

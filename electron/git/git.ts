@@ -1,10 +1,10 @@
 import { execFile, spawn } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
-import { access, mkdtemp, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdtemp, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { Commit, FileStatus, RefLabel } from '../../src/shared/types';
+import type { Commit, FileChangeCount, FileStatus, RefLabel, StashDetail, StashRef } from '../../src/shared/types';
 
 const run = promisify(execFile);
 
@@ -319,7 +319,7 @@ export interface RefList {
   local: { name: string; current: boolean; hash: string }[];
   remote: { name: string; hash: string }[];
   tags: { name: string }[];
-  stashes: { id: string; message: string }[];
+  stashes: StashRef[];
   headHash: string | null;
 }
 
@@ -340,15 +340,29 @@ export async function refs(cwd: string): Promise<RefList> {
       if (!ref.endsWith('/HEAD')) res.remote.push({ name: ref.slice(13), hash });
     } else if (ref.startsWith('refs/tags/')) res.tags.push({ name: ref.slice(10) });
   }
-  const st = await git(cwd, ['stash', 'list', '--format=%gd%x09%s']);
-  res.stashes = st
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => {
-      const [id, message] = l.split('\t');
-      return { id, message };
-    });
+  res.stashes = await stashEntries(cwd);
   return res;
+}
+
+async function stashEntries(cwd: string): Promise<StashRef[]> {
+  const st = await git(cwd, ['stash', 'list', '--format=%gd%x1f%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%gs%x1f%B%x1e']);
+  return st
+    .split(R)
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [id, hash, parents, author, email, date, reflogMessage, body] = record.split(F);
+      return {
+        id,
+        hash,
+        baseHash: parents.split(' ')[0],
+        author,
+        email,
+        date,
+        body: body.trim(),
+        message: reflogMessage.replace(/^(?:On|WIP on) .+?: /, ''),
+      };
+    });
 }
 
 export async function agentCheckpoints(cwd: string) {
@@ -414,7 +428,11 @@ export const commitFileDiff = (cwd: string, hash: string, path: string, oldPath?
     path,
   ]);
 
-export async function workingFileDiff(cwd: string, filePath: string, area: 'staged' | 'unstaged' | 'untracked') {
+export async function workingFileDiff(
+  cwd: string,
+  filePath: string,
+  area: 'staged' | 'unstaged' | 'untracked',
+): Promise<string> {
   const file = (await status(cwd)).find((entry) => entry.path === filePath);
   if (!file || !['staged', 'unstaged', 'untracked'].includes(area))
     throw new Error('This file is no longer in the working changes. Refresh the list.');
@@ -448,8 +466,134 @@ export async function workingFileDiff(cwd: string, filePath: string, area: 'stag
   ]);
 }
 
+export async function fileChangeCounts(cwd: string): Promise<FileChangeCount[]> {
+  const files = await status(cwd);
+  const readCounts = (text: string) => {
+    const counts = new Map<string, number | null>();
+    const records = text.split('\0');
+    for (let index = 0; index < records.length; index++) {
+      const record = /^([0-9]+|-)\t([0-9]+|-)\t(.*)$/s.exec(records[index]);
+      if (!record) continue;
+      let filePath = record[3];
+      if (!filePath) {
+        index++;
+        filePath = records[++index];
+      }
+      if (filePath)
+        counts.set(filePath, record[1] === '-' || record[2] === '-' ? null : Number(record[1]) + Number(record[2]));
+    }
+    return counts;
+  };
+  const args = ['diff', '--numstat', '-z', '--no-ext-diff', '--no-textconv'];
+  const [staged, unstaged] = await Promise.all([
+    git(cwd, [...args, '--cached', '--']).then(readCounts),
+    git(cwd, [...args, '--']).then(readCounts),
+  ]);
+  const untracked = files.filter((file) => file.index === '?' && file.worktree === '?');
+  for (let offset = 0; offset < untracked.length; offset += 8) {
+    await Promise.all(
+      untracked.slice(offset, offset + 8).map(async (file) => {
+        const { full } = await workPath(cwd, file.path);
+        if ((await lstat(full)).isDirectory()) {
+          unstaged.set(file.path, null);
+          return;
+        }
+        let output: string;
+        try {
+          const result = await run(
+            'git',
+            ['diff', '--numstat', '-z', '--no-index', '--no-ext-diff', '--no-textconv', '--', '/dev/null', file.path],
+            { cwd, maxBuffer: 256 * 1024 * 1024 },
+          );
+          output = result.stdout;
+        } catch (error: any) {
+          if (error.code !== 1 || typeof error.stdout !== 'string') throw error;
+          output = error.stdout;
+        }
+        unstaged.set(file.path, readCounts(output).get(file.path) ?? (output ? null : 0));
+      }),
+    );
+  }
+  return files.map((file) => ({
+    path: file.path,
+    staged: staged.has(file.path) ? staged.get(file.path)! : 0,
+    unstaged: unstaged.has(file.path) ? unstaged.get(file.path)! : 0,
+  }));
+}
+
+export async function discardWorkingFiles(
+  cwd: string,
+  files: { path: string; area: 'unstaged' | 'untracked'; diff: string }[],
+) {
+  if (!Array.isArray(files) || !files.length) throw new Error('Select files to discard.');
+  if (await opState(cwd)) throw new Error('Finish or abort the current Git operation before discarding changes.');
+  const entries = await status(cwd);
+  const tracked: string[] = [];
+  const untracked: string[] = [];
+  const seen = new Set<string>();
+  for (const file of files) {
+    if (!file || typeof file.path !== 'string' || typeof file.diff !== 'string' || seen.has(file.path))
+      throw new Error('Invalid discard selection.');
+    seen.add(file.path);
+    const entry = entries.find((value) => value.path === file.path);
+    if (
+      !entry ||
+      !['unstaged', 'untracked'].includes(file.area) ||
+      ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(entry.index + entry.worktree)
+    )
+      throw new Error('This file cannot be discarded. Refresh the working changes.');
+    if ((await workingFileDiff(cwd, file.path, file.area)) !== file.diff)
+      throw new Error('File changes changed since confirmation. Review the diff and try again.');
+    if (file.area === 'untracked') {
+      const { full } = await workPath(cwd, file.path);
+      if ((await lstat(full)).isDirectory()) throw new Error('Discarding directories is not supported.');
+      untracked.push(full);
+    } else tracked.push(file.path);
+  }
+  if (tracked.length) {
+    const modes = await git(cwd, ['--literal-pathspecs', 'ls-files', '--stage', '-z', '--', ...tracked]);
+    if (modes.split('\0').some((entry) => entry.startsWith('160000 ')))
+      throw new Error('Discard submodule changes inside the submodule repository.');
+    await git(cwd, ['--literal-pathspecs', 'restore', '--worktree', '--', ...tracked]);
+  }
+  for (const full of untracked) await rm(full);
+}
+
+export async function discardWorkingHunk(cwd: string, filePath: string, expectedDiff: string, hunkIndex: number) {
+  if (await opState(cwd)) throw new Error('Finish or abort the current Git operation before discarding changes.');
+  const current = await workingFileDiff(cwd, filePath, 'unstaged');
+  if (typeof expectedDiff !== 'string' || current !== expectedDiff)
+    throw new Error('File changes changed since confirmation. Review the diff and try again.');
+  if (
+    /^(?:new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|Binary files|GIT binary patch)/m.test(
+      current,
+    )
+  )
+    throw new Error('Discard this change as a whole file instead.');
+  const { full } = await workPath(cwd, filePath);
+  if (!(await lstat(full)).isFile()) throw new Error('Only regular text files support hunk discard.');
+  const lines = current.split('\n');
+  const starts = lines.flatMap((line, index) => (/^@@ /.test(line) ? [index] : []));
+  if (!Number.isInteger(hunkIndex) || hunkIndex < 0 || hunkIndex >= starts.length)
+    throw new Error('This hunk is no longer available. Refresh the diff.');
+  const patch = [
+    ...lines.slice(0, starts[0]),
+    ...lines.slice(starts[hunkIndex], starts[hunkIndex + 1] ?? lines.length),
+  ].join('\n');
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-discard-'));
+  try {
+    const patchFile = path.join(dir, 'hunk.patch');
+    await writeFile(patchFile, patch.endsWith('\n') ? patch : `${patch}\n`);
+    await git(cwd, ['apply', '--reverse', '--check', '--whitespace=nowarn', '--', patchFile]);
+    await git(cwd, ['apply', '--reverse', '--whitespace=nowarn', '--', patchFile]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 export const fetch = (cwd: string, prune = true) => git(cwd, ['fetch', '--all', ...(prune ? ['--prune'] : [])]);
-export const pull = (cwd: string) => git(cwd, ['pull']);
+export const pull = (cwd: string, mode: 'ff' | 'ff-only' | 'rebase' = 'ff') =>
+  git(cwd, ['pull', mode === 'rebase' ? '--rebase' : mode === 'ff-only' ? '--ff-only' : '--ff']);
 export const push = (cwd: string) => git(cwd, ['push']);
 export async function commitIdentity(cwd: string) {
   const [name, email] = await Promise.all(
@@ -546,8 +690,26 @@ export async function pushBranch(
   }
 }
 export const createBranch = (cwd: string, name: string, from = 'HEAD') => git(cwd, ['checkout', '-b', name, from]);
-export const stash = (cwd: string) => git(cwd, ['stash', 'push', '--include-untracked']);
+export const stash = (cwd: string, message?: string) =>
+  git(cwd, ['stash', 'push', '--include-untracked', ...(message ? ['-m', message] : [])]);
 export const stashPop = (cwd: string) => git(cwd, ['stash', 'pop']);
+export async function stashRename(cwd: string, id: string, message: string) {
+  if (typeof id !== 'string' || !/^(?:stash@\{\d+\}|[a-f0-9]{40}|[a-f0-9]{64})$/i.test(id))
+    throw new Error('Invalid stash.');
+  if (typeof message !== 'string' || !message.trim() || message.length > 200)
+    throw new Error('Enter a stash name of 1–200 characters.');
+  const entries = await stashEntries(cwd);
+  const index = entries.findIndex((entry) => entry.id === id || entry.hash === id);
+  const hash = entries[index]?.hash;
+  if (!hash) throw new Error('This stash is no longer available. Refresh the repository.');
+  await git(cwd, ['stash', 'store', '--message', message.trim(), hash]);
+  try {
+    await git(cwd, ['stash', 'drop', `stash@{${index + 1}}`]);
+  } catch (error) {
+    await git(cwd, ['stash', 'drop', 'stash@{0}']).catch(() => {});
+    throw error;
+  }
+}
 
 export const reset = (cwd: string, hash: string, mode: 'soft' | 'mixed' | 'hard') =>
   git(cwd, ['reset', `--${mode}`, hash]);
@@ -620,6 +782,67 @@ export const stashDiff = (cwd: string, id: string) => {
   if (typeof id !== 'string' || !/^stash@\{\d+\}$/.test(id)) throw new Error('Invalid stash.');
   return git(cwd, ['stash', 'show', '--include-untracked', '--patch', '--no-ext-diff', '--no-color', id]);
 };
+
+export async function stashDetail(cwd: string, id: string): Promise<StashDetail> {
+  if (typeof id !== 'string' || !/^(?:stash@\{\d+\}|[a-f0-9]{40}|[a-f0-9]{64})$/i.test(id))
+    throw new Error('Invalid stash.');
+  const stash = (await stashEntries(cwd)).find((entry) => entry.id === id || entry.hash === id);
+  if (!stash?.hash || !stash.baseHash) throw new Error('This stash is no longer available. Refresh the repository.');
+  const tracked = await commitDetail(cwd, stash.hash);
+  const files: StashDetail['files'] = [...tracked.files];
+  const untracked = await git(cwd, ['rev-parse', '--verify', `${stash.hash}^3`]).catch(() => '');
+  if (untracked.trim()) {
+    const paths = await git(cwd, ['ls-tree', '-r', '--name-only', '-z', untracked.trim()]);
+    files.push(
+      ...paths
+        .split('\0')
+        .filter(Boolean)
+        .map((filePath) => ({ status: 'A', path: filePath, untracked: true })),
+    );
+  }
+  return { ...stash, hash: stash.hash, baseHash: stash.baseHash, body: tracked.body, files };
+}
+
+export async function stashFileDiff(cwd: string, id: string, filePath: string): Promise<string> {
+  const detail = await stashDetail(cwd, id);
+  const file = detail.files.find((entry) => entry.path === filePath);
+  if (!file) throw new Error('This file is not in the selected stash.');
+  return file.untracked
+    ? git(cwd, [
+        '--literal-pathspecs',
+        'diff-tree',
+        '--root',
+        '--no-commit-id',
+        '--patch',
+        '-r',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--no-color',
+        `${detail.hash}^3`,
+        '--',
+        file.path,
+      ])
+    : git(cwd, [
+        '--literal-pathspecs',
+        'diff',
+        '--find-renames',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--no-color',
+        detail.baseHash,
+        detail.hash,
+        '--',
+        ...(file.oldPath ? [file.oldPath] : []),
+        file.path,
+      ]);
+}
+
+export async function stashFileAt(cwd: string, id: string, filePath: string): Promise<string> {
+  const detail = await stashDetail(cwd, id);
+  const file = detail.files.find((entry) => entry.path === filePath);
+  if (!file || file.status === 'D') throw new Error('This file is not available in the selected stash.');
+  return git(cwd, ['show', `${detail.hash}${file.untracked ? '^3' : ''}:${file.path}`]);
+}
 export const revert = (cwd: string, hash: string) => git(cwd, ['revert', '--no-edit', hash]);
 export const rebaseOnto = (cwd: string, hash: string) => git(cwd, ['rebase', hash]);
 export const createTag = (cwd: string, name: string, hash: string) => git(cwd, ['tag', name, hash]);

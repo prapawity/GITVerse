@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Columns2, FilePen, History, Rows2, UserRound, X } from 'lucide-react';
+import { Columns2, FilePen, History, Loader2, Rows2, Trash2, UserRound, X } from 'lucide-react';
 import { highlight, parseDiff, toSplit, type DiffLine } from '../lib/diff';
 import { Markdown } from '../lib/markdown';
 import { relTime } from './CommitGraph';
 import { CodeSkeleton, ListSkeleton, Spinner } from './Loading';
 import type { ChangedFile } from './DetailsPanel';
+import { useRepo } from '../store/repoStore';
+import { askConfirm } from './Dialogs';
 
 const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-[#f38ba8]/[0.14]', ctx: '' } as const;
 const SIGN = { add: '+', del: '−', ctx: '' } as const;
@@ -120,6 +122,10 @@ export function DiffView({
   onJumpToCommit,
   area,
   revision,
+  onRefresh,
+  loadDiff,
+  loadContent,
+  readOnlySnapshot = false,
 }: {
   repoPath: string;
   hash: string;
@@ -128,6 +134,10 @@ export function DiffView({
   onJumpToCommit?: (hash: string) => void;
   area?: 'staged' | 'unstaged' | 'untracked';
   revision?: number;
+  onRefresh?: () => Promise<void>;
+  loadDiff?: () => Promise<string>;
+  loadContent?: () => Promise<string>;
+  readOnlySnapshot?: boolean;
 }) {
   const [mode, setMode] = useState<'diff' | 'file'>('diff');
   const [split, setSplit] = useState(false);
@@ -135,17 +145,26 @@ export function DiffView({
   const [blame, setBlame] = useState(false);
   const [history, setHistory] = useState(false);
   const [showWhitespace, setShowWhitespace] = useState(true);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardError, setDiscardError] = useState('');
+  const [discardRevision, setDiscardRevision] = useState(0);
+  const working = useRepo((state) => state.working);
+  const operation = useRepo((state) => state.operation);
   const isMd = /\.(md|markdown)$/i.test(file.path);
-  const key = [repoPath, hash, file.path, file.oldPath, area, revision];
+  const key = [repoPath, hash, file.path, file.oldPath, area, revision, discardRevision, readOnlySnapshot];
+  const context = JSON.stringify([repoPath, file.path, area]);
+  const activeContext = useRef(context);
+  activeContext.current = context;
 
   useEffect(() => {
     setMode('diff');
     setBlame(false);
     setHistory(false);
     setView(isMd ? 'preview' : 'code');
+    setDiscardError('');
   }, [hash, file.path, isMd]);
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('[role="dialog"]') && onClose();
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
@@ -153,20 +172,76 @@ export function DiffView({
   const diff = useLoad<string>(
     true,
     () =>
-      area
-        ? api().workingFileDiff(repoPath, file.path, area)
-        : api().commitFileDiff(repoPath, hash, file.path, file.oldPath),
+      loadDiff
+        ? loadDiff()
+        : area
+          ? api().workingFileDiff(repoPath, file.path, area)
+          : api().commitFileDiff(repoPath, hash, file.path, file.oldPath),
     key,
   );
-  const content = useLoad<string>(!area && mode === 'file', () => api().fileAt(repoPath, hash, file.path), key);
+  const content = useLoad<string>(
+    !area && mode === 'file',
+    () => (loadContent ? loadContent() : api().fileAt(repoPath, hash, file.path)),
+    key,
+  );
   const blameRes = useLoad<Blame>(
-    !area && mode === 'file' && blame && view === 'code',
+    !readOnlySnapshot && !area && mode === 'file' && blame && view === 'code',
     () => api().fileBlame(repoPath, hash, file.path),
     key,
   );
-  const histRes = useLoad<Hist>(!area && history, () => api().fileHistory(repoPath, hash, file.path), key);
+  const histRes = useLoad<Hist>(
+    !readOnlySnapshot && !area && history,
+    () => api().fileHistory(repoPath, hash, file.path),
+    key,
+  );
 
   const parsed = useMemo(() => (diff?.data == null ? null : parseDiff(diff.data)), [diff]);
+  const canDiscardFile = (area === 'unstaged' || area === 'untracked') && !!onRefresh;
+  const canDiscardHunks =
+    area === 'unstaged' &&
+    !!onRefresh &&
+    !parsed?.binary &&
+    !/^(?:new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|Binary files|GIT binary patch)/m.test(
+      diff?.data ?? '',
+    );
+  const discard = async (hunk?: number) => {
+    if (!canDiscardFile || discarding || working || operation || diff?.data == null) return;
+    const snapshot = diff.data;
+    setDiscarding(true);
+    setDiscardError('');
+    try {
+      if (
+        !(await askConfirm(
+          hunk == null ? 'Discard file changes?' : 'Discard this hunk?',
+          `${file.path}\n\n${hunk == null && area === 'untracked' ? 'This untracked file will be permanently deleted.' : 'These unstaged changes will be permanently lost. Staged changes are kept.'}`,
+          { label: hunk == null ? 'Discard file' : 'Discard hunk', danger: true },
+        ))
+      )
+        return;
+      if (useRepo.getState().repoPath !== repoPath || activeContext.current !== context) return;
+      if (hunk == null) await api().discardWorkingFiles(repoPath, [{ path: file.path, area, diff: snapshot }]);
+      else await api().discardWorkingHunk(repoPath, file.path, snapshot, hunk);
+      useRepo
+        .getState()
+        .recordActivity('success', hunk == null ? 'Discarded file changes' : 'Discarded hunk', file.path, repoPath);
+      if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
+        setDiscardRevision((value) => value + 1);
+        await onRefresh?.();
+      }
+    } catch (e) {
+      const message = String((e as Error)?.message ?? e).replace(
+        /^Error invoking remote method '[^']*': (Error: )?/,
+        '',
+      );
+      useRepo.getState().recordActivity('error', 'Discard failed', message, repoPath);
+      if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
+        setDiscardError(message);
+        setDiscardRevision((value) => value + 1);
+      }
+    } finally {
+      setDiscarding(false);
+    }
+  };
   const inlineChanges = useMemo(() => {
     const result = new Map<DiffLine, [number, number]>();
     for (const hunk of parsed?.hunks ?? [])
@@ -231,7 +306,20 @@ export function DiffView({
           <span className="font-medium">{file.path.slice(i + 1)}</span>
         </span>
         <span className="text-[12px] text-sub">UTF-8</span>
-        <span className="font-mono text-[12px] text-sub">{area ?? hash.slice(0, 7)}</span>
+        <span className="font-mono text-[12px] text-sub">
+          {area ?? (readOnlySnapshot ? 'stash' : hash.slice(0, 7))}
+        </span>
+        {canDiscardFile && (
+          <button
+            onClick={() => void discard()}
+            disabled={discarding || !!working || !!operation || diff?.data == null}
+            aria-label={`Discard ${file.path}`}
+            title="Discard file changes"
+            className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+          >
+            {discarding ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+          </button>
+        )}
         <button
           onClick={onClose}
           aria-label="Close file changes"
@@ -243,13 +331,13 @@ export function DiffView({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 border-b border-surface/60 px-4 py-2">
-        <span className="text-[12px] italic text-sub">read-only</span>
+        <span className="text-[12px] italic text-sub">{area ? 'Local changes' : 'read-only'}</span>
         <div className="mx-auto flex items-center gap-3">
           {!area && (
             <div role="group" aria-label="View" className={grp}>
               <button
                 aria-pressed={mode === 'file'}
-                disabled={file.status === 'D'}
+                disabled={file.status === 'D' || !!parsed?.binary}
                 className={seg(mode === 'file') + ' disabled:opacity-40'}
                 onClick={() => setMode('file')}
               >
@@ -297,7 +385,7 @@ export function DiffView({
               </button>
             </div>
           )}
-          {!area && (
+          {!area && !readOnlySnapshot && (
             <div role="group" aria-label="File tools" className={grp}>
               <button
                 aria-pressed={blame}
@@ -318,6 +406,7 @@ export function DiffView({
 
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 min-w-0 flex-1 overflow-auto font-mono text-[13px] leading-[22px]">
+          {err(discardError)}
           {mode === 'diff' && !diff && <CodeSkeleton label="Loading changes…" />}
           {mode === 'diff' && err(diff?.error)}
           {mode === 'diff' && parsed?.binary && (
@@ -328,11 +417,28 @@ export function DiffView({
           )}
           {mode === 'diff' &&
             parsed?.hunks.map((h, hi) => (
-              <section key={hi} className={`mb-3 ${split ? '' : 'min-w-max'}`}>
-                <div className="sticky top-0 z-10 border-y border-surface bg-[#232a35] px-4 text-[12px] text-[#8b96a8]">
-                  {h.header}
+              <section key={hi} className="mb-3 min-w-0">
+                <div className="sticky top-0 z-10 flex min-h-[32px] items-center gap-3 border-y border-surface bg-[#232a35] px-4 text-[12px] text-[#8b96a8]">
+                  <span className="min-w-0 flex-1 truncate">{h.header}</span>
+                  {canDiscardHunks && (
+                    <button
+                      onClick={() => void discard(hi)}
+                      disabled={discarding || !!working || !!operation}
+                      title="Discard this hunk"
+                      aria-label={`Discard hunk ${hi + 1}`}
+                      className="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 font-sans text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+                    >
+                      <Trash2 size={13} aria-hidden /> Discard hunk
+                    </button>
+                  )}
                 </div>
-                {split ? <SplitHunk lines={h.lines} side={half} /> : h.lines.map(unified)}
+                {split ? (
+                  <SplitHunk lines={h.lines} side={half} />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-max">{h.lines.map(unified)}</div>
+                  </div>
+                )}
               </section>
             ))}
 

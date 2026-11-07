@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertCircle, CheckCircle2, ClipboardList, Info, Trash2, X } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
+import { version } from '../../package.json';
 
 export function ActivityLog() {
   const [open, setOpen] = useState(false);
@@ -9,26 +10,36 @@ export function ActivityLog() {
   const current = useRepo((s) => s.repoPath);
   return (
     <footer className="relative flex h-8 shrink-0 items-center border-t border-surface bg-crust px-3 text-xs text-sub">
+      <span className="max-w-[40%] min-w-0 truncate" title={current ?? undefined}>
+        {current ?? 'No repository open'}
+      </span>
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls="activity-log"
-        className={`flex h-full items-center gap-2 rounded px-2 hover:bg-surface/50 hover:text-text ${open ? 'text-[#4cc2ff]' : ''}`}
+        className={`ml-auto flex h-full shrink-0 items-center gap-2 rounded px-2 hover:bg-surface/50 hover:text-text ${open ? 'text-[#4cc2ff]' : ''}`}
       >
         <ClipboardList size={15} /> Activity log{' '}
         {activity.length > 0 && (
           <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px]">{activity.length}</span>
         )}
       </button>
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[10px]">Crafted by Prapawity</span>
-      <span className="ml-auto max-w-[40%] min-w-0 truncate text-right" title={current ?? undefined}>
-        {current ?? 'No repository open'}
+      <span
+        aria-label={`App version ${version}`}
+        title={`GITVerse ${version}`}
+        className="ml-2 inline-flex h-5 max-w-[30%] min-w-0 shrink-0 items-center bg-[#c2410c] px-3 text-[11px] font-semibold text-white"
+        style={{ clipPath: 'polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)' }}
+      >
+        <span className="truncate">v{version}</span>
+      </span>
+      <span className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-[10px] sm:inline">
+        Crafted by Prapawity
       </span>
       {open && (
         <section
           id="activity-log"
           aria-label="Activity log"
-          className="absolute bottom-full left-2 z-[70] mb-2 flex max-h-[min(60vh,520px)] w-[min(520px,90vw)] flex-col overflow-hidden rounded-lg border border-surface bg-mantle shadow-2xl"
+          className="absolute bottom-full right-2 z-[70] mb-2 flex max-h-[min(60vh,520px)] w-[min(520px,90vw)] flex-col overflow-hidden rounded-lg border border-surface bg-mantle shadow-2xl"
         >
           <header className="flex shrink-0 items-center gap-2 border-b border-surface px-4 py-3">
             <ClipboardList size={16} className="text-[#4cc2ff]" />
@@ -36,7 +47,7 @@ export function ActivityLog() {
             <button
               onClick={clear}
               disabled={!activity.length}
-              className="flex items-center gap-1 rounded px-2 py-1 hover:bg-surface/50 disabled:opacity-40"
+              className="flex items-center gap-1 rounded px-2 py-1 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
             >
               <Trash2 size={14} /> Clear
             </button>

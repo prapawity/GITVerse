@@ -111,6 +111,31 @@ test('amend preserves the draft and remains off if reading HEAD fails', async ()
   assert.equal(useRepo.getState().commitDrafts['/repo'], draft);
 });
 
+test('stash metadata is merged into graph without altering branch pagination and disappears after removal', async () => {
+  const stash = {
+    id: 'stash@{0}',
+    hash: 'stash-hash',
+    baseHash: 'new',
+    message: 'Saved work',
+    author: 'Test',
+    date: new Date().toISOString(),
+  };
+  backend.refs = async () => ({ ...refs('new'), stashes: [stash] });
+  await useRepo.getState().refresh();
+  assert.deepEqual(
+    useRepo.getState().commits.map((entry) => entry.hash),
+    ['new'],
+  );
+  assert.equal(useRepo.getState().graph.rows.find((row) => row.commit.hash === stash.hash)?.commit.stashId, stash.id);
+  assert.equal(await useRepo.getState().ensureCommitVisible(stash.hash), true);
+  backend.refs = async () => refs('new');
+  await useRepo.getState().refreshStatus();
+  assert.equal(
+    useRepo.getState().graph.rows.some((row) => row.commit.stashId),
+    false,
+  );
+});
+
 test('external commits refresh history, references and staged changes with feedback', async () => {
   backend.status = async () => [{ path: 'file.ts', index: 'M', worktree: ' ' }];
   await useRepo.getState().refreshStatus();

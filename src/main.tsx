@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { AppLaunch } from './components/AppLaunch';
 import './index.css';
 
 const root = document.getElementById('root')!;
@@ -18,7 +19,9 @@ if (navigator.userAgent.includes('Electron/') && !hasDesktopStorage) {
 } else {
   createRoot(root).render(
     <React.StrictMode>
-      <App />
+      <AppLaunch>
+        <App />
+      </AppLaunch>
     </React.StrictMode>,
   );
 }

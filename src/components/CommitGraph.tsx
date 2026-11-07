@@ -57,7 +57,12 @@ interface Props {
 const matches = (r: GraphRow, q: string) => {
   const c = r.commit;
   q = q.toLowerCase();
-  return c.hash.startsWith(q) || c.subject.toLowerCase().includes(q) || c.author.toLowerCase().includes(q);
+  return (
+    c.hash.startsWith(q) ||
+    c.subject.toLowerCase().includes(q) ||
+    c.author.toLowerCase().includes(q) ||
+    !!c.stashId?.toLowerCase().includes(q)
+  );
 };
 const initials = (n: string) =>
   n
@@ -187,10 +192,15 @@ export function CommitGraph({
         ctx.fillStyle = wipSelected ? 'rgba(79,193,233,0.14)' : 'rgba(255,255,255,0.04)';
         ctx.fillRect(0, top, size.w, ROW_H);
       }
-      ctx.fillStyle = 'rgba(76,194,255,0.18)';
+      const glow = ctx.createLinearGradient(x, 0, msgX, 0);
+      glow.addColorStop(0, light ? 'rgba(0,142,190,0.22)' : 'rgba(64,224,255,0.3)');
+      glow.addColorStop(1, 'rgba(76,194,255,0.03)');
+      ctx.fillStyle = glow;
       ctx.fillRect(x, top + 3, msgX - 6 - x, ROW_H - 6);
-      ctx.fillStyle = light ? '#536478' : '#9eacbe';
+      ctx.fillStyle = light ? '#006a89' : '#80efff';
+      ctx.font = '600 13px Inter, system-ui, sans-serif';
       ctx.fillText('// WIP', msgX, top + ROW_H / 2);
+      ctx.font = FONT;
       ctx.fillStyle = light ? '#9b5a00' : '#e3ad62';
       ctx.fillText(`${changeCount} changed · ${stagedCount} staged`, msgX + 64, top + ROW_H / 2);
     }
@@ -229,9 +239,11 @@ export function CommitGraph({
         const x = REF_W + PAD + LANE_W / 2 - gs;
         const start = ROW_H / 2 - scrollTop;
         ctx.save();
-        ctx.strokeStyle = '#4cc2ff';
+        ctx.strokeStyle = light ? '#0089b3' : '#70efff';
+        ctx.shadowColor = light ? '#009cc8' : '#39dfff';
+        ctx.shadowBlur = light ? 5 : 10;
         ctx.lineWidth = 2;
-        ctx.setLineDash([2, 4]);
+        ctx.setLineDash([5, 5]);
         if (headIndex >= 0) {
           const end = (headIndex + wipRows) * ROW_H - scrollTop + ROW_H / 2;
           if (end > 0) {
@@ -239,7 +251,13 @@ export function CommitGraph({
             ctx.moveTo(x, start);
             ctx.lineTo(x, end);
             ctx.lineTo(gx(rows[headIndex].col), end);
+            ctx.lineWidth = 4;
             ctx.stroke();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = light ? '#006a89' : '#d2fbff';
+            ctx.stroke();
+            ctx.strokeStyle = light ? '#0089b3' : '#70efff';
+            ctx.lineWidth = 2;
           }
         }
         if (start + 9 >= 0 && start - 9 <= size.h) {
@@ -247,7 +265,12 @@ export function CommitGraph({
           ctx.beginPath();
           ctx.arc(x, start, 9, 0, Math.PI * 2);
           ctx.fill();
+          ctx.setLineDash([]);
           ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(x, start, 3, 0, Math.PI * 2);
+          ctx.fillStyle = light ? '#0089b3' : '#b2f8ff';
+          ctx.fill();
         }
         ctx.restore();
       }
@@ -259,6 +282,7 @@ export function CommitGraph({
         const top = (i + wipRows) * ROW_H - scrollTop;
         const mid = top + ROW_H / 2;
         for (const sg of row.segments) {
+          ctx.setLineDash(sg.stash ? [4, 4] : []);
           ctx.strokeStyle = col(sg.color, light);
           ctx.beginPath();
           const x1 = gx(sg.x1),
@@ -282,6 +306,7 @@ export function CommitGraph({
           ctx.stroke();
         }
       }
+      ctx.setLineDash([]);
     }
 
     ctx.restore();
@@ -294,7 +319,17 @@ export function CommitGraph({
       const top = (i + wipRows) * ROW_H - scrollTop;
       const mid = top + ROW_H / 2;
       const cx = gx(showLines ? row.col : 0);
-      const lane = col(row.color, light);
+      const lane = c.stashId ? (light ? '#a86400' : '#f5a623') : col(row.color, light);
+
+      if (c.stashId) {
+        ctx.font = FONT;
+        ctx.fillStyle = light ? '#fff2d5' : '#40321b';
+        ctx.beginPath();
+        ctx.roundRect(8, mid - 10, Math.min(REF_W - 16, ctx.measureText(c.stashId).width + 16), 20, 3);
+        ctx.fill();
+        ctx.fillStyle = lane;
+        ctx.fillText(c.stashId, 16, mid + 0.5);
+      }
 
       if (c.refs.length) {
         const groups = groupRefs(c.refs);
@@ -365,7 +400,16 @@ export function CommitGraph({
       ctx.beginPath();
       ctx.rect(gL, top, graphW, ROW_H);
       ctx.clip();
-      if (c.parents.length > 1) {
+      if (c.stashId) {
+        ctx.strokeStyle = lane;
+        ctx.lineWidth = 1.8;
+        ctx.strokeRect(cx - 7, mid - 4, 14, 11);
+        ctx.strokeRect(cx - 9, mid - 8, 18, 4);
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, mid + 1);
+        ctx.lineTo(cx + 3, mid + 1);
+        ctx.stroke();
+      } else if (c.parents.length > 1) {
         ctx.beginPath();
         ctx.arc(cx, mid, DOT, 0, Math.PI * 2);
         ctx.fillStyle = lane;
@@ -512,6 +556,11 @@ export function CommitGraph({
           }
           if (i === null) return;
           const hash = rows[i].commit.hash;
+          if (rows[i].commit.stashId) {
+            anchor.current = hash;
+            onSelect(hash, [hash]);
+            return;
+          }
           const start = rows.findIndex((row) => row.commit.hash === anchor.current);
           if (e.shiftKey && start >= 0)
             onSelect(
@@ -535,6 +584,10 @@ export function CommitGraph({
           if (i === null || i < 0) return;
           e.preventDefault();
           const hash = rows[i].commit.hash;
+          if (rows[i].commit.stashId) {
+            onSelect(hash, [hash]);
+            return;
+          }
           if (!selectedHashes.includes(hash)) {
             anchor.current = hash;
             onSelect(hash, [hash]);
@@ -543,6 +596,28 @@ export function CommitGraph({
         }}
       >
         <div style={{ height: totalRows * ROW_H }} />
+        {rows.map(
+          (row, index) =>
+            row.commit.stashId && (
+              <button
+                key={row.commit.hash}
+                type="button"
+                aria-label={`${row.commit.stashId}: ${row.commit.subject}`}
+                aria-pressed={selectedHash === row.commit.hash}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(row.commit.hash, [row.commit.hash]);
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onSelect(row.commit.hash, [row.commit.hash]);
+                }}
+                className="absolute left-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f5a623]"
+                style={{ top: (index + wipRows) * ROW_H }}
+              />
+            ),
+        )}
         {wipRows > 0 && (
           <button
             type="button"

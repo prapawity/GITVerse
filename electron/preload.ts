@@ -13,7 +13,14 @@ const names = [
   'historyPosition',
   'commitDetail',
   'commitFileDiff',
+  'stashDetail',
+  'stashRename',
+  'stashFileDiff',
+  'stashFileAt',
   'workingFileDiff',
+  'fileChangeCounts',
+  'discardWorkingFiles',
+  'discardWorkingHunk',
   'fetch',
   'pull',
   'push',
@@ -57,6 +64,12 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   return () => ipcRenderer.removeListener('repo:cloneProgress', handler);
 };
 (gitApi as any).pathForFile = (file: File) => webUtils.getPathForFile(file);
+(gitApi as any).updates = {
+  environment: () => ipcRenderer.invoke('updates:environment'),
+  startup: () => ipcRenderer.invoke('updates:startup'),
+  check: () => ipcRenderer.invoke('updates:check'),
+  openDownloads: (url: string) => ipcRenderer.invoke('updates:openDownloads', url),
+};
 (gitApi as any).findRepositories = (folder: string, id: string) =>
   ipcRenderer.invoke('repo:findRepositories', folder, id);
 (gitApi as any).cancelScan = (id: string) => ipcRenderer.send('repo:cancelScan', id);

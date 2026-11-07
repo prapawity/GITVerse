@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { layoutGraph } from '../lib/graphLayout';
-import type { Commit, FileStatus, GraphLayout } from '../shared/types';
+import { layoutGraph, withStashes } from '../lib/graphLayout';
+import type { Commit, FileStatus, GraphLayout, StashRef } from '../shared/types';
 import { useSettings } from './settingsStore';
 
 const api = () => (window as any).gitApi;
@@ -33,7 +33,7 @@ interface RepoState {
     local: { name: string; current: boolean; hash?: string }[];
     remote: { name: string; hash?: string }[];
     tags: { name: string }[];
-    stashes: { id: string; message: string }[];
+    stashes: StashRef[];
     headHash?: string | null;
   };
   detail: { hash: string; body: string; files: { status: string; path: string; oldPath?: string }[] } | null;
@@ -68,7 +68,7 @@ interface RepoState {
   dismissToast: (id: number) => void;
   toast: (msg: string) => void; // shorthand for a success toast
   closeRepo: (path: string) => void;
-  action: (name: 'fetch' | 'pull' | 'push' | 'stash' | 'stashPop') => Promise<void>;
+  action: (name: 'fetch' | 'pull' | 'push' | 'stash' | 'stashPop', ...args: unknown[]) => Promise<void>;
   createBranch: (name: string) => Promise<void>;
   exec: (name: string, ...args: unknown[]) => Promise<void>;
 
@@ -171,7 +171,7 @@ export const useRepo = create<RepoState>((set, get) => {
     const op = get().operation;
     switch (name) {
       case 'fetch':
-        return 'Fetched from all remotes';
+        return args[0] === 'all' ? 'Fetched from all remotes' : 'Pulled from remote';
       case 'pull':
         return 'Pulled the latest changes';
       case 'push':
@@ -343,16 +343,23 @@ export const useRepo = create<RepoState>((set, get) => {
       }
     },
 
-    action: (name) => {
+    action: (name, ...args) => {
       let stopped = false;
       const before = get().operation;
+      const actionArgs = name === 'fetch' && !args.length ? [useSettings.getState().fetchMode] : args;
       return guard(
         async () => {
           set({ busy: name });
           const cwd = get().repoPath;
           try {
             stopped = await attempt(() =>
-              name === 'fetch' ? api().fetch(cwd, useSettings.getState().autoPrune) : api()[name](cwd),
+              name === 'fetch'
+                ? actionArgs[0] === 'all'
+                  ? api().fetch(cwd, useSettings.getState().autoPrune)
+                  : api().pull(cwd, actionArgs[0])
+                : name === 'stash'
+                  ? api().stash(cwd, actionArgs[0])
+                  : api()[name](cwd),
             );
             if (name === 'push' && cwd) await get().syncAfterPush(cwd);
             else if (get().repoPath === cwd) await get().refresh();
@@ -364,7 +371,7 @@ export const useRepo = create<RepoState>((set, get) => {
         {
           blocking: OPS[name].blocking,
           fail: OPS[name].fail,
-          done: () => (stopped ? null : doneMsg(name, [], before)),
+          done: () => (stopped ? null : doneMsg(name, actionArgs, before)),
         },
       );
     },
@@ -515,7 +522,7 @@ export const useRepo = create<RepoState>((set, get) => {
               status,
               refs,
               operation,
-              graph: layoutGraph(commits),
+              graph: layoutGraph(withStashes(commits, refs.stashes)),
               hasMore: useSettings.getState().lazyLoad && !useSettings.getState().showAll && commits.length === limit,
               loadingMore: false,
             });
@@ -538,7 +545,11 @@ export const useRepo = create<RepoState>((set, get) => {
         // ignore the result if the repo was switched or refreshed while we were waiting
         if (get().repoPath !== cwd || get().commits.length !== commits.length) return;
         const all = [...commits, ...next];
-        set({ commits: all, graph: layoutGraph(all), hasMore: next.length === pageSize() });
+        set({
+          commits: all,
+          graph: layoutGraph(withStashes(all, get().refs.stashes)),
+          hasMore: next.length === pageSize(),
+        });
       } catch (e: any) {
         get().notify('error', 'Could not load more commits', clean(e.message));
         set({ hasMore: false });
@@ -550,7 +561,7 @@ export const useRepo = create<RepoState>((set, get) => {
     ensureCommitVisible: async (hash) => {
       const { repoPath: cwd, commits, loadingMore, hasMore } = get();
       if (!cwd) return false;
-      if (commits.some((c) => c.hash === hash)) return true;
+      if (commits.some((c) => c.hash === hash) || get().refs.stashes.some((stash) => stash.hash === hash)) return true;
       if (loadingMore) {
         get().notify('info', 'History is loading', 'Try navigating again when loading completes.');
         return false;
@@ -566,7 +577,7 @@ export const useRepo = create<RepoState>((set, get) => {
         }
         if (!loaded.some((c) => c.hash === hash))
           throw new Error('The branch moved while loading. Refresh and try again.');
-        set({ commits: loaded, graph: layoutGraph(loaded), hasMore });
+        set({ commits: loaded, graph: layoutGraph(withStashes(loaded, get().refs.stashes)), hasMore });
         return true;
       } catch (e: any) {
         if (get().repoPath === cwd) get().notify('error', 'Could not locate commit', clean(e.message));

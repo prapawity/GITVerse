@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkForRelease, newerRelease, RELEASES_URL } from './updates';
+import { checkAppUpdate, checkForRelease, isReleaseDownloadUrl, newerRelease, RELEASES_URL } from './updates';
 
 const release = (tag_name: string) => ({ tag_name, draft: false, prerelease: false });
 
@@ -32,6 +32,19 @@ test('does not trust release URLs returned by the API', () => {
   assert.equal(result?.url, `${RELEASES_URL}/tag/v2.0.0`);
 });
 
+test('only opens valid release-version URLs for the configured repository', () => {
+  assert.equal(isReleaseDownloadUrl(`${RELEASES_URL}/tag/v2.0.0`), true);
+  for (const url of [
+    'javascript:alert(1)',
+    'https://example.com',
+    `${RELEASES_URL}/tag/latest`,
+    `${RELEASES_URL}/tag/v2.0.0?redirect=1`,
+    `${RELEASES_URL}/tag/v2.0.0/extra`,
+    'https://user@github.com/prapawity/GITVerse/releases/tag/v2.0.0',
+  ])
+    assert.equal(isReleaseDownloadUrl(url), false);
+});
+
 test('requests only the configured repository with a timeout and no redirects', async () => {
   const mock: typeof fetch = async (url, options) => {
     assert.equal(url, 'https://api.github.com/repos/prapawity/GITVerse/releases/latest');
@@ -44,6 +57,39 @@ test('requests only the configured repository with a timeout and no redirects', 
 
 test('handles a repository without releases', async () => {
   assert.equal(await checkForRelease('1.0.0', async () => new Response(null, { status: 404 })), null);
+});
+
+test('development update checks never call the network', async () => {
+  let requests = 0;
+  const result = await checkAppUpdate('1.0.0', false, async () => {
+    requests++;
+    return Response.json(release('v2.0.0'));
+  });
+  assert.deepEqual(result, { kind: 'development', currentVersion: '1.0.0' });
+  assert.equal(requests, 0);
+});
+
+test('packaged checks distinguish optional updates, current versions, and recoverable errors', async () => {
+  assert.deepEqual(await checkAppUpdate('1.0.0', true, async () => Response.json(release('v2.0.0'))), {
+    kind: 'optional',
+    currentVersion: '1.0.0',
+    version: '2.0.0',
+    url: `${RELEASES_URL}/tag/v2.0.0`,
+  });
+  assert.deepEqual(await checkAppUpdate('2.0.0', true, async () => Response.json(release('v2.0.0'))), {
+    kind: 'current',
+    currentVersion: '2.0.0',
+  });
+  assert.deepEqual(
+    await checkAppUpdate('1.0.0', true, async () => {
+      throw new Error('Offline');
+    }),
+    {
+      kind: 'error',
+      currentVersion: '1.0.0',
+      message: 'Offline',
+    },
+  );
 });
 
 test('surfaces HTTP, network, JSON, and timeout failures', async () => {

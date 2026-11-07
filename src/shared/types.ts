@@ -13,6 +13,24 @@ export interface Commit {
   date: string; // ISO
   subject: string;
   body?: string; // first non-empty line of the body
+  stashId?: string;
+}
+
+export interface StashRef {
+  id: string;
+  message: string;
+  hash?: string;
+  baseHash?: string;
+  author?: string;
+  email?: string;
+  date?: string;
+  body?: string;
+}
+
+export interface StashDetail extends StashRef {
+  hash: string;
+  baseHash: string;
+  files: { status: string; path: string; oldPath?: string; untracked?: boolean }[];
 }
 
 export interface Segment {
@@ -20,6 +38,7 @@ export interface Segment {
   x2: number; // lane index at end
   color: number;
   half: 'top' | 'bottom';
+  stash?: boolean;
 }
 
 export interface GraphRow {
@@ -39,4 +58,10 @@ export interface FileStatus {
   index: string; // X of porcelain XY
   worktree: string; // Y
   oldPath?: string;
+}
+
+export interface FileChangeCount {
+  path: string;
+  staged: number | null;
+  unstaged: number | null;
 }

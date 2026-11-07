@@ -6,7 +6,8 @@ import { registerTerminal } from './terminal';
 import { loadState, saveKey } from './state';
 import { registerAi } from './ai';
 import { readSecret, writeSecret } from './ai/common';
-import { checkForRelease } from './updates';
+import { checkAppUpdate, isReleaseDownloadUrl } from './updates';
+import type { AppUpdateCheck } from '../src/shared/updates';
 import { scanRepositories } from './repositoryScan';
 
 // name shown in the macOS menu bar, About box and dock (a packaged build also gets it from productName)
@@ -42,6 +43,9 @@ const handlers = {
   commitDetail: git.commitDetail,
   commitFileDiff: git.commitFileDiff,
   workingFileDiff: git.workingFileDiff,
+  fileChangeCounts: git.fileChangeCounts,
+  discardWorkingFiles: git.discardWorkingFiles,
+  discardWorkingHunk: git.discardWorkingHunk,
   fetch: git.fetch,
   pull: git.pull,
   push: git.push,
@@ -51,12 +55,16 @@ const handlers = {
   createBranch: git.createBranch,
   stash: git.stash,
   stashPop: git.stashPop,
+  stashRename: git.stashRename,
   reset: git.reset,
   squashCommits: git.squashCommits,
   cherryPick: git.cherryPick,
   cherryPickMany: git.cherryPickMany,
   tagCommit: git.tagCommit,
   stashDiff: git.stashDiff,
+  stashDetail: git.stashDetail,
+  stashFileDiff: git.stashFileDiff,
+  stashFileAt: git.stashFileAt,
   revert: git.revert,
   rebaseOnto: git.rebaseOnto,
   createTag: git.createTag,
@@ -178,14 +186,31 @@ ipcMain.handle(
 );
 
 app.whenReady().then(() => {
+  let startupUpdate: Promise<AppUpdateCheck> | null = null;
+  let manualUpdate: Promise<AppUpdateCheck> | null = null;
+  const requestUpdate = () => {
+    if (!manualUpdate)
+      manualUpdate = checkAppUpdate(app.getVersion(), app.isPackaged).finally(() => {
+        manualUpdate = null;
+      });
+    return manualUpdate;
+  };
+  ipcMain.handle('updates:environment', () => ({ enabled: app.isPackaged, currentVersion: app.getVersion() }));
+  ipcMain.handle('updates:startup', () => (startupUpdate ??= requestUpdate()));
+  ipcMain.handle('updates:check', () => requestUpdate());
+  ipcMain.handle('updates:openDownloads', (_event, url: string) => {
+    if (!isReleaseDownloadUrl(url)) throw new Error('Invalid release download URL.');
+    return shell.openExternal(url);
+  });
   let checking = false;
   const checkUpdates = async (manual: boolean) => {
-    if (checking) return;
+    if (!app.isPackaged || checking) return;
     checking = true;
     try {
-      const update = await checkForRelease(app.getVersion());
+      const update = await requestUpdate();
       if (win.isDestroyed()) return;
-      if (update) {
+      if (update.kind === 'error') throw new Error(update.message);
+      if (update.kind === 'optional') {
         const { response } = await dialog.showMessageBox(win, {
           type: 'info',
           title: 'Update available',
@@ -196,7 +221,7 @@ app.whenReady().then(() => {
           cancelId: 1,
         });
         if (response === 0) await shell.openExternal(update.url);
-      } else if (manual) {
+      } else if (manual && update.kind === 'current') {
         await dialog.showMessageBox(win, {
           type: 'info',
           message: 'No newer stable release is available.',
@@ -231,7 +256,9 @@ app.whenReady().then(() => {
         role: 'help' as const,
         submenu: [
           {
+            id: 'check-for-updates',
             label: 'Check for Updates…',
+            enabled: app.isPackaged,
             click: () => {
               void checkUpdates(true);
             },
@@ -246,9 +273,6 @@ app.whenReady().then(() => {
     height: 900,
     backgroundColor: '#1e1e2e',
     webPreferences: { preload: path.join(__dirname, '../preload/preload.js'), contextIsolation: true },
-  });
-  win.webContents.once('did-finish-load', () => {
-    if (app.isPackaged) void checkUpdates(false);
   });
   if (process.env.VITE_DEV_SERVER_URL) win.loadURL(process.env.VITE_DEV_SERVER_URL);
   else win.loadFile(path.join(__dirname, '../../dist/index.html'));

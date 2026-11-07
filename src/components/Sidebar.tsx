@@ -16,6 +16,7 @@ import {
 import { ancestors, buildTree, visibleRows, type RefLeaf } from '../lib/refTree';
 import { useRepo } from '../store/repoStore';
 import { SidebarSkeleton } from './Loading';
+import type { StashRef } from '../shared/types';
 
 function Section({
   icon,
@@ -188,11 +189,13 @@ export function Sidebar({
   onContext,
   onTag,
   onStash,
+  selectedStashHash,
 }: {
   onNavigate: (kind: 'local' | 'remote', name: string) => void;
   onContext: (kind: 'local' | 'remote', name: string, x: number, y: number) => void;
   onTag: (name: string) => void;
-  onStash: (stash: { id: string; message: string }) => void;
+  onStash: (stash: StashRef) => void;
+  selectedStashHash?: string;
 }) {
   const { refs, checkout, checkoutRemote, loading } = useRepo();
   const [q, setQ] = useState('');
@@ -279,8 +282,9 @@ export function Sidebar({
           <button
             key={s.id}
             onClick={() => onStash(s)}
+            aria-pressed={!!s.hash && s.hash === selectedStashHash}
             title={s.message}
-            className="block min-h-[32px] w-full truncate px-9 py-[7px] text-left text-[14px] hover:bg-surface/50"
+            className={`block min-h-[32px] w-full truncate px-9 py-[7px] text-left text-[14px] hover:bg-surface/50 ${s.hash && s.hash === selectedStashHash ? 'bg-[#f5a623]/15 text-[#f5a623]' : ''}`}
           >
             {s.message}
           </button>

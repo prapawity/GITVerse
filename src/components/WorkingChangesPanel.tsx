@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, FilePen, Loader2, Minus, Plus, RefreshCw, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowDownUp, Check, FilePen, Loader2, Minus, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
-import type { FileStatus } from '../shared/types';
+import type { FileChangeCount, FileStatus } from '../shared/types';
 import { useSettings } from '../store/settingsStore';
 import { providerLabel } from '../shared/aiTypes';
 
@@ -12,6 +12,12 @@ const isConflict = (f: FileStatus) => ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']
 const clean = (e: unknown) =>
   String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
 const EMPTY_DRAFT = { summary: '', description: '', amend: false, signoff: false };
+const SORT_MODES = [
+  { id: 'az', label: 'A-Z' },
+  { id: 'za', label: 'Z-A' },
+  { id: 'most', label: 'Most changes' },
+  { id: 'fewest', label: 'Fewest changes' },
+] as const;
 
 export function WorkingChangesPanel({
   selected,
@@ -30,19 +36,164 @@ export function WorkingChangesPanel({
   const [generating, setGenerating] = useState(false);
   const provider = useSettings((s) => s.aiProvider);
   const draft = repoPath ? (commitDrafts[repoPath] ?? EMPTY_DRAFT) : EMPTY_DRAFT;
-  const { summary, description, amend, signoff } = draft;
+  const { summary, description, amend } = draft;
   const updateDraft = (changes: Partial<typeof draft>) => {
     if (repoPath) setCommitDraft(repoPath, { ...draft, ...changes });
   };
-  const [optionsOpen, setOptionsOpen] = useState(false);
   const [error, setError] = useState('');
+  const [sort, setSort] = useState<'az' | 'za' | 'most' | 'fewest'>('az');
+  const sortMenu = useRef<HTMLDetailsElement>(null);
+  const [sortOpen, setSortOpen] = useState(false);
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      if (sortMenu.current && !sortMenu.current.contains(event.target as Node)) sortMenu.current.open = false;
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, []);
+  const [counts, setCounts] = useState<{ repo: string; files: FileChangeCount[] } | null>(null);
+  const [counting, setCounting] = useState(false);
+  const [sortError, setSortError] = useState('');
+  const byChanges = sort === 'most' || sort === 'fewest';
+  useEffect(() => {
+    if (!repoPath || !byChanges) {
+      setCounting(false);
+      setSortError('');
+      return;
+    }
+    let active = true;
+    setCounting(true);
+    setSortError('');
+    api()
+      .fileChangeCounts(repoPath)
+      .then((files: FileChangeCount[]) => {
+        if (active) setCounts({ repo: repoPath, files });
+      })
+      .catch((e: unknown) => {
+        if (active) setSortError(`Could not count file changes: ${clean(e)}`);
+      })
+      .finally(() => {
+        if (active) setCounting(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [repoPath, byChanges, status]);
+  const [selection, setSelection] = useState<{
+    repo: string;
+    area: 'staged' | 'unstaged';
+    paths: string[];
+    anchor: string;
+  } | null>(null);
 
-  const conflict = status.filter(isConflict);
-  const staged = status.filter((f) => !isConflict(f) && f.index !== ' ' && f.index !== '?');
-  const unstaged = status.filter((f) => !isConflict(f) && (f.worktree !== ' ' || f.index === '?'));
+  const changeCounts = new Map(counts?.repo === repoPath ? counts.files.map((file) => [file.path, file]) : []);
+  const sortFiles = (files: FileStatus[], area: 'staged' | 'unstaged') =>
+    [...files].sort((left, right) => {
+      const name =
+        left.path.localeCompare(right.path, 'en', { sensitivity: 'base', numeric: true }) ||
+        left.path.localeCompare(right.path, 'en');
+      if (sort === 'az') return name;
+      if (sort === 'za') return -name;
+      const leftCount = changeCounts.get(left.path)?.[area];
+      const rightCount = changeCounts.get(right.path)?.[area];
+      if (leftCount == null && rightCount != null) return 1;
+      if (rightCount == null && leftCount != null) return -1;
+      if (leftCount != null && rightCount != null && leftCount !== rightCount)
+        return sort === 'most' ? rightCount - leftCount : leftCount - rightCount;
+      return name;
+    });
+  const conflict = sortFiles(status.filter(isConflict), 'unstaged');
+  const staged = sortFiles(
+    status.filter((f) => !isConflict(f) && f.index !== ' ' && f.index !== '?'),
+    'staged',
+  );
+  const unstaged = sortFiles(
+    status.filter((f) => !isConflict(f) && (f.worktree !== ' ' || f.index === '?')),
+    'unstaged',
+  );
   const busy = pending || generating || !!working;
   const missingSummary = !summary.trim() && (!amend || !!description.trim());
   const current = refs.local.find((b) => b.current)?.name ?? 'detached HEAD';
+  const selectedPaths = selection?.repo === repoPath ? selection.paths : [];
+  const stagedSelection =
+    selection?.repo === repoPath &&
+    selection.area === 'staged' &&
+    staged.some((file) => selectedPaths.includes(file.path));
+  const discardSelection =
+    selection?.repo === repoPath && selection.area === 'unstaged'
+      ? unstaged.filter((file) => selectedPaths.includes(file.path))
+      : [];
+
+  const selectFile = (file: WorkingFile, area: 'staged' | 'unstaged', files: FileStatus[], event: React.MouseEvent) => {
+    if (!repoPath || busy) return;
+    const sameGroup = selection?.repo === repoPath && selection.area === area;
+    const anchor = sameGroup ? files.findIndex((value) => value.path === selection.anchor) : -1;
+    const index = files.findIndex((value) => value.path === file.path);
+    const previous = sameGroup ? selectedPaths : [];
+    const paths =
+      event.shiftKey && anchor >= 0
+        ? files.slice(Math.min(anchor, index), Math.max(anchor, index) + 1).map((value) => value.path)
+        : event.metaKey || event.ctrlKey
+          ? previous.includes(file.path)
+            ? previous.filter((value) => value !== file.path)
+            : [...previous, file.path]
+          : [file.path];
+    setSelection({
+      repo: repoPath,
+      area,
+      paths,
+      anchor: event.shiftKey && anchor >= 0 ? selection!.anchor : file.path,
+    });
+    onSelect(file);
+  };
+
+  const discard = async (files: FileStatus[]) => {
+    if (!repoPath || busy || operation || !files.length) return;
+    const cwd = repoPath;
+    setPending(true);
+    setError('');
+    try {
+      const snapshots = await Promise.all(
+        files.map(async (file) => {
+          const area = file.index === '?' ? ('untracked' as const) : ('unstaged' as const);
+          return { path: file.path, area, diff: await api().workingFileDiff(cwd, file.path, area) };
+        }),
+      );
+      if (useRepo.getState().repoPath !== cwd) return;
+      if (
+        !(await askConfirm(
+          `Discard ${files.length} file${files.length === 1 ? '' : 's'}?`,
+          `Unstaged changes will be permanently lost. Untracked files will be deleted. Staged changes are kept.\n\n${files
+            .slice(0, 5)
+            .map((file) => (file.path.length > 100 ? `...${file.path.slice(-97)}` : file.path))
+            .join('\n')}${files.length > 5 ? `\n...and ${files.length - 5} more files` : ''}`,
+          { label: 'Discard changes', danger: true },
+        ))
+      )
+        return;
+      if (useRepo.getState().repoPath !== cwd) return;
+      await api().discardWorkingFiles(cwd, snapshots);
+      useRepo
+        .getState()
+        .recordActivity(
+          'success',
+          `Discarded ${files.length} file${files.length === 1 ? '' : 's'}`,
+          files.map((file) => file.path).join('\n'),
+          cwd,
+        );
+      notify('success', `Discarded ${files.length} file${files.length === 1 ? '' : 's'}`);
+      if (useRepo.getState().repoPath === cwd) {
+        setSelection(null);
+        if (selected && files.some((file) => file.path === selected.path)) onClear();
+        await onRefresh();
+      }
+    } catch (e) {
+      if (useRepo.getState().repoPath === cwd) setError(clean(e));
+      useRepo.getState().recordActivity('error', 'Discard failed', clean(e), cwd);
+    } finally {
+      setPending(false);
+    }
+  };
 
   const changeAmend = async (enabled: boolean) => {
     if (!repoPath || busy) return;
@@ -153,7 +304,7 @@ export function WorkingChangesPanel({
     setPending(true);
     setError('');
     try {
-      await api().commit(cwd, summary.trim(), description, { amend, signoff });
+      await api().commit(cwd, summary.trim(), description, { amend });
       setCommitDraft(cwd, null);
       if (useRepo.getState().repoPath === cwd) {
         onClear();
@@ -169,10 +320,17 @@ export function WorkingChangesPanel({
   };
 
   const group = (label: string, files: FileStatus[], area: 'staged' | 'unstaged') => (
-    <section>
+    <section aria-label={`${label} files`}>
       <div className="flex items-center gap-2 border-b border-surface/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sub">
         <span className="flex-1">
           {label} · {files.length}
+          {selection?.repo === repoPath &&
+            selection.area === area &&
+            files.filter((file) => selectedPaths.includes(file.path)).length > 1 && (
+              <span className="ml-2 normal-case text-[#4cc2ff]">
+                {files.filter((file) => selectedPaths.includes(file.path)).length} selected
+              </span>
+            )}
         </span>
         <button
           disabled={!files.length || busy}
@@ -186,13 +344,19 @@ export function WorkingChangesPanel({
         const kind = area === 'unstaged' && f.index === '?' ? 'untracked' : area;
         const code = kind === 'untracked' ? '?' : kind === 'staged' ? f.index : f.worktree;
         const active = selected?.path === f.path && selected.area === kind;
+        const chosen = selection?.repo === repoPath && selection.area === area && selectedPaths.includes(f.path);
+        const discardFiles = discardSelection.some((file) => file.path === f.path) ? discardSelection : [f];
         return (
-          <div key={f.path} className={`group flex items-center ${active ? 'bg-[#4cc2ff]/20' : 'hover:bg-surface/40'}`}>
+          <div
+            key={f.path}
+            className={`group flex items-center ${chosen ? 'bg-[#4cc2ff]/20' : active ? 'bg-surface/25' : 'hover:bg-surface/40'}`}
+          >
             <button
-              onClick={() => onSelect({ path: f.path, status: code, area: kind })}
-              aria-pressed={active}
+              onClick={(event) => selectFile({ path: f.path, status: code, area: kind }, area, files, event)}
+              aria-pressed={chosen}
+              disabled={busy}
               title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
-              className="flex min-h-[38px] min-w-0 flex-1 items-center gap-2 px-4 text-left"
+              className="flex min-h-[38px] min-w-0 flex-1 select-none items-center gap-2 px-4 text-left"
             >
               <span
                 className={`w-4 shrink-0 text-center font-mono text-xs font-semibold ${code === 'D' ? 'text-[#f38ba8]' : code === 'A' || code === '?' ? 'text-[#a6e3a1]' : 'text-[#fab387]'}`}
@@ -200,7 +364,28 @@ export function WorkingChangesPanel({
                 {code}
               </span>
               <span className="min-w-0 flex-1 truncate">{f.path}</span>
+              {byChanges && changeCounts.has(f.path) && (
+                <span
+                  className="min-w-[28px] shrink-0 text-right font-mono text-[11px] text-sub"
+                  title="Added and deleted lines"
+                >
+                  {changeCounts.get(f.path)?.[area] ?? 'bin'}
+                </span>
+              )}
             </button>
+            {area === 'unstaged' && (
+              <button
+                disabled={busy || !!operation}
+                onClick={() => void discard(discardFiles)}
+                aria-label={
+                  discardFiles.length > 1 ? `Discard ${discardFiles.length} selected files` : `Discard ${f.path}`
+                }
+                title={discardFiles.length > 1 ? `Discard ${discardFiles.length} selected files` : `Discard ${f.path}`}
+                className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+              >
+                <Trash2 size={15} aria-hidden />
+              </button>
+            )}
             <button
               disabled={busy}
               onClick={() => changeStage(area === 'staged' ? 'unstage' : 'stage', [f])}
@@ -223,17 +408,119 @@ export function WorkingChangesPanel({
         <h2 className="min-w-0 flex-1 truncate font-semibold">
           {status.length} file change{status.length === 1 ? '' : 's'} on {current}
         </h2>
-        <button
-          disabled={busy}
-          onClick={onRefresh}
-          aria-label="Refresh local changes"
-          title="Refresh local changes"
-          className="rounded p-1.5 text-sub hover:bg-surface hover:text-text disabled:opacity-40"
+        <details
+          ref={sortMenu}
+          onToggle={(event) => setSortOpen(event.currentTarget.open)}
+          className="relative shrink-0"
+          onKeyDown={(event) => {
+            const menu = event.currentTarget;
+            if (event.key === 'Escape' && menu.open) {
+              event.preventDefault();
+              event.stopPropagation();
+              menu.open = false;
+              menu.querySelector('summary')?.focus();
+            } else if (!busy && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+              event.preventDefault();
+              menu.open = true;
+              const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+              const index = items.indexOf(document.activeElement as HTMLButtonElement);
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? items.length - 1
+                    : index < 0
+                      ? event.key === 'ArrowUp'
+                        ? items.length - 1
+                        : 0
+                      : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+              items[next]?.focus();
+            }
+          }}
         >
-          <RefreshCw size={15} />
+          <summary
+            role="button"
+            aria-label="Sort file changes"
+            aria-haspopup="menu"
+            aria-expanded={sortOpen}
+            aria-disabled={busy}
+            title={`Sort files: ${SORT_MODES.find((mode) => mode.id === sort)?.label}`}
+            onClick={(event) => {
+              if (busy) event.preventDefault();
+            }}
+            className="list-none rounded p-1.5 text-sub hover:bg-surface hover:text-text [&::-webkit-details-marker]:hidden"
+          >
+            {counting ? (
+              <Loader2 size={15} className="animate-spin" aria-hidden />
+            ) : (
+              <ArrowDownUp size={15} aria-hidden />
+            )}
+          </summary>
+          <div
+            role="menu"
+            aria-label="File sorting"
+            className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-md border border-surface bg-mantle py-1 shadow-xl"
+          >
+            {SORT_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={sort === mode.id}
+                disabled={busy}
+                onClick={() => {
+                  setSort(mode.id);
+                  if (sortMenu.current) {
+                    sortMenu.current.open = false;
+                    sortMenu.current.querySelector('summary')?.focus();
+                  }
+                }}
+                className={`flex min-h-[32px] w-full items-center gap-2 px-3 text-left text-xs hover:bg-surface/60 disabled:opacity-40 ${sort === mode.id ? 'text-[#4cc2ff]' : 'text-sub'}`}
+              >
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                  {sort === mode.id && <Check size={14} aria-hidden />}
+                </span>
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </details>
+        <button
+          disabled={busy || !!operation || !unstaged.length || stagedSelection}
+          onClick={() => void discard(discardSelection.length ? discardSelection : unstaged)}
+          aria-label={
+            stagedSelection
+              ? 'Unstage selected files before discarding'
+              : discardSelection.length
+                ? `Discard ${discardSelection.length} selected file${discardSelection.length === 1 ? '' : 's'}`
+                : 'Discard all unstaged changes'
+          }
+          title={
+            stagedSelection
+              ? 'Unstage selected files before discarding'
+              : discardSelection.length
+                ? `Discard ${discardSelection.length} selected file${discardSelection.length === 1 ? '' : 's'}`
+                : 'Discard all unstaged changes'
+          }
+          className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+        >
+          <Trash2 size={15} aria-hidden />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      {sortError && (
+        <p role="alert" className="px-4 py-2 text-xs text-[#f38ba8]">
+          {sortError}
+        </p>
+      )}
+      <div
+        className="min-h-0 flex-1 overflow-auto"
+        onClick={(event) => {
+          if (event.target === event.currentTarget && !busy) {
+            setSelection(null);
+            onClear();
+          }
+        }}
+      >
         {conflict.length > 0 && (
           <section>
             <div className="border-b border-surface/60 px-4 py-2 text-xs font-semibold uppercase text-[#f9e2af]">
@@ -324,28 +611,6 @@ export function WorkingChangesPanel({
           rows={3}
           className="w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
         />
-        <div>
-          <button
-            type="button"
-            aria-expanded={optionsOpen}
-            onClick={() => setOptionsOpen(!optionsOpen)}
-            className="flex items-center gap-1 text-sm text-sub hover:text-text"
-          >
-            {optionsOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />} Commit options
-          </button>
-          {optionsOpen && (
-            <label className="mt-2 flex items-center gap-2 text-sm text-sub">
-              <input
-                type="checkbox"
-                checked={signoff}
-                disabled={busy}
-                onChange={(e) => updateDraft({ signoff: e.target.checked })}
-                className="accent-[#4cc2ff]"
-              />{' '}
-              Sign off
-            </label>
-          )}
-        </div>
         <button
           type="submit"
           disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}

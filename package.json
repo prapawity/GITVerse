@@ -24,7 +24,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "security:audit": "npm audit --audit-level=high --registry=https://registry.npmjs.org",
-    "test": "tsx --test electron/updates.test.ts electron/repositoryScan.test.ts electron/git/history.test.ts src/store/repoStore.test.ts scripts/smoke-electron.test.cjs",
+    "test": "tsx --test electron/updates.test.ts electron/repositoryScan.test.ts electron/git/history.test.ts electron/git/discard.test.ts electron/git/stash.test.ts src/store/repoStore.test.ts scripts/smoke-electron.test.cjs",
     "test:electron": "npm run build && node scripts/smoke-electron.cjs",
     "dist": "npm run build && electron-builder --publish never"
   },

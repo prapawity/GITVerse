@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GITVerse Universe | Launch Preview</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { LaunchScreen } from '../src/components/LaunchScreen';
+      import '../src/index.css';
+      createRoot(document.getElementById('root')).render(
+        React.createElement(LaunchScreen, { status: 'GITVerse Universe' }),
+      );
+    </script>
+  </body>
+</html>

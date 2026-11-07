@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   GitMerge,
+  Info,
   KeyRound,
   Palette,
   Settings as Gear,
@@ -26,8 +27,9 @@ import {
 } from '../store/settingsStore';
 import { useRepo } from '../store/repoStore';
 import { ProfileSettings } from './ProfileSettings';
+import { ApplicationAbout } from './ApplicationAbout';
 
-export type Section = 'general' | 'appearance' | 'terminal' | 'conflicts' | 'ai' | 'gitflow' | 'profiles';
+export type Section = 'general' | 'appearance' | 'terminal' | 'conflicts' | 'ai' | 'gitflow' | 'profiles' | 'about';
 
 const input =
   'w-full max-w-[360px] rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]';
@@ -702,7 +704,11 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
   useEffect(() => setSection(initial), [initial]);
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && !(e.target instanceof HTMLInputElement) && onExit();
+    const h = (e: KeyboardEvent) =>
+      e.key === 'Escape' &&
+      !(e.target instanceof HTMLInputElement) &&
+      !document.querySelector('dialog[open]') &&
+      onExit();
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [onExit]);
@@ -712,9 +718,11 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
       key={id}
       onClick={() => setSection(id)}
       aria-current={section === id ? 'page' : undefined}
-      className={`flex min-h-[48px] w-full items-center gap-4 px-6 text-left text-[16px] ${section === id ? 'bg-[#4cc2ff]/15 text-text' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
+      aria-label={label}
+      title={label}
+      className={`flex min-h-[48px] w-full items-center gap-4 px-4 text-left text-[16px] sm:px-6 ${section === id ? 'bg-[#4cc2ff]/15 text-text' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
     >
-      <I size={19} aria-hidden /> {label}
+      <I size={19} className="shrink-0" aria-hidden /> <span className="hidden sm:inline">{label}</span>
     </button>
   );
 
@@ -735,23 +743,27 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
     <div className="flex h-full min-h-0">
       <nav
         aria-label="Preferences"
-        className="flex w-[300px] shrink-0 flex-col overflow-y-auto border-r border-surface bg-mantle py-3"
+        className="flex w-14 shrink-0 flex-col overflow-y-auto border-r border-surface bg-mantle py-3 sm:w-[300px]"
       >
         <button
           onClick={onExit}
-          className="mb-3 flex min-h-[44px] items-center gap-3 px-6 text-left text-[17px] hover:text-[#4cc2ff]"
+          aria-label="Exit Preferences"
+          title="Exit Preferences"
+          className="mb-3 flex min-h-[44px] items-center gap-3 px-4 text-left text-[17px] hover:text-[#4cc2ff] sm:px-6"
         >
-          <Undo2 size={18} aria-hidden /> Exit Preferences
+          <Undo2 size={18} className="shrink-0" aria-hidden />{' '}
+          <span className="hidden sm:inline">Exit Preferences</span>
         </button>
-        <div className="px-6 pb-1 pt-2 text-[14px] text-sub">Preferences</div>
+        <div className="hidden px-6 pb-1 pt-2 text-[14px] text-sub sm:block">Preferences</div>
         {nav('general', 'General', Gear)}
         {nav('appearance', 'Appearance', Palette)}
+        {nav('about', 'Application / About', Info)}
         {nav('profiles', 'Profiles', UserRound)}
         {nav('terminal', 'In-App Terminal', SquareTerminal)}
         {nav('conflicts', 'Conflicts', GitMerge)}
         {nav('ai', 'AI Assistant', Sparkles)}
-        <div className="px-6 pb-1 pt-6 text-[14px] text-sub">Repo-Specific Preferences</div>
-        <div className="px-6 pb-2 text-[14px]">
+        <div className="hidden px-6 pb-1 pt-6 text-[14px] text-sub sm:block">Repo-Specific Preferences</div>
+        <div className="hidden px-6 pb-2 text-[14px] sm:block">
           {repoName ? (
             <>
               Repo: <span className="font-medium">{repoName}</span>
@@ -763,7 +775,8 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
         {repoName && nav('gitflow', 'Gitflow', Workflow)}
       </nav>
 
-      <main className="min-w-0 flex-1 overflow-y-auto px-10 py-6">
+      <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10">
+        {section === 'about' && <ApplicationAbout />}
         {section === 'general' && (
           <>
             <h1 className="mb-4 text-[28px] font-semibold">General</h1>

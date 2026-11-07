@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileMinus, FilePen, FilePlus, FileSymlink, Folder, List, ListTree } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { DetailsSkeleton, Skeleton } from './Loading';
+import type { StashDetail, StashRef } from '../shared/types';
 
-export type ChangedFile = { status: string; path: string; oldPath?: string };
+export type ChangedFile = { status: string; path: string; oldPath?: string; untracked?: boolean };
 type F = ChangedFile;
 
 const icon = (s: string) => {
@@ -45,10 +46,11 @@ function FileRow({
       title={f.path}
     >
       {icon(f.status)}
-      <span className="truncate">
+      <span className="min-w-0 flex-1 truncate">
         {!tree && <span className="text-sub">{f.path.slice(0, i + 1)}</span>}
         <span className="font-medium">{f.path.slice(i + 1)}</span>
       </span>
+      {f.untracked && <span className="shrink-0 text-[11px] text-sub">untracked</span>}
     </button>
   );
 }
@@ -56,13 +58,54 @@ function FileRow({
 export function DetailsPanel({
   file,
   onSelectFile,
+  stash,
 }: {
   file: ChangedFile | null;
   onSelectFile: (file: ChangedFile) => void;
+  stash?: StashRef;
 }) {
-  const { graph, selectedHash, detail, status } = useRepo();
+  const state = useRepo();
+  const { graph, selectedHash, status, repoPath } = state;
+  const [editingStash, setEditingStash] = useState(false);
+  const [stashName, setStashName] = useState('');
+  const [stashEditError, setStashEditError] = useState('');
+  const [savingStashName, setSavingStashName] = useState(false);
+  const stashKey = stash ? `${repoPath}:${stash.hash ?? stash.id}` : '';
+  const [snapshot, setSnapshot] = useState<{ key: string; data?: StashDetail; error?: string } | null>(null);
+  useEffect(() => {
+    if (!stash || !repoPath) return;
+    let active = true;
+    setSnapshot({ key: stashKey });
+    (window as any).gitApi
+      .stashDetail(repoPath, stash.hash ?? stash.id)
+      .then((data: StashDetail) => {
+        if (active) setSnapshot({ key: stashKey, data });
+      })
+      .catch((error: Error) => {
+        if (active)
+          setSnapshot({
+            key: stashKey,
+            error: error.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''),
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [repoPath, stashKey, stash?.id, stash?.hash]);
+  const saved = snapshot?.key === stashKey ? snapshot.data : undefined;
+  const detail = stash ? saved : state.detail;
   const [view, setView] = useState<'path' | 'tree'>('path');
-  const c = graph.rows.find((r) => r.commit.hash === selectedHash)?.commit;
+  const c = stash
+    ? {
+        hash: saved?.hash ?? stash.hash ?? '',
+        parents: saved?.baseHash ? [saved.baseHash] : stash.baseHash ? [stash.baseHash] : [],
+        author: saved?.author ?? stash.author ?? 'Unknown',
+        email: saved?.email ?? stash.email ?? '',
+        date: saved?.date ?? stash.date ?? '',
+        subject: stash.message,
+        stashId: saved?.id ?? stash.id,
+      }
+    : graph.rows.find((r) => r.commit.hash === selectedHash)?.commit;
 
   const groups = useMemo(() => {
     const m = new Map<string, F[]>();
@@ -73,6 +116,12 @@ export function DetailsPanel({
     return [...m];
   }, [detail]);
 
+  if (stash && snapshot?.key === stashKey && snapshot.error)
+    return (
+      <p role="alert" className="whitespace-pre-wrap p-4 text-[#f38ba8]">
+        {snapshot.error}
+      </p>
+    );
   if (!c && selectedHash) return <DetailsSkeleton />;
   if (!c)
     return (
@@ -80,7 +129,7 @@ export function DetailsPanel({
         {status.length} changed file(s) in working tree. Select a commit to see its details.
       </div>
     );
-  const [title, ...rest] = (detail?.body ?? c.subject).split('\n');
+  const [title, ...rest] = (stash ? stash.message : (detail?.body ?? c.subject)).split('\n');
   const initials = c.author
     .split(/\s+/)
     .slice(0, 2)
@@ -98,18 +147,90 @@ export function DetailsPanel({
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-surface px-4 py-3 text-sub">
+    <div
+      role="region"
+      aria-label={stash ? 'Stash details' : 'Commit details'}
+      className="flex h-full flex-col overflow-hidden"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-surface px-4 py-3 text-sub">
         <span>
-          commit: <span className="font-mono text-[15px] font-semibold text-text">{c.hash.slice(0, 6)}</span>
+          {stash ? 'stash' : 'commit'}:{' '}
+          <span className="font-mono text-[15px] font-semibold text-text">{c.hash.slice(0, 6)}</span>
+          {stash && <span className="ml-2 font-mono text-[#f5a623]">{c.stashId}</span>}
         </span>
         <span>
-          parent: <span className="font-mono">{c.parents.map((p) => p.slice(0, 6)).join(', ') || '—'}</span>
+          {stash ? 'base' : 'parent'}:{' '}
+          <span className="font-mono">{c.parents.map((p) => p.slice(0, 6)).join(', ') || '—'}</span>
         </span>
       </div>
 
       <div className="m-4 max-h-[38%] overflow-auto rounded-lg border border-surface bg-crust p-4">
-        <div className="text-[17px] font-semibold leading-snug">{title}</div>
+        {stash ? (
+          <>
+            <input
+              aria-label="Stash name"
+              maxLength={200}
+              value={editingStash ? stashName : stash.message}
+              onFocus={() => {
+                if (!editingStash) setStashName(stash.message);
+                setEditingStash(true);
+              }}
+              onChange={(event) => {
+                setStashName(event.target.value);
+                setEditingStash(true);
+              }}
+              className="w-full rounded border border-surface bg-mantle px-3 py-2 text-[16px] outline-none focus:border-[#4cc2ff]"
+            />
+            {stashEditError && (
+              <p role="alert" className="mt-2 text-sm text-[#f38ba8]">
+                {stashEditError}
+              </p>
+            )}
+            {editingStash && (
+              <div className="mt-4 flex gap-2">
+                <button
+                  disabled={savingStashName || !stashName.trim() || stashName.trim() === stash.message}
+                  onClick={async () => {
+                    setSavingStashName(true);
+                    setStashEditError('');
+                    try {
+                      await (window as any).gitApi.stashRename(repoPath, stash.hash ?? stash.id, stashName.trim());
+                      await state.refresh();
+                      setEditingStash(false);
+                    } catch (error) {
+                      setStashEditError(
+                        String((error as Error).message).replace(
+                          /^Error invoking remote method '[^']*': (Error: )?/,
+                          '',
+                        ),
+                      );
+                    } finally {
+                      setSavingStashName(false);
+                    }
+                  }}
+                  className="min-h-9 flex-1 rounded border border-[#a6e3a1] bg-[#a6e3a1]/20 px-3 text-sm disabled:opacity-40"
+                >
+                  Update Message
+                </button>
+                <button
+                  disabled={savingStashName}
+                  onClick={() => {
+                    setStashName(stash.message);
+                    setEditingStash(false);
+                    setStashEditError('');
+                  }}
+                  className="min-h-9 flex-1 rounded border border-[#f38ba8] bg-[#f38ba8]/15 px-3 text-sm disabled:opacity-40"
+                >
+                  Cancel Amend
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="text-[17px] font-semibold leading-snug">{title}</div>
+          </>
+        )}
         {rest.join('\n').trim() && (
           <pre className="mt-3 whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-sub">
             {rest.join('\n').trim()}
@@ -127,7 +248,9 @@ export function DetailsPanel({
         <div className="min-w-0">
           <div className="truncate text-[15px] font-medium">{c.author}</div>
           {c.email && <div className="break-all text-[13px] text-sub">{c.email}</div>}
-          <div className="text-[13px] text-sub">authored {new Date(c.date).toLocaleString()}</div>
+          <div className="text-[13px] text-sub">
+            {c.date ? `authored ${new Date(c.date).toLocaleString()}` : 'Loading metadata...'}
+          </div>
         </div>
       </div>
 

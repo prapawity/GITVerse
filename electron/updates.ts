@@ -1,5 +1,6 @@
 import { gt, prerelease, valid } from 'semver';
 import { z } from 'zod';
+import type { AppUpdateCheck } from '../src/shared/updates';
 
 export const RELEASES_URL = 'https://github.com/prapawity/GITVerse/releases';
 const RELEASE_API = 'https://api.github.com/repos/prapawity/GITVerse/releases/latest';
@@ -12,6 +13,25 @@ const releaseSchema = z.object({
 export interface ReleaseUpdate {
   version: string;
   url: string;
+}
+
+export function isReleaseDownloadUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    const prefix = '/prapawity/GITVerse/releases/tag/';
+    return (
+      url.origin === 'https://github.com' &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname.startsWith(prefix) &&
+      !!valid(decodeURIComponent(url.pathname.slice(prefix.length)))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function newerRelease(payload: unknown, current: string): ReleaseUpdate | null {
@@ -35,4 +55,20 @@ export async function checkForRelease(
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`GitHub release check failed (HTTP ${response.status}).`);
   return newerRelease(await response.json(), current);
+}
+
+export async function checkAppUpdate(
+  current: string,
+  packaged: boolean,
+  fetchRelease: typeof fetch = fetch,
+): Promise<AppUpdateCheck> {
+  if (!packaged) return { kind: 'development', currentVersion: current };
+  try {
+    const release = await checkForRelease(current, fetchRelease);
+    return release
+      ? { kind: 'optional', currentVersion: current, ...release }
+      : { kind: 'current', currentVersion: current };
+  } catch (error) {
+    return { kind: 'error', currentVersion: current, message: error instanceof Error ? error.message : String(error) };
+  }
 }
