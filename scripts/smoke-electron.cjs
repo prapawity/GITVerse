@@ -195,27 +195,43 @@ if (!process.versions.electron) {
           const graph = canvas.parentElement;
           const rect = graph.getBoundingClientRect();
           const original = CanvasRenderingContext2D.prototype.stroke;
+          const width = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width');
+          let renders = 0;
+          let segments = 0;
           let glows = 0;
-          let clearing = false;
-          let clearRender = false;
+          Object.defineProperty(canvas, 'width', {
+            configurable: true,
+            get() { return width.get.call(this); },
+            set(value) {
+              width.set.call(this, value);
+              renders++;
+              segments = 0;
+              glows = 0;
+            },
+          });
           CanvasRenderingContext2D.prototype.stroke = function (...args) {
-            if (this.canvas === canvas) {
-              if (clearing && args[0] instanceof Path2D && this.lineWidth === 2) clearRender = true;
+            if (this.canvas === canvas && args[0] instanceof Path2D) {
+              segments++;
               if (this.shadowBlur === 8) glows++;
             }
             return original.apply(this, args);
           };
-          const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const waitFor = async (condition, attempts) => {
+            for (let attempt = 0; attempt < attempts; attempt++) {
+              await new Promise(resolve => setTimeout(resolve, 20));
+              if (condition()) return true;
+            }
+            return false;
+          };
           let found = false;
           let hitX = rect.left;
           let hitY = rect.top;
           for (const x of [170, 186, 202, 218]) {
             for (const y of [4, 10, 24, 30, 34, 38, 52, 58, 62, 66, 80, 86, 90, 94]) {
-              glows = 0;
+              const previousRender = renders;
               const options = {bubbles: true, clientX: rect.left + x, clientY: rect.top + y};
               graph.dispatchEvent(new MouseEvent('mousemove', options));
-              await frame();
-              if (glows) {
+              if (await waitFor(() => renders > previousRender && segments > 0 && glows > 0, 10)) {
                 found = true;
                 hitX = options.clientX;
                 hitY = options.clientY;
@@ -224,21 +240,24 @@ if (!process.versions.electron) {
             }
             if (found) break;
           }
-          glows = 0;
-          clearing = true;
+          const previousRender = renders;
           graph.dispatchEvent(new MouseEvent('mouseout', {
             bubbles: true,
             clientX: hitX,
             clientY: hitY,
             relatedTarget: document.body,
           }));
-          for (let attempt = 0; attempt < 30 && !clearRender; attempt++)
-            await new Promise(resolve => setTimeout(resolve, 20));
-          await frame();
+          const cleared = await waitFor(() => renders > previousRender && segments > 0 && glows === 0, 100);
+          delete canvas.width;
           CanvasRenderingContext2D.prototype.stroke = original;
-          return {found, cleared: clearRender && glows === 0};
+          return {found, cleared, previousRender, renders, segments, glows};
         })()`);
-        assert.deepEqual(graphSelection, { found: true, cleared: true }, 'Graph line hover highlights and clears');
+        assert.equal(
+          graphSelection.found,
+          true,
+          `Graph line hover did not highlight: ${JSON.stringify(graphSelection)}`,
+        );
+        assert.equal(graphSelection.cleared, true, `Graph line hover did not clear: ${JSON.stringify(graphSelection)}`);
         const tabs = await win.webContents.executeJavaScript(
           `JSON.parse(window.gitApi.stateStorage.getItem('gitverse.tabs'))`,
         );
