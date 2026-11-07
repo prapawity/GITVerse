@@ -9,7 +9,6 @@ import { readSecret, writeSecret } from './ai/common';
 import { checkAppUpdate, downloadMacUpdate, isReleaseDownloadUrl, listReleases, RELEASES_URL } from './updates';
 import type { AppUpdateCheck } from '../src/shared/updates';
 import { scanRepositories } from './repositoryScan';
-import { autoUpdater } from 'electron-updater';
 
 // name shown in the macOS menu bar, About box and dock (a packaged build also gets it from productName)
 app.setName('GITVerse');
@@ -192,7 +191,7 @@ ipcMain.handle(
     ),
 );
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (process.platform === 'darwin') app.dock?.setIcon(appIcon);
   let startupUpdate: Promise<AppUpdateCheck> | null = null;
   let manualUpdate: Promise<AppUpdateCheck> | null = null;
@@ -203,16 +202,19 @@ app.whenReady().then(() => {
       });
     return manualUpdate;
   };
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
-  autoUpdater.allowPrerelease = false;
+  const updater = app.isPackaged ? (await import('electron-updater')).autoUpdater : null;
+  if (updater) {
+    updater.autoDownload = false;
+    updater.autoInstallOnAppQuit = false;
+    updater.allowPrerelease = false;
+  }
   let macInstaller: string | null = null;
   let downloading = false;
   const sendUpdateStatus = (status: { state: string; percent?: number; version?: string; message?: string }) => {
     if (!win.isDestroyed()) win.webContents.send('updates:status', status);
   };
-  autoUpdater.on('download-progress', ({ percent }) => sendUpdateStatus({ state: 'downloading', percent }));
-  autoUpdater.on('update-downloaded', (info) => sendUpdateStatus({ state: 'downloaded', version: info.version }));
+  updater?.on('download-progress', ({ percent }) => sendUpdateStatus({ state: 'downloading', percent }));
+  updater?.on('update-downloaded', (info) => sendUpdateStatus({ state: 'downloaded', version: info.version }));
   const downloadUpdate = async (version: string) => {
     if (!app.isPackaged) throw new Error('Updates are only available in packaged builds.');
     if (downloading) throw new Error('An update is already downloading.');
@@ -229,10 +231,11 @@ app.whenReady().then(() => {
         });
         sendUpdateStatus({ state: 'downloaded', version });
       } else {
-        const result = await autoUpdater.checkForUpdates();
+        if (!updater) throw new Error('Updates are only available in packaged builds.');
+        const result = await updater.checkForUpdates();
         if (!result || result.updateInfo.version !== version)
           throw new Error('This release is not available for this platform.');
-        await autoUpdater.downloadUpdate();
+        await updater.downloadUpdate();
       }
     } finally {
       downloading = false;
@@ -246,7 +249,8 @@ app.whenReady().then(() => {
       if (error) throw new Error(error);
       return;
     }
-    autoUpdater.quitAndInstall(false, true);
+    if (!updater) throw new Error('Updates are only available in packaged builds.');
+    updater.quitAndInstall(false, true);
   };
   ipcMain.handle('updates:download', (_event, version: string) => downloadUpdate(version));
   ipcMain.handle('updates:install', () => installUpdate());
