@@ -1,0 +1,29 @@
+appId: io.github.prapawity.gitverse
+productName: GITVerse
+directories:
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/main/**/*
+  - dist-electron/preload/**/*
+  - package.json
+  - LICENSE
+asar: true
+artifactName: GITVerse-${version}-${os}-${arch}.${ext}
+mac:
+  category: public.app-category.developer-tools
+  identity: null
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  category: Development
+  maintainer: prapawity
+  target:
+    - AppImage

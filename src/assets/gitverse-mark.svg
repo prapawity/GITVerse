@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <title>GITVerse Orbital Graph</title>
+  <defs>
+    <linearGradient id="orbit" x1="16" y1="94" x2="112" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED" />
+      <stop offset="1" stop-color="#C084FC" />
+    </linearGradient>
+    <linearGradient id="graph" x1="44" y1="100" x2="86" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0891B2" />
+      <stop offset="1" stop-color="#22D3EE" />
+    </linearGradient>
+  </defs>
+  <ellipse cx="64" cy="64" rx="54" ry="26" transform="rotate(-30 64 64)" stroke="url(#orbit)" stroke-width="3.5" />
+  <path d="M44 85V41M44 76C44 57 86 74 86 53" stroke="url(#graph)" stroke-width="9" stroke-linecap="round" />
+  <circle cx="44" cy="30" r="10" fill="#ECFEFF" stroke="#22D3EE" stroke-width="7" />
+  <circle cx="86" cy="42" r="10" fill="#ECFEFF" stroke="#06B6D4" stroke-width="7" />
+  <circle cx="44" cy="96" r="10" fill="#ECFEFF" stroke="#0891B2" stroke-width="7" />
+  <path d="M105 86L107.5 93.5L115 96L107.5 98.5L105 106L102.5 98.5L95 96L102.5 93.5Z" fill="#A855F7" />
+</svg>
