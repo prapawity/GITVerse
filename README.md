@@ -1,14 +1,64 @@
-# GITVerse
+<div align="center">
 
-<img src="./src/assets/gitverse-logo.svg" alt="GITVerse Orbital Graph logo" width="360" />
+<img src="./src/assets/gitverse-logo.svg" alt="GITVerse logo" width="420" />
 
-A desktop Git client built with Electron and React, with commit graphs, working-tree diffs, conflict tools, and optional AI assistance.
+### Your Git history, as a universe you can actually navigate.
 
-**Status: experimental.** Back up important work before using operations that change history or the working tree. Cross-platform packaging is configured but every platform must be smoke-tested before publication.
+A fast, beautiful desktop Git client with an interactive commit graph, painless conflict tools, an integrated terminal, and **optional** AI help that you control.
 
-The **Orbital Graph** identity separates a solid cyan/teal Git graph from a thinner violet/lilac orbit. The large wordmark adds violet-magenta nebula ribbons and gently twinkling stars; reduced-motion preferences disable the animation. The small symbol stays static and uncluttered. Vector sources: [symbol](./src/assets/gitverse-mark.svg) and [wordmark](./src/assets/gitverse-logo.svg). Open the standalone [brand preview](./preview/brand.html) to inspect light/dark backgrounds and 16-64 px sizes. The symbol is used in the app header and browser favicon; packaged OS icons are unchanged.
+[![CI](https://github.com/prapawity/GITVerse/actions/workflows/ci.yml/badge.svg)](https://github.com/prapawity/GITVerse/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/prapawity/GITVerse?color=22d3ee)](https://github.com/prapawity/GITVerse/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-a78bfa)](./LICENSE)
+![Platforms](https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-supported-334155)
+![Status](https://img.shields.io/badge/status-experimental-f59e0b)
 
-## Features
+[**Download**](#download) · [**Features**](#why-gitverse) · [**AI & privacy**](#ai-and-privacy) · [**Contribute**](./CONTRIBUTING.md)
+
+<br />
+
+<img src="./docs/media/demo.gif" alt="GITVerse demo: stage changes, browse the commit graph, inspect a diff" width="900" />
+
+<sub>Stage changes, browse the graph, inspect a diff. Recorded from the UI preview with demo data.</sub>
+
+</div>
+
+> **Status: experimental.** Back up important work before using operations that change history or the working tree. Cross-platform packaging is configured but every platform must be smoke-tested before publication.
+
+## Why GITVerse?
+
+|                                                  |                                                                                                                        |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| 🌌 **A graph you can read**                      | Local branches, remotes, tags, HEAD, and stashes in one colour-coded lane view, with search and paginated history.     |
+| ⚡ **Everyday Git, one click away**              | Stage, commit, amend, fetch, pull, push, branch, stash, undo/redo from a clean toolbar.                                |
+| 🧩 **Conflicts without the dread**               | A dedicated merge/conflict workflow with a built-in merge tool.                                                        |
+| 🤖 **AI when you want it, never when you don't** | Bring your own Claude, OpenAI, or GitHub Copilot account for commit messages, conflict help, and chat. Off by default. |
+| 🧑‍💻 **Built for real-world setups**               | Repository tabs and groups, multiple commit identities, per-repo push auth, Git Flow support, integrated terminal.     |
+| 🔒 **Private by design**                         | No repo content leaves your machine unless you use an AI feature. Secrets use Electron `safeStorage`.                  |
+
+<p align="center">
+  <img src="./docs/media/screenshot-graph.png" alt="Commit graph with branches, tags and working changes" width="49%" />
+  <img src="./docs/media/screenshot-diff.png" alt="Commit details with a file diff" width="49%" />
+</p>
+<p align="center"><sub>Screenshots use the browser preview with demo data, not a real repository.</sub></p>
+
+## Quick start
+
+1. Grab the installer from [Releases](https://github.com/prapawity/GITVerse/releases/latest) (see [Download](#download)).
+2. Make sure [Git](https://git-scm.com/downloads) is installed.
+3. Open GITVerse and **drop a folder** onto the window. It scans for repositories, or clone one from the **+** tab.
+
+Prefer to run from source?
+
+```bash
+git clone https://github.com/prapawity/GITVerse.git
+cd GITVerse && npm ci && npm run dev
+```
+
+## Brand
+
+The **Orbital Graph** identity separates a solid cyan/teal Git graph from a thinner violet/lilac orbit. The large wordmark adds violet-magenta nebula ribbons and gently twinkling stars; reduced-motion preferences disable the animation. Vector sources: [symbol](./src/assets/gitverse-mark.svg) and [wordmark](./src/assets/gitverse-logo.svg). Open the [brand preview](./preview/brand.html) to inspect light/dark backgrounds and 16-64 px sizes.
+
+## Feature details
 
 - Repository tabs, groups, local-folder discovery, and cloning.
 - Commit graph, branch/ref navigation, search, and paginated history.
@@ -135,6 +185,6 @@ Update checks contact the public GitHub API and send the usual network request m
 - No signed/notarized distribution or automatic installation yet.
 - System Git, shell, Python, credential helpers, and provider access are not bundled.
 - Platform-specific Git credentials, packaging, terminal behavior, and app launch need testing.
-- Screenshots and a dedicated application icon are still to be added; no placeholder screenshots are presented as actual UI.
+- Screenshots and the GIF come from the browser preview with demo data; a dedicated packaged application icon is still to be added.
 
 Issues and feature requests are welcome at [GitHub Issues](https://github.com/prapawity/GITVerse/issues). Do not include private repository content, credentials, or personal account details.

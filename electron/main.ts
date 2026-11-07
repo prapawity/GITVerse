@@ -73,6 +73,8 @@ const handlers = {
   createTag: git.createTag,
   branchAt: git.branchAt,
   fileAt: git.fileAt,
+  fileBlobAt: git.fileBlobAt,
+  workingFileBlob: git.workingFileBlob,
   worktreeAdd: git.worktreeAdd,
   remoteUrl: git.remoteUrl,
   formatPatch: git.formatPatch,

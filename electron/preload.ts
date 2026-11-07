@@ -37,6 +37,8 @@ const names = [
   'createTag',
   'branchAt',
   'fileAt',
+  'fileBlobAt',
+  'workingFileBlob',
   'worktreeAdd',
   'remoteUrl',
   'formatPatch',
