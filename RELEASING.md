@@ -17,13 +17,13 @@ Code signing is deliberately not configured. macOS signing is disabled in this i
 3. Enable private vulnerability reporting in GitHub repository settings.
 4. Enable GitHub Actions and allow the release job's `contents: write` permission.
 5. Add a dedicated app icon and actual UI screenshots when available.
-6. Review `npm audit` results and update/test affected dependencies before public distribution. The initial dependency tree includes known advisories; a successful build does not mean the dependency audit is clean.
+6. Review `npm audit` results and update/test affected dependencies before public distribution. A successful build does not mean the dependency audit is clean; rerun the audit even if the current lockfile previously passed.
 
 No repository initialization, remote changes, tags, or pushes are performed by the setup files themselves.
 
 ## Publish a stable release
 
-1. Test the Git workflows on disposable repositories. Run `npm ci`, `npm test`, and `npm run build`.
+1. Test the Git workflows on disposable repositories. Run `npm ci`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:electron`, and `npm run security:audit`. Resolve high/critical advisories before publishing.
 2. Bump `package.json` and `package-lock.json` together, for example `npm version patch --no-git-tag-version`.
 3. Stabilize on `release/<version>` branched from `develop`. Merge the reviewed release into `main`, tag that production merge with the matching version (for example `v0.1.1`), then merge the release back into `develop`. Push the branches and tag. The workflow rejects mismatched tags and prerelease versions.
 4. Wait for all four release builds to finish.
@@ -35,12 +35,13 @@ GitHub's latest-release API only sees published releases. Do not mark the releas
 
 ## Current update behavior
 
-- A packaged app checks `https://api.github.com/repos/prapawity/GITVerse/releases/latest` once after its window loads; the Help menu supports manual checks.
+- A packaged release app checks `https://api.github.com/repos/prapawity/GITVerse/releases/latest` during the animated launch screen and caches that startup result. Settings > Application / About and the Help menu support manual checks. Development/unpackaged builds disable update controls and skip all update-check requests.
 - Semantic versions are compared, ignoring draft/prerelease releases and build metadata.
 - Requests have a timeout; failures are visible and do not prevent app use. GitHub API limits can affect unauthenticated checks.
 - A newer release triggers a confirmation dialog. Confirmation opens the configured repository's release page in the browser, never a server-provided arbitrary URL.
 - Users choose the correct OS/architecture artifact, quit the app, and install it themselves. Existing app user-data should be preserved; back up important state before upgrading.
 - There is no background installer, binary execution, or in-place replacement.
+- All available updates are optional; launch failures offer Retry/Continue. Mandatory minimum-version blocking requires a separately defined, authoritative version-policy API and is not implemented in this optional-update iteration.
 
 ## Future automatic installation
 

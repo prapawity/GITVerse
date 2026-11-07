@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GITVerse | Orbital Graph</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --violet: #8b5cf6;
+        --lilac: #c084fc;
+        --ink: #191620;
+        --paper: #faf9fc;
+        --line: #e5e1eb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: 'Trebuchet MS', sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 24px 5%;
+        border-bottom: 1px solid var(--line);
+      }
+      header strong {
+        font-size: 18px;
+      }
+      .label {
+        font:
+          12px Consolas,
+          monospace;
+        color: #777080;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+      }
+      .wordmark {
+        display: grid;
+        place-items: center;
+        min-height: 290px;
+        padding: 48px 24px;
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 64px 64px;
+      }
+      .wordmark img {
+        display: block;
+        width: 456px;
+        max-width: 100%;
+        height: auto;
+      }
+      .cosmic {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 24px;
+        min-height: 280px;
+        padding: 28px 5%;
+        background: #100d19;
+        border-top: 1px solid #332c40;
+      }
+      .cosmic .label {
+        color: #b9aecb;
+      }
+      .cosmic img {
+        width: 640px;
+        max-width: 100%;
+        height: auto;
+        align-self: center;
+        justify-self: center;
+      }
+      .proofs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .proof {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 24px;
+        min-height: 320px;
+        padding: 28px 10%;
+        border-top: 1px solid var(--line);
+      }
+      .proof > img {
+        width: 176px;
+        height: 176px;
+        align-self: center;
+        justify-self: center;
+      }
+      .dark {
+        background: #191620;
+        border-color: #332c40;
+      }
+      .dark .label {
+        color: #b9aecb;
+      }
+      .sizes {
+        padding: 32px 5%;
+        border-top: 1px solid var(--line);
+      }
+      .size-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 32px;
+        max-width: 640px;
+        margin-top: 28px;
+      }
+      figure {
+        display: grid;
+        place-items: center;
+        gap: 16px;
+        min-width: 48px;
+        margin: 0;
+      }
+      figcaption {
+        font:
+          12px Consolas,
+          monospace;
+        color: #777080;
+      }
+      .swatches {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        padding: 24px 5%;
+        border-top: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .swatch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font:
+          12px Consolas,
+          monospace;
+      }
+      .chip {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+      }
+      footer {
+        padding: 20px 5%;
+        border-top: 1px solid var(--line);
+      }
+      @media (max-width: 540px) {
+        header {
+          padding: 20px;
+        }
+        .wordmark {
+          min-height: 220px;
+          padding: 32px 20px;
+        }
+        .proof {
+          min-height: 240px;
+          padding: 24px 16px;
+        }
+        .proof > img {
+          width: 128px;
+          height: 128px;
+        }
+        .size-row {
+          justify-content: flex-start;
+          gap: 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>GITVerse</h1>
+      <span class="label">ORBITAL GRAPH / 02</span>
+    </header>
+    <main>
+      <section class="wordmark" aria-label="GITVerse wordmark">
+        <img src="../src/assets/gitverse-logo.svg" width="456" height="128" alt="GITVerse" />
+      </section>
+      <section class="cosmic" aria-label="Nebula wordmark on a dark background">
+        <span class="label">NEBULA</span>
+        <img
+          src="../src/assets/gitverse-logo.svg"
+          width="456"
+          height="128"
+          alt="GITVerse nebula wordmark with twinkling stars"
+        />
+      </section>
+      <div class="proofs">
+        <section class="proof" aria-label="Symbol on light background">
+          <span class="label">LIGHT</span>
+          <img src="../src/assets/gitverse-mark.svg" width="176" height="176" alt="GITVerse orbital Git graph" />
+        </section>
+        <section class="proof dark" aria-label="Symbol on dark background">
+          <span class="label">DARK</span>
+          <img src="../src/assets/gitverse-mark.svg" width="176" height="176" alt="GITVerse orbital Git graph" />
+        </section>
+      </div>
+      <section class="sizes" aria-label="Symbol at application sizes">
+        <span class="label">SCALE</span>
+        <div class="size-row">
+          <figure>
+            <img src="../src/assets/gitverse-mark.svg" width="16" height="16" alt="" />
+            <figcaption>16</figcaption>
+          </figure>
+          <figure>
+            <img src="../src/assets/gitverse-mark.svg" width="24" height="24" alt="" />
+            <figcaption>24</figcaption>
+          </figure>
+          <figure>
+            <img src="../src/assets/gitverse-mark.svg" width="32" height="32" alt="" />
+            <figcaption>32</figcaption>
+          </figure>
+          <figure>
+            <img src="../src/assets/gitverse-mark.svg" width="48" height="48" alt="" />
+            <figcaption>48</figcaption>
+          </figure>
+          <figure>
+            <img src="../src/assets/gitverse-mark.svg" width="64" height="64" alt="" />
+            <figcaption>64</figcaption>
+          </figure>
+        </div>
+      </section>
+      <section class="swatches" aria-label="Brand colors">
+        <span class="label">PALETTE</span>
+        <span class="swatch"><span class="chip" style="background: #7c3aed"></span>#7C3AED</span>
+        <span class="swatch"><span class="chip" style="background: #8b5cf6"></span>#8B5CF6</span>
+        <span class="swatch"><span class="chip" style="background: #c084fc"></span>#C084FC</span>
+        <span class="swatch"><span class="chip" style="background: #0891b2"></span>#0891B2</span>
+        <span class="swatch"><span class="chip" style="background: #22d3ee"></span>#22D3EE</span>
+      </section>
+    </main>
+    <footer class="label">GIT + UNIVERSE</footer>
+  </body>
+</html>
