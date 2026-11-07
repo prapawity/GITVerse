@@ -67,7 +67,7 @@ The **Orbital Graph** identity separates a solid cyan/teal Git graph from a thin
 - Merge/conflict workflow and integrated terminal.
 - Commit identity profiles and repository-specific push authentication.
 - Optional Claude, OpenAI, and GitHub Copilot integrations.
-- Stable-release checks against GitHub Releases, with user-confirmed manual installation.
+- Stable-release checks against GitHub Releases, with in-app download and restart-to-install on supported packaged builds.
 
 Dropping folders searches for repositories without a folder-count or depth limit. The scan shows live progress and can be cancelled. Hidden folders, dependency/build directories, and directory symlinks are skipped. Unreadable folders or invalid repositories are reported; cancelling discards the interrupted folder's results and keeps already completed dropped folders.
 
@@ -153,11 +153,11 @@ The standalone animation preview at `preview/launch.html` uses the preview Vite 
 
 Packaged release apps check the latest stable GitHub Release through the main process during launch, caching the startup result for that app session. **Settings > Application / About > Check for Update** provides a loading indicator, optional-update dialog with **Update/Later**, or a latest-version message; **Help > Check for Updates** also supports manual checks. Development/unpackaged builds never send update-check requests, automatically or manually; both update controls are disabled there.
 
-When a newer semantic version is found, the app asks before opening its GitHub download page. It **does not download, run installers, or replace files automatically**. A failed launch check offers **Retry/Continue** so offline use remains possible. Draft releases and prereleases are not offered. This version supports optional updates only: minimum-version blocking is not enabled because no authoritative version-policy API has been configured.
+When a newer semantic version is found, the app asks before downloading it. On macOS it verifies the DMG against the release's SHA-256 digest and opens the installer so the user can quit GITVerse and replace the app in Applications. Windows and Linux AppImage offer **Restart and Install** using electron-updater. A failed launch check offers **Retry/Continue** so offline use remains possible. Draft releases and prereleases are not offered. The installed 0.1.3 release predates this download feature, so upgrade it manually once. Minimum-version blocking is not enabled because no authoritative version-policy API has been configured.
 
 Launch imagery: the [Orion Nebula Hubble mosaic](https://commons.wikimedia.org/wiki/File:Orion_Nebula_-_Hubble_2006_mosaic_18000.jpg), credited to NASA, ESA, M. Robberto (STScI/ESA), and the Hubble Space Telescope Orion Treasury Project Team. The 2006 image is available under the source page's public-domain terms; the bundled 1920-pixel derivative is color-treated in CSS. The original metadata also references [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). No external image request is made during launch.
 
-See [Releasing](./RELEASING.md) for the release workflow and a future signed automatic-update path.
+See [Releasing](./RELEASING.md) for the release workflow and platform-specific update requirements.
 
 ## AI and privacy
 
@@ -182,7 +182,7 @@ Update checks contact the public GitHub API and send the usual network request m
 ## Known limitations
 
 - Experimental software; build success is not a substitute for testing real Git workflows.
-- No signed/notarized distribution or automatic installation yet.
+- macOS builds require a Developer ID certificate configured in GitHub Actions to support automatic updates; unsigned builds must be replaced manually.
 - System Git, shell, Python, credential helpers, and provider access are not bundled.
 - Platform-specific Git credentials, packaging, terminal behavior, and app launch need testing.
 - Screenshots and the GIF come from the browser preview with demo data; a dedicated packaged application icon is still to be added.

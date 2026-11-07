@@ -100,16 +100,21 @@ async function git(cwd: string, args: string[], env?: Record<string, string>): P
   }
 }
 
+const isRemoteHeadAlias = (name: string) => /^[^/]+\/HEAD$/.test(name);
+
 function parseRefs(decoration: string): RefLabel[] {
   if (!decoration.trim()) return [];
-  return decoration.split(', ').map((raw): RefLabel => {
-    if (raw.startsWith('HEAD -> refs/heads/')) return { name: raw.slice(19), kind: 'local', current: true };
-    if (raw === 'HEAD') return { name: 'HEAD', kind: 'head', current: true };
-    if (raw.startsWith('tag: refs/tags/')) return { name: raw.slice(15), kind: 'tag' };
-    if (raw.startsWith('refs/heads/')) return { name: raw.slice(11), kind: 'local' };
-    if (raw.startsWith('refs/remotes/')) return { name: raw.slice(13), kind: 'remote' };
-    return { name: raw, kind: 'head' };
-  });
+  return decoration
+    .split(', ')
+    .filter((raw) => !raw.startsWith('refs/remotes/') || !isRemoteHeadAlias(raw.slice(13)))
+    .map((raw): RefLabel => {
+      if (raw.startsWith('HEAD -> refs/heads/')) return { name: raw.slice(19), kind: 'local', current: true };
+      if (raw === 'HEAD') return { name: 'HEAD', kind: 'head', current: true };
+      if (raw.startsWith('tag: refs/tags/')) return { name: raw.slice(15), kind: 'tag' };
+      if (raw.startsWith('refs/heads/')) return { name: raw.slice(11), kind: 'local' };
+      if (raw.startsWith('refs/remotes/')) return { name: raw.slice(13), kind: 'remote' };
+      return { name: raw, kind: 'head' };
+    });
 }
 
 const F = '\x1f';
@@ -361,7 +366,7 @@ export async function refs(cwd: string): Promise<RefList> {
     const [ref, head, hash] = line.split('\t');
     if (ref.startsWith('refs/heads/')) res.local.push({ name: ref.slice(11), current: head === '*', hash });
     else if (ref.startsWith('refs/remotes/')) {
-      if (!ref.endsWith('/HEAD')) res.remote.push({ name: ref.slice(13), hash });
+      if (!isRemoteHeadAlias(ref.slice(13))) res.remote.push({ name: ref.slice(13), hash });
     } else if (ref.startsWith('refs/tags/')) res.tags.push({ name: ref.slice(10) });
   }
   res.stashes = await stashEntries(cwd);
@@ -1097,6 +1102,7 @@ export const deleteRemoteBranch = async (cwd: string, name: string) => {
   const branch = name.slice(slash + 1);
   if (slash < 1 || !branch || name.includes('\0') || remote.startsWith('-') || branch.startsWith('-'))
     throw new Error('Invalid remote branch.');
+  if (isRemoteHeadAlias(name)) throw new Error(`${name} points to the remote's default branch and cannot be deleted.`);
   if (!(await git(cwd, ['remote'])).split('\n').includes(remote))
     throw new Error('The selected remote no longer exists.');
   await git(cwd, ['check-ref-format', '--branch', branch]);

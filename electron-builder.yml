@@ -13,10 +13,14 @@ files:
   - LICENSE
 asar: true
 artifactName: GITVerse-${version}-${os}-${arch}.${ext}
+publish:
+  provider: github
+  owner: prapawity
+  repo: GITVerse
+  releaseType: release
 mac:
   icon: resources/icon.icns
   category: public.app-category.developer-tools
-  identity: null
   target:
     - dmg
     - zip

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Laptop } from 'lucide-react';
 import type { GraphLayout, GraphRow, RefLabel, Segment } from '../shared/types';
 import { groupRefs } from '../lib/refGroups';
 import { Spinner } from './Loading';
@@ -343,7 +344,9 @@ export function CommitGraph({
         const ref = group.ref;
         const extra = groups.length > 1 ? `+${groups.length - 1}` : '';
         ctx.font = ref.current ? '600 15.6px Inter, system-ui, sans-serif' : FONT;
-        const iconW = ref.kind === 'remote' || ref.kind === 'tag' || group.remotes.length ? 18 : 0;
+        const hasLocal = ref.kind === 'local';
+        const hasRemote = ref.kind === 'remote' || group.remotes.length > 0;
+        const iconW = (hasLocal ? 17 : 0) + (hasRemote || ref.kind === 'tag' ? 18 : 0);
         const extraW = extra ? ctx.measureText(extra).width + 8 : 0;
         const name = fit(ctx, ref.kind === 'head' ? 'Detached HEAD' : ref.name, REF_W - 30 - iconW - extraW);
         const w = ctx.measureText(name).width + 16 + iconW + extraW;
@@ -371,7 +374,15 @@ export function CommitGraph({
         let ix = 16 + ctx.measureText(name).width + 6;
         ctx.strokeStyle = light ? '#526579' : '#c8d3df';
         ctx.lineWidth = 1.3;
-        if (ref.kind === 'remote' || group.remotes.length) {
+        if (hasLocal) {
+          ctx.beginPath();
+          ctx.roundRect(ix + 1, mid - 5, 10, 7, 1);
+          ctx.moveTo(ix, mid + 4);
+          ctx.lineTo(ix + 12, mid + 4);
+          ctx.stroke();
+          ix += 17;
+        }
+        if (hasRemote) {
           // cloud glyph
           ctx.beginPath();
           ctx.moveTo(ix + 3, mid + 4);
@@ -380,7 +391,7 @@ export function CommitGraph({
           ctx.arc(ix + 12, mid + 1.5, 2.5, Math.PI * 1.5, Math.PI / 2);
           ctx.closePath();
           ctx.stroke();
-          ix += iconW;
+          ix += 18;
         } else if (ref.kind === 'tag') {
           // tag glyph
           ctx.beginPath();
@@ -391,7 +402,7 @@ export function CommitGraph({
           ctx.lineTo(ix, mid + 1);
           ctx.closePath();
           ctx.stroke();
-          ix += iconW;
+          ix += 18;
         }
         if (extra) {
           ctx.fillStyle = light ? '#536478' : '#9aa7b8';
@@ -763,7 +774,7 @@ export function CommitGraph({
           );
           const rowTop = HEAD_H + (hover + wipRows) * ROW_H - scrollTop;
           const top = rowTop + ROW_H + h > size.h + HEAD_H ? Math.max(HEAD_H, rowTop - h) : rowTop + ROW_H;
-          const glyph = { remote: '☁', tag: '◆', local: '●', head: '●' } as const;
+          const glyph = { remote: '☁', tag: '◆', local: '', head: '●' } as const;
           return (
             <div
               role="group"
@@ -781,7 +792,7 @@ export function CommitGraph({
                 const content = (
                   <>
                     <span aria-hidden className="mt-px w-4 shrink-0 text-center text-[11px] text-sub">
-                      {glyph[r.kind]}
+                      {r.kind === 'local' ? <Laptop size={14} /> : glyph[r.kind]}
                     </span>
                     <span className="min-w-0 break-all">{r.kind === 'head' ? 'Detached HEAD' : r.name}</span>
                     <span className="ml-auto shrink-0 pl-3 text-[11px] text-sub">{r.current ? 'current' : r.kind}</span>

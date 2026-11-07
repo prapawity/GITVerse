@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   checkAppUpdate,
   checkForRelease,
+  downloadMacUpdate,
   isReleaseDownloadUrl,
   listReleases,
   newerRelease,
@@ -10,6 +15,71 @@ import {
 } from './updates';
 
 const release = (tag_name: string) => ({ tag_name, draft: false, prerelease: false });
+
+test('downloads only the matching Mac installer and verifies its contents', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-update-test-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const bytes = Buffer.from('installer');
+  const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  const calls: string[] = [];
+  const fetchRelease: typeof fetch = async (url) => {
+    calls.push(String(url));
+    if (calls.length === 1)
+      return Response.json({
+        ...release('v2.0.0'),
+        assets: [{ name: 'GITVerse-2.0.0-mac-arm64.dmg', size: bytes.length, digest }],
+      });
+    if (calls.length === 2)
+      return new Response(null, {
+        status: 302,
+        headers: { location: 'https://release-assets.githubusercontent.com/file' },
+      });
+    return new Response(bytes);
+  };
+  const percentages: number[] = [];
+  const file = await downloadMacUpdate('2.0.0', 'arm64', dir, (percent) => percentages.push(percent), fetchRelease);
+  assert.deepEqual(await readFile(file), bytes);
+  assert.equal(percentages.at(-1), 100);
+  assert.match(calls[1], /GITVerse-2\.0\.0-mac-arm64\.dmg$/);
+});
+
+test('rejects a corrupt installer and removes the partial download', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-update-test-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  let calls = 0;
+  const fetchRelease: typeof fetch = async () => {
+    if (++calls === 1)
+      return Response.json({
+        ...release('v2.0.0'),
+        assets: [{ name: 'GITVerse-2.0.0-mac-x64.dmg', size: 3, digest: `sha256:${'0'.repeat(64)}` }],
+      });
+    return new Response('bad');
+  };
+  await assert.rejects(
+    downloadMacUpdate('2.0.0', 'x64', dir, () => {}, fetchRelease),
+    /verification failed/,
+  );
+  assert.deepEqual(await readdir(dir), []);
+});
+
+test('rejects installer redirects to other hosts', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-update-test-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  let calls = 0;
+  const fetchRelease: typeof fetch = async () => {
+    if (++calls === 1)
+      return Response.json({
+        ...release('v2.0.0'),
+        assets: [{ name: 'GITVerse-2.0.0-mac-x64.dmg', size: 3, digest: `sha256:${'0'.repeat(64)}` }],
+      });
+    return new Response(null, { status: 302, headers: { location: 'https://example.com/file' } });
+  };
+  await assert.rejects(
+    downloadMacUpdate('2.0.0', 'x64', dir, () => {}, fetchRelease),
+    /Invalid installer download address/,
+  );
+  assert.equal(calls, 2);
+});
 
 test('compares semantic versions rather than strings', () => {
   assert.deepEqual(newerRelease(release('v0.10.0'), '0.9.9'), {

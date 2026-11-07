@@ -74,6 +74,16 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   list: () => ipcRenderer.invoke('updates:list'),
   openReleaseList: () => ipcRenderer.invoke('updates:openReleaseList'),
   openDownloads: (url: string) => ipcRenderer.invoke('updates:openDownloads', url),
+  download: (version: string) => ipcRenderer.invoke('updates:download', version),
+  install: () => ipcRenderer.invoke('updates:install'),
+  onStatus: (cb: (status: { state: string; percent?: number; version?: string; message?: string }) => void) => {
+    const handler = (
+      _event: unknown,
+      status: { state: string; percent?: number; version?: string; message?: string },
+    ) => cb(status);
+    ipcRenderer.on('updates:status', handler);
+    return () => ipcRenderer.removeListener('updates:status', handler);
+  },
 };
 (gitApi as any).findRepositories = (folder: string, id: string) =>
   ipcRenderer.invoke('repo:findRepositories', folder, id);

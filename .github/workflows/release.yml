@@ -15,10 +15,7 @@ jobs:
         include:
           - os: macos-15
             target: mac
-            arch: arm64
-          - os: macos-15-intel
-            target: mac
-            arch: x64
+            arch: both
           - os: windows-latest
             target: win
             arch: x64
@@ -28,6 +25,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CSC_LINK: ${{ matrix.target == 'mac' && secrets.MAC_CERTIFICATE_P12 || '' }}
+      CSC_KEY_PASSWORD: ${{ matrix.target == 'mac' && secrets.MAC_CERTIFICATE_PASSWORD || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -40,9 +39,21 @@ jobs:
         run: node -e "const v = require('./package.json').version; if (!/^\d+\.\d+\.\d+$/.test(v) || process.env.RELEASE_TAG !== 'v' + v) throw new Error('Use a stable vX.Y.Z tag matching package.json');"
       - run: npm ci
       - run: npm test
-      - run: npm run dist -- --${{ matrix.target }} --${{ matrix.arch }}
+      - name: Build macOS universal architecture set
+        if: matrix.target == 'mac'
+        run: npm run dist -- --mac --x64 --arm64
+      - name: Build platform
+        if: matrix.target != 'mac'
+        run: npm run dist -- --${{ matrix.target }} --${{ matrix.arch }}
       - name: Generate checksums
-        run: node scripts/checksums.cjs ${{ matrix.target }}-${{ matrix.arch }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = mac ]; then
+            node scripts/checksums.cjs mac-arm64
+            node scripts/checksums.cjs mac-x64
+          else
+            node scripts/checksums.cjs ${{ matrix.target }}-${{ matrix.arch }}
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: installers-${{ matrix.target }}-${{ matrix.arch }}
@@ -52,6 +63,8 @@ jobs:
             release/*.zip
             release/*.exe
             release/*.AppImage
+            release/*.yml
+            release/*.blockmap
             release/SHA256SUMS-*.txt
 
   draft-release:

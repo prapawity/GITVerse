@@ -14,6 +14,7 @@ import {
   log,
   pushBranch,
   pushInfo,
+  refs,
 } from './git';
 
 const run = promisify(execFile);
@@ -170,6 +171,42 @@ test('deletes a remote branch without affecting its local counterpart', async (t
   await assert.rejects(command(remote, 'rev-parse', 'refs/heads/feature'));
   assert.equal(await command(cwd, 'rev-parse', 'refs/heads/feature'), await command(cwd, 'rev-parse', 'main'));
   await assert.rejects(command(cwd, 'rev-parse', 'refs/remotes/origin/feature'));
+});
+
+test('hides the remote HEAD alias but keeps and deletes a real nested HEAD branch', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-remote-head-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const cwd = path.join(dir, 'local');
+  const remote = path.join(dir, 'remote.git');
+  const command = async (repo: string, ...args: string[]) => (await run('git', args, { cwd: repo })).stdout.trim();
+  await command(dir, 'init', '--bare', '--initial-branch=main', remote);
+  await command(dir, 'init', '--initial-branch=main', cwd);
+  await command(cwd, 'config', 'user.name', 'Test');
+  await command(cwd, 'config', 'user.email', 'test@example.com');
+  await command(cwd, 'commit', '--allow-empty', '-m', 'Initial');
+  await command(cwd, 'branch', 'team/HEAD');
+  await command(cwd, 'remote', 'add', 'origin', remote);
+  await command(cwd, 'push', 'origin', 'main', 'team/HEAD');
+  await command(cwd, 'fetch', 'origin');
+  await command(cwd, 'remote', 'set-head', 'origin', '--auto');
+
+  const graphRefs = (await log(cwd))[0].refs;
+  assert.equal(
+    graphRefs.some((ref) => ref.name === 'origin/HEAD'),
+    false,
+  );
+  assert.equal(
+    graphRefs.some((ref) => ref.name === 'origin/team/HEAD'),
+    true,
+  );
+  const remoteRefs = (await refs(cwd)).remote.map((ref) => ref.name);
+  assert.equal(remoteRefs.includes('origin/HEAD'), false);
+  assert.equal(remoteRefs.includes('origin/team/HEAD'), true);
+  await assert.rejects(deleteRemoteBranch(cwd, 'origin/HEAD'), /default branch/);
+  assert.equal(await command(cwd, 'symbolic-ref', 'refs/remotes/origin/HEAD'), 'refs/remotes/origin/main');
+  await deleteRemoteBranch(cwd, 'origin/team/HEAD');
+  await assert.rejects(command(remote, 'rev-parse', '--verify', 'refs/heads/team/HEAD'));
+  assert.ok(await command(remote, 'rev-parse', '--verify', 'refs/heads/main'));
 });
 
 test('checking out a remote uses a tracking branch and preserves its local history', async (t) => {

@@ -6,9 +6,10 @@ import { registerTerminal } from './terminal';
 import { loadState, saveKey } from './state';
 import { registerAi } from './ai';
 import { readSecret, writeSecret } from './ai/common';
-import { checkAppUpdate, isReleaseDownloadUrl, listReleases, RELEASES_URL } from './updates';
+import { checkAppUpdate, downloadMacUpdate, isReleaseDownloadUrl, listReleases, RELEASES_URL } from './updates';
 import type { AppUpdateCheck } from '../src/shared/updates';
 import { scanRepositories } from './repositoryScan';
+import { autoUpdater } from 'electron-updater';
 
 // name shown in the macOS menu bar, About box and dock (a packaged build also gets it from productName)
 app.setName('GITVerse');
@@ -202,7 +203,58 @@ app.whenReady().then(() => {
       });
     return manualUpdate;
   };
-  ipcMain.handle('updates:environment', () => ({ enabled: app.isPackaged, currentVersion: app.getVersion() }));
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.allowPrerelease = false;
+  let macInstaller: string | null = null;
+  let downloading = false;
+  const sendUpdateStatus = (status: { state: string; percent?: number; version?: string; message?: string }) => {
+    if (!win.isDestroyed()) win.webContents.send('updates:status', status);
+  };
+  autoUpdater.on('download-progress', ({ percent }) => sendUpdateStatus({ state: 'downloading', percent }));
+  autoUpdater.on('update-downloaded', (info) => sendUpdateStatus({ state: 'downloaded', version: info.version }));
+  const downloadUpdate = async (version: string) => {
+    if (!app.isPackaged) throw new Error('Updates are only available in packaged builds.');
+    if (downloading) throw new Error('An update is already downloading.');
+    downloading = true;
+    try {
+      const latest = await requestUpdate();
+      if (latest.kind !== 'optional' || latest.version !== version) throw new Error('Check for updates again.');
+      sendUpdateStatus({ state: 'downloading', percent: 0, version });
+      if (process.platform === 'darwin') {
+        macInstaller = null;
+        macInstaller = await downloadMacUpdate(version, process.arch, app.getPath('downloads'), (percent) => {
+          if (!win.isDestroyed()) win.setProgressBar(percent / 100);
+          sendUpdateStatus({ state: 'downloading', percent, version });
+        });
+        sendUpdateStatus({ state: 'downloaded', version });
+      } else {
+        const result = await autoUpdater.checkForUpdates();
+        if (!result || result.updateInfo.version !== version)
+          throw new Error('This release is not available for this platform.');
+        await autoUpdater.downloadUpdate();
+      }
+    } finally {
+      downloading = false;
+      if (!win.isDestroyed()) win.setProgressBar(-1);
+    }
+  };
+  const installUpdate = async () => {
+    if (process.platform === 'darwin') {
+      if (!macInstaller) throw new Error('Download an update first.');
+      const error = await shell.openPath(macInstaller);
+      if (error) throw new Error(error);
+      return;
+    }
+    autoUpdater.quitAndInstall(false, true);
+  };
+  ipcMain.handle('updates:download', (_event, version: string) => downloadUpdate(version));
+  ipcMain.handle('updates:install', () => installUpdate());
+  ipcMain.handle('updates:environment', () => ({
+    enabled: app.isPackaged,
+    currentVersion: app.getVersion(),
+    manualInstall: process.platform === 'darwin',
+  }));
   ipcMain.handle('updates:startup', () => (startupUpdate ??= requestUpdate()));
   ipcMain.handle('updates:check', () => requestUpdate());
   ipcMain.handle('updates:list', () => listReleases());
@@ -224,12 +276,36 @@ app.whenReady().then(() => {
           type: 'info',
           title: 'Update available',
           message: `GITVerse ${update.version} is available`,
-          detail: `You are using ${app.getVersion()}. Open GitHub Releases to download the installer for your platform. Quit GITVerse before installing; no files will be replaced automatically.`,
-          buttons: ['Open downloads', 'Later'],
+          detail:
+            process.platform === 'darwin'
+              ? 'Download the installer, then quit GITVerse and drag the new app to Applications.'
+              : `You are using ${app.getVersion()}. Download and install the update from the app, or choose Later.`,
+          buttons: ['Download update', 'Later'],
           defaultId: 0,
           cancelId: 1,
         });
-        if (response === 0) await shell.openExternal(update.url);
+        if (response === 0) {
+          try {
+            await downloadUpdate(update.version);
+            const { response: install } = await dialog.showMessageBox(win, {
+              type: 'info',
+              message: 'Update downloaded',
+              detail:
+                process.platform === 'darwin'
+                  ? 'Open the installer, quit GITVerse, then drag the new app to Applications.'
+                  : 'Restart GITVerse to install the update.',
+              buttons: [process.platform === 'darwin' ? 'Open installer' : 'Restart and install', 'Later'],
+              cancelId: 1,
+            });
+            if (install === 0) await installUpdate();
+          } catch (error) {
+            await dialog.showMessageBox(win, {
+              type: 'warning',
+              message: 'Could not install the update',
+              detail: String(error),
+            });
+          }
+        }
       } else if (manual && update.kind === 'current') {
         await dialog.showMessageBox(win, {
           type: 'info',
