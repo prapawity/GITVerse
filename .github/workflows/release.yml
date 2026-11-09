@@ -25,8 +25,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      CSC_LINK: ${{ matrix.target == 'mac' && secrets.MAC_CERTIFICATE_P12 || '' }}
-      CSC_KEY_PASSWORD: ${{ matrix.target == 'mac' && secrets.MAC_CERTIFICATE_PASSWORD || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -41,7 +39,15 @@ jobs:
       - run: npm test
       - name: Build macOS universal architecture set
         if: matrix.target == 'mac'
-        run: npm run dist -- --mac --x64 --arm64
+        env:
+          MAC_CERTIFICATE_P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          if [[ -n "$MAC_CERTIFICATE_P12" && -n "$MAC_CERTIFICATE_PASSWORD" ]]; then
+            CSC_LINK="$MAC_CERTIFICATE_P12" CSC_KEY_PASSWORD="$MAC_CERTIFICATE_PASSWORD" npm run dist -- --mac --x64 --arm64
+          else
+            npm run dist -- --mac --x64 --arm64
+          fi
       - name: Build platform
         if: matrix.target != 'mac'
         run: npm run dist -- --${{ matrix.target }} --${{ matrix.arch }}
