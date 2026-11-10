@@ -85,7 +85,8 @@ async function create(cwd: string | null): Promise<Session> {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(el);
-  const s: Session = { key: ++keySeq, id: null, title: 'zsh', term, fit, el, ended: false };
+  const title = cwd?.split(/[\\/]/).filter(Boolean).pop() || 'Terminal';
+  const s: Session = { key: ++keySeq, id: null, title, term, fit, el, ended: false };
   sessions.push(s);
   notify();
   if (!api()) {
@@ -186,6 +187,7 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
             <button
               role="tab"
               aria-selected={s === current}
+              title={`Terminal in ${s.title}${s.ended ? ' (process exited)' : ''}`}
               onClick={() => setActive(s.key)}
               className="flex items-center gap-1.5"
             >

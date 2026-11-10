@@ -100,6 +100,23 @@ async function git(cwd: string, args: string[], env?: Record<string, string>): P
   }
 }
 
+async function gitWithInput(cwd: string, args: string[], input: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => (stdout = (stdout + chunk).slice(-1024 * 1024)));
+    child.stderr.on('data', (chunk: string) => (stderr = (stderr + chunk).slice(-1024 * 1024)));
+    child.on('error', (error) => reject(new Error(`Could not start Git: ${error.message}`)));
+    child.on('close', (code) =>
+      code === 0 ? resolve(stdout) : reject(new Error(stderr.trim() || `Git failed (exit ${code ?? 'unknown'}).`)),
+    );
+    child.stdin.end(input);
+  });
+}
+
 const isRemoteHeadAlias = (name: string) => /^[^/]+\/HEAD$/.test(name);
 
 function parseRefs(decoration: string): RefLabel[] {
@@ -206,8 +223,152 @@ export async function stagedForCommitMessage(cwd: string) {
     throw new Error('Staged changes changed while preparing the diff. Try again.');
   return { tree, diff };
 }
-export const checkout = (cwd: string, ref: string) => git(cwd, ['checkout', ref]);
-export async function checkoutRemote(cwd: string, ref: string) {
+function windowsPathBlocker(action: string, ref: string, paths: string[]) {
+  const examples = paths.slice(0, 6).map((filePath) => `'${filePath}'`).join('\n');
+  const more = paths.length > 6 ? `\n…and ${paths.length - 6} more.` : '';
+  return `Cannot ${action} ${ref} on Windows because the target tree contains unsupported file names:\n${examples}${more}\nAsk the repository owner to rename these paths. No repository state was changed.`;
+}
+
+async function ensureTargetTreeSupported(cwd: string, ref: string, action: string) {
+  const allUnsupported = await unsupportedTreePaths(cwd, ref);
+  const unsupported = await sparseExcludedUnsupportedPaths(cwd, allUnsupported);
+  if (unsupported.length) throw new Error(windowsPathBlocker(action, ref, unsupported));
+}
+
+export async function checkout(cwd: string, ref: string) {
+  if (process.platform === 'win32') {
+    const target = (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])).trim();
+    await ensureTargetTreeSupported(cwd, target, 'check out');
+  }
+  return git(cwd, ['checkout', ref]);
+}
+
+/* eslint-disable no-control-regex */
+export function windowsIncompatiblePaths(paths: string[]) {
+  const reservedDevice = /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\..*)?$/i;
+  return paths.filter((filePath) =>
+    filePath.split('/').some((part) => /[<>:"|?*\x00-\x1f]/.test(part) || /[ .]$/.test(part) || reservedDevice.test(part)),
+  );
+}
+/* eslint-enable no-control-regex */
+
+async function unsupportedTreePaths(cwd: string, ref: string) {
+  if (process.platform !== 'win32') return [];
+  const treePaths = (await git(cwd, ['ls-tree', '-r', '-z', '--name-only', ref])).split('\0').filter(Boolean);
+  return windowsIncompatiblePaths(treePaths);
+}
+
+function sparseExcludePattern(filePath: string) {
+  if (/[\r\n\0]/.test(filePath)) throw new Error('Cannot safely exclude a path containing a line break from sparse checkout.');
+  const escaped = filePath.replace(/[\\*?[\]]/g, '\\$&').replace(/ +$/, (spaces) => [...spaces].map(() => '\\ ').join(''));
+  return `!/${escaped}`;
+}
+
+async function sparseCheckoutPatterns(cwd: string) {
+  const enabled = (await git(cwd, ['config', '--bool', 'core.sparseCheckout']).catch(() => 'false')).trim() === 'true';
+  if (!enabled) return { enabled: false, patterns: ['/*'] };
+  const infoPath = (await git(cwd, ['rev-parse', '--git-path', 'info/sparse-checkout'])).trim();
+  const filePath = path.resolve(cwd, infoPath);
+  const contents = await readFile(filePath, 'utf8').catch(() => '');
+  const patterns = contents.split(/\r?\n/).filter(Boolean);
+  if (!patterns.length)
+    throw new Error('Existing sparse-checkout rules could not be read. Review the repository sparse-checkout settings before continuing.');
+  return { enabled: true, patterns };
+}
+
+async function sparseExcludedUnsupportedPaths(cwd: string, paths: string[]) {
+  if (!paths.length || process.platform !== 'win32') return [];
+  const { enabled, patterns } = await sparseCheckoutPatterns(cwd);
+  if (!enabled) return [];
+  const rules = new Set(patterns);
+  return paths.filter((filePath) => !rules.has(sparseExcludePattern(filePath)));
+}
+
+export async function windowsUnsupportedPathsForRef(cwd: string, ref: string) {
+  const slash = ref.indexOf('/');
+  if (slash < 1 || slash === ref.length - 1) throw new Error('Invalid remote branch.');
+  const remoteRef = `refs/remotes/${ref}`;
+  await git(cwd, ['show-ref', '--verify', '--quiet', remoteRef]);
+  const paths = await unsupportedTreePaths(cwd, remoteRef);
+  return sparseExcludedUnsupportedPaths(cwd, paths);
+}
+
+async function enableWindowsSparseCheckout(cwd: string, paths: string[]) {
+  if (process.platform !== 'win32' || !paths.length) return;
+  const { patterns } = await sparseCheckoutPatterns(cwd);
+  const next = [...patterns];
+  const known = new Set(next);
+  for (const filePath of paths) {
+    const pattern = sparseExcludePattern(filePath);
+    if (!known.has(pattern)) {
+      known.add(pattern);
+      next.push(pattern);
+    }
+  }
+  await gitWithInput(cwd, ['sparse-checkout', 'set', '--no-cone', '--stdin'], `${next.join('\n')}\n`);
+}
+
+async function prepareWindowsSparsePaths(
+  cwd: string,
+  ref: string,
+  allowSparse: boolean,
+  expectedUnsupported?: string[],
+) {
+  const unsupported = await unsupportedTreePaths(cwd, ref);
+  const unexcluded = await sparseExcludedUnsupportedPaths(cwd, unsupported);
+  if (expectedUnsupported) {
+    const expected = [...expectedUnsupported].sort();
+    const actual = [...unexcluded].sort();
+    if (expected.length !== actual.length || expected.some((filePath, index) => filePath !== actual[index]))
+      throw new Error('The remote branch changed while confirmation was open. Refresh and retry so you can review the files sparse checkout would omit.');
+  }
+  if (unexcluded.length && !allowSparse)
+    throw new Error(windowsPathBlocker('check out', ref, unexcluded));
+  if (unexcluded.length) {
+    const changes = await git(cwd, ['status', '--porcelain', '--untracked-files=all']);
+    if (changes.trim())
+      throw new Error('Cannot enable sparse checkout while the index or working tree has local changes. Commit or stash them first. No repository state was changed.');
+    await enableWindowsSparseCheckout(cwd, unexcluded);
+  }
+  return unexcluded;
+}
+
+async function ensureFastForwardSafe(cwd: string, branch: string, ref: string) {
+  const [allUnsupported, changes] = await Promise.all([
+    unsupportedTreePaths(cwd, ref),
+    git(cwd, ['status', '--porcelain', '--untracked-files=all']),
+  ]);
+  const unsupported = await sparseExcludedUnsupportedPaths(cwd, allUnsupported);
+  const reasons: string[] = [];
+  if (unsupported.length) {
+    const examples = unsupported.slice(0, 6).map((filePath) => `'${filePath}'`).join('\n');
+    const more = unsupported.length > 6 ? `\n…and ${unsupported.length - 6} more.` : '';
+    reasons.push(
+      `Windows cannot create file names in ${ref}:\n${examples}${more}\nAsk the repository owner to rename these paths.`,
+    );
+  }
+  if (changes.trim()) reasons.push(`The index or working tree has local changes. Commit or stash them before fast-forwarding ${branch}.`);
+  if (reasons.length)
+    throw new Error(`Cannot align ${branch} with ${ref} yet:\n\n${reasons.join('\n\n')}\n\nYour local branch and work have been preserved.`);
+}
+
+async function ensureBranchNotCheckedOutElsewhere(cwd: string, branch: string) {
+  const activeRoot = (await realpath(cwd)).toLowerCase();
+  const rows = (await git(cwd, ['worktree', 'list', '--porcelain'])).split('\n\n');
+  for (const row of rows) {
+    const worktree = /^worktree (.+)$/m.exec(row)?.[1];
+    const checkedOutBranch = /^branch refs\/heads\/(.+)$/m.exec(row)?.[1];
+    if (worktree && checkedOutBranch === branch && path.resolve(worktree).toLowerCase() !== activeRoot)
+      throw new Error(`Cannot check out ${branch}: it is already checked out in another worktree (${worktree}).`);
+  }
+}
+
+export async function checkoutRemote(
+  cwd: string,
+  ref: string,
+  allowWindowsSparse = false,
+  expectedUnsupported?: string[],
+) {
   const slash = ref.indexOf('/');
   if (slash < 1 || slash === ref.length - 1) throw new Error('Invalid remote branch.');
   const remoteRef = `refs/remotes/${ref}`;
@@ -230,9 +391,46 @@ export async function checkoutRemote(cwd: string, ref: string) {
       throw new Error(
         `Local branch ${existing.branch} tracks a different remote branch. Select a local branch instead.`,
       );
+    const localRef = `refs/heads/${existing.branch}`;
+    await ensureBranchNotCheckedOutElsewhere(cwd, existing.branch);
+    const [localHash, remoteHash] = await Promise.all([
+      git(cwd, ['rev-parse', '--verify', localRef]).then((value) => value.trim()),
+      git(cwd, ['rev-parse', '--verify', remoteRef]).then((value) => value.trim()),
+    ]);
+    const currentBranch = (await git(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')).trim();
+    if (localHash === remoteHash && currentBranch === existing.branch) {
+      await prepareWindowsSparsePaths(cwd, remoteRef, allowWindowsSparse, expectedUnsupported);
+      return existing.branch;
+    }
+    const behind = localHash !== remoteHash && await git(cwd, ['merge-base', '--is-ancestor', localRef, remoteRef]).then(
+      () => true,
+      () => false,
+    );
+    if (localHash !== remoteHash && !behind) {
+      const ahead = await git(cwd, ['merge-base', '--is-ancestor', remoteRef, localRef]).then(
+        () => true,
+        () => false,
+      );
+      throw new Error(
+        ahead
+          ? `Cannot align ${existing.branch} with ${ref}: the local branch has commits that are not on the remote. They were preserved.`
+          : `Cannot align ${existing.branch} with ${ref}: the branches have diverged. Local commits were preserved.`,
+      );
+    }
+    if (behind) {
+      await prepareWindowsSparsePaths(cwd, remoteRef, allowWindowsSparse, expectedUnsupported);
+      await ensureFastForwardSafe(cwd, existing.branch, remoteRef);
+    } else {
+      await prepareWindowsSparsePaths(cwd, remoteRef, allowWindowsSparse, expectedUnsupported);
+      await ensureTargetTreeSupported(cwd, remoteRef, 'check out');
+    }
     await git(cwd, ['switch', '--', existing.branch]);
+    if (behind) await git(cwd, ['merge', '--ff-only', remoteRef]);
+    if (!existing.upstream) await git(cwd, ['branch', `--set-upstream-to=${remoteRef}`, existing.branch]);
     return existing.branch;
   }
+  await prepareWindowsSparsePaths(cwd, remoteRef, allowWindowsSparse, expectedUnsupported);
+  await ensureTargetTreeSupported(cwd, remoteRef, 'check out');
   await git(cwd, ['switch', '--track', '-c', name, '--', remoteRef]);
   return name;
 }
@@ -345,7 +543,15 @@ export async function moveIndexHistory(cwd: string, direction: 'undo' | 'redo') 
 }
 
 export interface RefList {
-  local: { name: string; current: boolean; hash: string }[];
+  local: {
+    name: string;
+    current: boolean;
+    hash: string;
+    upstream?: string;
+    ahead?: number;
+    behind?: number;
+    gone?: boolean;
+  }[];
   remote: { name: string; hash: string }[];
   tags: { name: string }[];
   stashes: StashRef[];
@@ -355,7 +561,7 @@ export interface RefList {
 export async function refs(cwd: string): Promise<RefList> {
   const out = await git(cwd, [
     'for-each-ref',
-    '--format=%(refname)%09%(HEAD)%09%(objectname)',
+    '--format=%(refname)%09%(HEAD)%09%(objectname)%09%(upstream:short)%09%(upstream:track)',
     'refs/heads',
     'refs/remotes',
     'refs/tags',
@@ -363,8 +569,17 @@ export async function refs(cwd: string): Promise<RefList> {
   const headHash = (await git(cwd, ['rev-parse', '--verify', 'HEAD']).catch(() => '')).trim() || null;
   const res: RefList = { local: [], remote: [], tags: [], stashes: [], headHash };
   for (const line of out.split('\n').filter(Boolean)) {
-    const [ref, head, hash] = line.split('\t');
-    if (ref.startsWith('refs/heads/')) res.local.push({ name: ref.slice(11), current: head === '*', hash });
+    const [ref, head, hash, upstream, track] = line.split('\t');
+    if (ref.startsWith('refs/heads/'))
+      res.local.push({
+        name: ref.slice(11),
+        current: head === '*',
+        hash,
+        upstream: upstream || undefined,
+        ahead: Number(track?.match(/ahead (\d+)/)?.[1] ?? 0),
+        behind: Number(track?.match(/behind (\d+)/)?.[1] ?? 0),
+        gone: track?.includes('gone') || false,
+      });
     else if (ref.startsWith('refs/remotes/')) {
       if (!isRemoteHeadAlias(ref.slice(13))) res.remote.push({ name: ref.slice(13), hash });
     } else if (ref.startsWith('refs/tags/')) res.tags.push({ name: ref.slice(10) });
@@ -620,6 +835,54 @@ export async function discardWorkingHunk(cwd: string, filePath: string, expected
   }
 }
 
+export async function stageWorkingHunk(
+  cwd: string,
+  filePath: string,
+  area: 'staged' | 'unstaged',
+  expectedDiff: string,
+  hunkIndex: number,
+) {
+  if (area !== 'staged' && area !== 'unstaged') throw new Error('Invalid change area.');
+  if (await opState(cwd)) throw new Error('Finish or abort the current Git operation first.');
+  const current = await workingFileDiff(cwd, filePath, area);
+  if (typeof expectedDiff !== 'string' || current !== expectedDiff)
+    throw new Error('File changes changed since the diff was opened. Refresh and review them first.');
+  if (
+    /^(?:new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|Binary files|GIT binary patch)/m.test(
+      current,
+    )
+  )
+    throw new Error('Stage or unstage this change as a whole file instead.');
+  const lines = current.split('\n');
+  const starts = lines.flatMap((line, index) => (/^@@ /.test(line) ? [index] : []));
+  if (!Number.isInteger(hunkIndex) || hunkIndex < 0 || hunkIndex >= starts.length)
+    throw new Error('This hunk is no longer available. Refresh the diff.');
+  const patch = [
+    ...lines.slice(0, starts[0]),
+    ...lines.slice(starts[hunkIndex], starts[hunkIndex + 1] ?? lines.length),
+  ].join('\n');
+  const index = await indexFile(cwd);
+  const before = await indexSnapshot(cwd, index);
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-stage-'));
+  try {
+    const patchFile = path.join(dir, 'hunk.patch');
+    await writeFile(patchFile, patch.endsWith('\n') ? patch : `${patch}\n`);
+    const args = ['apply', '--cached', ...(area === 'staged' ? ['--reverse'] : []), '--whitespace=nowarn'];
+    await git(cwd, [...args, '--check', '--', patchFile]);
+    await git(cwd, [...args, '--', patchFile]);
+    const after = await indexSnapshot(cwd, index);
+    if (!sameIndex(before, after)) {
+      const history = indexHistory.get(cwd) ?? { undo: [], redo: [] };
+      history.undo.push({ before, after, label: area === 'staged' ? 'unstage hunk' : 'stage hunk' });
+      history.undo = history.undo.slice(-20);
+      history.redo = [];
+      indexHistory.set(cwd, history);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 export const fetch = (cwd: string, prune = true) => git(cwd, ['fetch', '--all', ...(prune ? ['--prune'] : [])]);
 export const pull = (cwd: string, mode: 'ff' | 'ff-only' | 'rebase' = 'ff') =>
   git(cwd, ['pull', mode === 'rebase' ? '--rebase' : mode === 'ff-only' ? '--ff-only' : '--ff']);
@@ -722,6 +985,17 @@ export const createBranch = (cwd: string, name: string, from = 'HEAD') => git(cw
 export const stash = (cwd: string, message?: string) =>
   git(cwd, ['stash', 'push', '--include-untracked', ...(message ? ['-m', message] : [])]);
 export const stashPop = (cwd: string) => git(cwd, ['stash', 'pop']);
+export async function stashAction(cwd: string, hash: string, action: 'apply' | 'pop' | 'drop') {
+  if (typeof hash !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(hash))
+    throw new Error('Invalid stash identity. Refresh the repository.');
+  if (!['apply', 'pop', 'drop'].includes(action)) throw new Error('Invalid stash action.');
+  if (await opState(cwd)) throw new Error('Finish the current Git operation first.');
+  const matches = (await stashEntries(cwd)).filter((entry) => entry.hash === hash);
+  if (matches.length !== 1) throw new Error('This stash changed or is ambiguous. Refresh the repository.');
+  const selector = matches[0].id;
+  // A hash can identify the content for apply; pop and drop require the current reflog selector.
+  return git(cwd, ['stash', action, action === 'apply' ? hash : selector]);
+}
 export async function stashRename(cwd: string, id: string, message: string) {
   if (typeof id !== 'string' || !/^(?:stash@\{\d+\}|[a-f0-9]{40}|[a-f0-9]{64})$/i.test(id))
     throw new Error('Invalid stash.');
@@ -740,8 +1014,13 @@ export async function stashRename(cwd: string, id: string, message: string) {
   }
 }
 
-export const reset = (cwd: string, hash: string, mode: 'soft' | 'mixed' | 'hard') =>
-  git(cwd, ['reset', `--${mode}`, hash]);
+export async function reset(cwd: string, hash: string, mode: 'soft' | 'mixed' | 'hard') {
+  if (mode !== 'soft') {
+    const target = (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${hash}^{commit}`])).trim();
+    await ensureTargetTreeSupported(cwd, target, `${mode} reset to`);
+  }
+  return git(cwd, ['reset', `--${mode}`, hash]);
+}
 export async function squashCommits(cwd: string, hashes: string[], message: string) {
   if (
     !Array.isArray(hashes) ||
@@ -874,8 +1153,40 @@ export async function stashFileAt(cwd: string, id: string, filePath: string): Pr
 }
 export const revert = (cwd: string, hash: string) => git(cwd, ['revert', '--no-edit', hash]);
 export const rebaseOnto = (cwd: string, hash: string) => git(cwd, ['rebase', hash]);
+export async function rebasePreview(cwd: string, base: string) {
+  if (typeof base !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(base))
+    throw new Error('Select a valid commit as the base.');
+  if (await opState(cwd)) throw new Error('Finish the current Git operation first.');
+  const branch = (await git(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')).trim();
+  if (!branch) throw new Error('Check out a local branch before planning a rebase.');
+  const head = (await git(cwd, ['rev-parse', '--verify', 'HEAD'])).trim();
+  const upstream = (await git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).catch(() => '')).trim();
+  if (!upstream) throw new Error('Set an upstream branch before planning unpublished commits.');
+  if (!(await git(cwd, ['merge-base', '--is-ancestor', base, head]).then(() => true, () => false)))
+    throw new Error('The selected base must be an ancestor of the current branch.');
+  const lines = (await git(cwd, ['rev-list', '--reverse', '--parents', `${base}..${head}`])).split('\n').filter(Boolean);
+  if (!lines.length) throw new Error('There are no commits after the selected base.');
+  if (lines.length > 100) throw new Error('Choose a range of at most 100 commits.');
+  let parent = base;
+  const commits: { hash: string; subject: string }[] = [];
+  for (const line of lines) {
+    const [hash, ...parents] = line.split(' ');
+    if (parents.length !== 1 || parents[0] !== parent) throw new Error('Choose a linear range without merge commits.');
+    if (await git(cwd, ['merge-base', '--is-ancestor', hash, upstream]).then(() => true, () => false))
+      throw new Error('The selected range contains commits already reachable from the upstream branch.');
+    const subject = (await git(cwd, ['show', '-s', '--format=%s', hash])).trim();
+    commits.push({ hash, subject });
+    parent = hash;
+  }
+  if ((await git(cwd, ['rev-parse', '--verify', 'HEAD'])).trim() !== head)
+    throw new Error('The branch changed while preparing the preview. Try again.');
+  return { branch, head, base, upstream, commits };
+}
 export const createTag = (cwd: string, name: string, hash: string) => git(cwd, ['tag', name, hash]);
-export const branchAt = (cwd: string, name: string, hash: string) => git(cwd, ['checkout', '-b', name, hash]);
+export async function branchAt(cwd: string, name: string, hash: string) {
+  await ensureTargetTreeSupported(cwd, hash, 'create a branch from');
+  return git(cwd, ['checkout', '-b', name, hash]);
+}
 export const fileAt = (cwd: string, hash: string, path: string) => git(cwd, ['show', `${hash}:${path}`]);
 
 const MAX_BLOB_BYTES = 50 * 1024 * 1024;
@@ -903,8 +1214,10 @@ export async function workingFileBlob(cwd: string, filePath: string): Promise<st
   return (await readFile(full)).toString('base64');
 }
 
-export const worktreeAdd = (cwd: string, path: string, hash: string) =>
-  git(cwd, ['worktree', 'add', '--detach', path, hash]);
+export async function worktreeAdd(cwd: string, path: string, hash: string) {
+  await ensureTargetTreeSupported(cwd, hash, 'create a worktree from');
+  return git(cwd, ['worktree', 'add', '--detach', path, hash]);
+}
 export const remoteUrl = async (cwd: string) => (await git(cwd, ['remote', 'get-url', 'origin'])).trim();
 export const formatPatch = (cwd: string, hash: string) => git(cwd, ['format-patch', '-1', '--stdout', hash]);
 export const createAnnotatedTag = (cwd: string, name: string, hash: string, message: string) =>
@@ -1094,8 +1407,43 @@ export async function writeWorkFile(cwd: string, rel: string, text: string) {
 // GIT_EDITOR=true: accept the generated merge message instead of opening an editor we cannot show
 export const merge = (cwd: string, ref: string, noFf = true, ffOnly = false) =>
   git(cwd, ['merge', ...(ffOnly ? ['--ff-only'] : noFf ? ['--no-ff'] : []), '--no-edit', ref], { GIT_EDITOR: 'true' });
-/** Safe delete only: refuses to drop a branch that is not fully merged. */
-export const deleteBranch = (cwd: string, name: string) => git(cwd, ['branch', '-d', name]);
+/** Delete only when Git confirms the branch is merged locally or into a fetched remote tip. */
+export async function deleteBranch(cwd: string, name: string, force = false) {
+  if (!name || name.startsWith('-') || name.includes('\0')) throw new Error('Invalid local branch name.');
+  await git(cwd, ['check-ref-format', '--branch', name]);
+  const current = (await git(cwd, ['branch', '--show-current'])).trim();
+  if (current === name) throw new Error(`Cannot delete ${name} while it is checked out.`);
+
+  // Force deletion is only reachable through the explicit, separately confirmed UI action.
+  // It removes the branch ref, not commits still reachable from another ref (for example,
+  // a squash-merged remote branch).
+  if (force) return git(cwd, ['branch', '-D', '--', name]);
+
+  try {
+    return await git(cwd, ['branch', '-d', '--', name]);
+  } catch (error) {
+    const detail = String((error as Error)?.message ?? error);
+    if (!/not fully merged|not merged/i.test(detail)) throw error;
+  }
+
+  const refs = (await git(cwd, ['for-each-ref', '--format=%(refname)', 'refs/remotes/'])).split('\n').filter(Boolean);
+  for (const remoteRef of refs) {
+    try {
+      await git(cwd, ['merge-base', '--is-ancestor', `refs/heads/${name}`, remoteRef]);
+      // `-d` checks only HEAD and the configured upstream. We have proved
+      // ancestry against this fetched remote tip, so force-delete that ref.
+      return git(cwd, ['branch', '-D', '--', name]);
+    } catch (error) {
+      // Git exit 1 means not an ancestor. Surface other failures instead of
+      // misreporting repository or executable errors as an unmerged branch.
+      const code = (error as Error & { cause?: { code?: number | string } }).cause?.code;
+      if (code !== 1) throw error;
+    }
+  }
+  throw new Error(
+    `Cannot delete ${name}: it is not merged into the current branch or any fetched remote branch. Fetch first, or merge it before deleting.`,
+  );
+}
 export const deleteRemoteBranch = async (cwd: string, name: string) => {
   const slash = name.indexOf('/');
   const remote = name.slice(0, slash);

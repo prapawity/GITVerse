@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { askConfirm, askFlow, askText } from './Dialogs';
 import { useRepo } from '../store/repoStore';
+import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 import { groupRefs } from '../lib/refGroups';
 
 const api = () => (window as any).gitApi;
@@ -42,7 +43,7 @@ export function CommitMenu({
   onPush: () => void;
   onClose: () => void;
 }) {
-  const { repoPath, exec, deleteBothBranches, checkout, checkoutRemote, toast, track, refs, graph, action } = useRepo();
+  const { repoPath, exec, deleteBothBranches, checkout, toast, track, refs, graph, action } = useRepo();
   const [open, setOpen] = useState<number | null>(null);
   const short = hash.slice(0, 7);
 
@@ -76,13 +77,47 @@ export function CommitMenu({
         refs.remote.find((branch) => branch.name.endsWith(`/${pairedLocal.name}`))));
   const sameTip = !!pairedLocal && !!pairedRemote && pairedLocal.hash === pairedRemote.hash;
   const deleteLocal = (name: string) =>
-    sure(
-      'Delete local branch',
-      `Delete local branch ${name}? Git will refuse if it is not fully merged.`,
-      'Delete local',
-      () => exec('deleteBranch', name),
-      true,
-    );
+    async () => {
+      if (
+        !(await askConfirm(
+          'Delete local branch',
+          `Delete local branch ${name}? If Git cannot verify that it was merged, GITVerse will ask before force deleting it.`,
+          { label: 'Delete local', danger: true },
+        ))
+      )
+        return;
+      const selectedRepo = repoPath;
+      if (!selectedRepo) return;
+      let deleted = false;
+      await track(
+        'Deleting branch…',
+        async () => {
+          try {
+            await api().deleteBranch(selectedRepo, name);
+          } catch (error) {
+            const message = String((error as Error)?.message ?? error).replace(
+              /^Error invoking remote method '[^']*': (Error: )?/,
+              '',
+            );
+            if (!/not fully merged|not merged into the current branch or any fetched remote branch/i.test(message))
+              throw error;
+            const force = await askConfirm(
+              'Branch is not verified as merged',
+              `${message}\n\nForce deleting removes the local branch reference. Commits may eventually be pruned if no other branch, tag, or reflog entry refers to them.`,
+              { label: 'Force delete local', danger: true },
+            );
+            if (!force || useRepo.getState().repoPath !== selectedRepo) return;
+            await api().deleteBranch(selectedRepo, name, true);
+          }
+          if (useRepo.getState().repoPath === selectedRepo) {
+            await useRepo.getState().refresh();
+            deleted = true;
+          }
+        },
+        { blocking: false, fail: 'Could not delete the branch' },
+      );
+      if (deleted) useRepo.getState().notify('success', `Deleted branch “${name}”`);
+    };
   const deleteRemote = (name: string) =>
     sure(
       'Delete remote branch',
@@ -116,7 +151,8 @@ export function CommitMenu({
                 '-' as const,
                 {
                   label: `Checkout ${refName}`,
-                  run: () => (ref.kind === 'local' ? checkout(refName) : checkoutRemote(refName)),
+                  run: () =>
+                    ref.kind === 'local' ? checkout(refName) : checkoutRemoteWithSparseRecovery(refName),
                 },
                 '-' as const,
               ]),
@@ -147,7 +183,9 @@ export function CommitMenu({
                 },
               ]
             : ref.kind === 'local' && !isCurrent
-              ? [{ label: `Delete ${refName}`, danger: true, run: deleteLocal(refName) }]
+              ? [
+                  { label: `Delete ${refName}`, danger: true, run: deleteLocal(refName) },
+                ]
               : ref.kind === 'remote'
                 ? [{ label: `Delete remote ${refName}`, danger: true, run: deleteRemote(refName) }]
                 : []),
@@ -166,7 +204,26 @@ export function CommitMenu({
     hashes && hashes.length > 1
       ? graph.rows.filter((row) => hashes.includes(row.commit.hash)).map((row) => row.commit.hash)
       : [];
-  const items: Item[] = [
+  const stash = refs.stashes.find((entry) => entry.hash === hash);
+  const items: Item[] = stash
+    ? (['apply', 'pop', 'drop'] as const).map((stashAction) => ({
+        label: `${stashAction[0].toUpperCase()}${stashAction.slice(1)} stash`,
+        danger: stashAction === 'drop',
+        run: sure(
+          `${stashAction[0].toUpperCase()}${stashAction.slice(1)} stash?`,
+          `${stash.message}\n\n${
+            stashAction === 'drop'
+              ? 'Permanently remove this stash and its saved changes.'
+              : stashAction === 'pop'
+                ? 'Apply the saved changes and remove the stash only if applying succeeds.'
+                : 'Apply the saved changes and keep the stash entry.'
+          }`,
+          `${stashAction[0].toUpperCase()}${stashAction.slice(1)} stash`,
+          () => exec('stashAction', stash.hash, stashAction),
+          stashAction === 'drop',
+        ),
+      }))
+    : [
     ...(selected.length > 1
       ? [
           {
@@ -329,36 +386,109 @@ export function CommitMenu({
         if (m) await exec('createAnnotatedTag', n, hash, m);
       }),
     },
-  ];
+      ];
 
-  const W = Math.min(560, window.innerWidth - 16);
-  const left = Math.min(x, window.innerWidth - W - 8);
-  const top = Math.max(8, Math.min(y, window.innerHeight - Math.min(700, window.innerHeight - 16)));
+  const W = Math.min(390, window.innerWidth - 16);
+  const left = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+  const top = Math.max(8, Math.min(y, window.innerHeight - Math.min(640, window.innerHeight - 16)));
   const row =
-    'flex w-full cursor-pointer items-center justify-between gap-4 px-4 py-[7px] text-left text-[14px] hover:bg-[#4cc2ff]/20 focus:bg-[#4cc2ff]/20';
+    'flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-[13px] leading-snug hover:bg-[#4cc2ff]/15 focus-visible:bg-[#4cc2ff]/20';
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+  }, []);
+  const navigateMenu = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const currentMenu = target.closest<HTMLElement>('[role="menu"]');
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (currentMenu && currentMenu !== menuRef.current) {
+        const parentIndex = currentMenu.dataset.parentIndex;
+        setOpen(null);
+        if (parentIndex !== undefined)
+          menuRef.current?.querySelector<HTMLButtonElement>(`[data-menu-index="${parentIndex}"]`)?.focus();
+        return;
+      }
+      onClose();
+      return;
+    }
+    if (event.key === 'ArrowLeft' && currentMenu && currentMenu !== menuRef.current) {
+      event.preventDefault();
+      const parentIndex = currentMenu.dataset.parentIndex;
+      setOpen(null);
+      if (parentIndex !== undefined)
+        menuRef.current?.querySelector<HTMLButtonElement>(`[data-menu-index="${parentIndex}"]`)?.focus();
+      return;
+    }
+    if (event.key === 'ArrowRight' && target.getAttribute('aria-haspopup') === 'true') {
+      event.preventDefault();
+      const index = target.dataset.menuIndex;
+      if (index !== undefined) {
+        setOpen(Number(index));
+        requestAnimationFrame(() =>
+          menuRef.current?.querySelector<HTMLElement>(`[data-parent-index="${index}"] [role="menuitem"]`)?.focus(),
+        );
+      }
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !currentMenu) return;
+    const items = [...currentMenu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].filter(
+      (item) => item.closest('[role="menu"]') === currentMenu && !item.disabled && item.getClientRects().length > 0,
+    );
+    if (!items.length) return;
+    event.preventDefault();
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[next]?.focus();
+  };
 
   return (
     <div
+      ref={menuRef}
       role="menu"
-      aria-label="Commit actions"
-      className="fixed z-50 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-surface bg-mantle/95 py-1 shadow-2xl backdrop-blur"
+      aria-label={stash ? `Actions for stash ${stash.message}` : 'Commit actions'}
+      className="glass-context-menu fixed z-50 max-h-[min(640px,calc(100vh-16px))] overflow-y-auto rounded-xl p-1.5"
       style={{ left, top, width: W }}
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={navigateMenu}
     >
+      <div className="pointer-events-none border-b border-surface/60 px-3 pb-2 pt-1">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-sub">
+          {stash ? 'Stash actions' : refName ? 'Branch actions' : 'Commit actions'}
+        </div>
+        <div className="mt-0.5 truncate text-sm font-semibold text-text" title={stash?.message ?? refName ?? hash}>
+          {stash?.message ?? refName ?? short}
+        </div>
+      </div>
       {items.map((it, i) =>
         it === '-' ? (
-          <div key={i} className="my-1 border-t border-white/10" />
+          <div key={i} role="separator" className="my-1.5 border-t border-surface/70" />
         ) : (
           <div key={it.label} className="relative" onMouseEnter={() => setOpen(it.sub ? i : null)}>
             <button
               role="menuitem"
+              data-menu-index={i}
               aria-haspopup={!!it.sub}
               aria-expanded={it.sub ? open === i : undefined}
               className={`${row} ${it.danger ? 'text-[#f38ba8]' : ''}`}
               title={it.label}
               onClick={() => {
-                if (it.sub) setOpen(i);
-                else {
+                if (it.sub) {
+                  const nextOpen = open === i ? null : i;
+                  setOpen(nextOpen);
+                  if (nextOpen !== null)
+                    requestAnimationFrame(() =>
+                      menuRef.current
+                        ?.querySelector<HTMLElement>(`[data-parent-index="${i}"] [role="menuitem"]`)
+                        ?.focus(),
+                    );
+                } else {
                   onClose();
                   it.run?.();
                 }
@@ -368,7 +498,12 @@ export function CommitMenu({
               {it.sub && <ChevronRight size={14} aria-hidden />}
             </button>
             {it.sub && open === i && (
-              <div role="menu" className="border-l border-[#4cc2ff]/40 bg-canvas py-1 pl-3">
+              <div
+                role="menu"
+                aria-label={it.label}
+                data-parent-index={i}
+                className="ml-3 rounded-lg border-l-2 border-[#4cc2ff]/40 bg-crust/60 py-1 pl-2"
+              >
                 {it.sub.map(
                   (s) =>
                     s !== '-' && (

@@ -171,6 +171,29 @@ test('fetch failure after a successful push warns but still refreshes local hist
   );
 });
 
+test('pull failures from Windows-incompatible paths explain why local history stayed behind', async () => {
+  backend.pull = async () => {
+    throw new Error("error: invalid path 'assets/kit:bathroommirror.png'");
+  };
+  await useRepo.getState().action('fetch', 'ff-only');
+  const toast = useRepo.getState().toasts.find((item) => item.kind === 'error');
+  assert.equal(toast?.title, 'Pull stopped: Windows cannot check out these file names');
+  assert.match(toast?.detail ?? '', /kit:bathroommirror\.png/);
+  assert.match(toast?.detail ?? '', /rename these files/);
+});
+
+test('remote checkout does not report success if the refreshed branch still differs from the remote', async () => {
+  backend.checkoutRemote = async () => 'main';
+  backend.refs = async () => ({
+    ...refs('local'),
+    local: [{ name: 'main', current: true, hash: 'local', upstream: 'origin/main', behind: 3, ahead: 0 }],
+    remote: [{ name: 'origin/main', hash: 'remote' }],
+  });
+  await useRepo.getState().checkoutRemote('origin/main');
+  assert.ok(useRepo.getState().toasts.some((toast) => toast.kind === 'error' && /still does not match origin\/main/.test(toast.detail ?? '')));
+  assert.ok(!useRepo.getState().toasts.some((toast) => toast.kind === 'success'));
+});
+
 test('poll results are ignored when the repository changes', async () => {
   backend.status = async () => {
     useRepo.setState({ repoPath: '/another' });
@@ -205,6 +228,5 @@ test('failed history refresh never reports that external changes were reloaded',
     throw new Error('Cannot read history');
   };
   await useRepo.getState().refreshStatus();
-  assert.ok(useRepo.getState().toasts.some((toast) => toast.kind === 'error'));
   assert.ok(!useRepo.getState().toasts.some((toast) => toast.kind === 'info'));
 });

@@ -30,7 +30,15 @@ interface RepoState {
   search: string;
   error: string | null;
   refs: {
-    local: { name: string; current: boolean; hash?: string }[];
+    local: {
+      name: string;
+      current: boolean;
+      hash?: string;
+      upstream?: string;
+      ahead?: number;
+      behind?: number;
+      gone?: boolean;
+    }[];
     remote: { name: string; hash?: string }[];
     tags: { name: string }[];
     stashes: StashRef[];
@@ -81,7 +89,7 @@ interface RepoState {
   select: (hash: string | null) => void;
   setSearch: (q: string) => void;
   checkout: (ref: string) => Promise<void>;
-  checkoutRemote: (ref: string) => Promise<void>;
+  checkoutRemote: (ref: string, allowWindowsSparse?: boolean, expectedUnsupported?: string[]) => Promise<void>;
   commit: (summary: string, description?: string, opts?: { amend?: boolean; signoff?: boolean }) => Promise<void>;
 }
 
@@ -95,7 +103,12 @@ export interface Activity extends Toast {
   time: number;
   repo: string | null;
 }
-type Meta = { blocking?: boolean; fail?: string; done?: string | (() => string | null) };
+type Meta = {
+  blocking?: boolean;
+  fail?: string;
+  done?: string | (() => string | null);
+  failure?: (message: string) => { title: string; detail: string } | null;
+};
 
 export const useRepo = create<RepoState>((set, get) => {
   let toastSeq = 0;
@@ -112,11 +125,21 @@ export const useRepo = create<RepoState>((set, get) => {
       await fn();
       ok = true;
     } catch (e: any) {
-      get().notify(
-        'error',
-        meta.fail ?? (label ? label.replace(/…$/, '') + ' failed' : 'Something went wrong'),
-        clean(e?.message ?? e),
-      );
+      const message = clean(e?.message ?? e);
+      const specificFailure = meta.failure?.(message);
+      if (specificFailure) {
+        get().notify(
+          'error',
+          specificFailure.title,
+          specificFailure.detail,
+        );
+      } else {
+        get().notify(
+          'error',
+          meta.fail ?? (label ? label.replace(/…$/, '') + ' failed' : 'Something went wrong'),
+          message,
+        );
+      }
     } finally {
       if (label) set((s) => (s.working === label ? { working: null, blocking: false } : {}));
     }
@@ -148,6 +171,7 @@ export const useRepo = create<RepoState>((set, get) => {
     push: { label: 'Pushing…', fail: 'Push failed' },
     stash: { label: 'Stashing changes…', fail: 'Stash failed', blocking: true },
     stashPop: { label: 'Applying stash…', fail: 'Could not apply stash', blocking: true },
+    stashAction: { label: 'Updating stash…', fail: 'Stash action failed', blocking: true },
     reset: { label: 'Resetting…', fail: 'Reset failed', blocking: true },
     squashCommits: { label: 'Squashing commits…', fail: 'Squash failed', blocking: true },
     cherryPick: { label: 'Cherry-picking…', fail: 'Cherry-pick failed', blocking: true },
@@ -182,6 +206,8 @@ export const useRepo = create<RepoState>((set, get) => {
         return 'Changes stashed';
       case 'stashPop':
         return 'Stash applied';
+      case 'stashAction':
+        return `${String(args[1]).replace(/^./, (letter) => letter.toUpperCase())} stash completed`;
       case 'reset':
         return `Reset (${args[1]}) to ${short(args[0])}`;
       case 'squashCommits':
@@ -351,6 +377,8 @@ export const useRepo = create<RepoState>((set, get) => {
       let stopped = false;
       const before = get().operation;
       const actionArgs = name === 'fetch' && !args.length ? [useSettings.getState().fetchMode] : args;
+      const isPull = name === 'fetch' && actionArgs[0] !== 'all';
+      const actionMeta = isPull ? OPS.pull : OPS[name];
       return guard(
         async () => {
           set({ busy: name });
@@ -371,10 +399,22 @@ export const useRepo = create<RepoState>((set, get) => {
             set({ busy: null });
           }
         },
-        OPS[name].label,
+        actionMeta.label,
         {
-          blocking: OPS[name].blocking,
-          fail: OPS[name].fail,
+          blocking: actionMeta.blocking,
+          fail: actionMeta.fail,
+          failure: isPull
+            ? (message) => {
+                const paths = [...message.matchAll(/invalid path '([^']+)'/g)].map((match) => match[1]);
+                if (!paths.length) return null;
+                const examples = paths.slice(0, 4).join('\n');
+                const more = paths.length > 4 ? `\n…and ${paths.length - 4} more.` : '';
+                return {
+                  title: 'Pull stopped: Windows cannot check out these file names',
+                  detail: `${examples}${more}\n\nGit for Windows cannot create paths containing “:”. The pull did not finish, so the local branch may still be behind. Fetch remote refs separately, then ask the repository owner to rename these files or update the branch from a filesystem that supports them.`,
+                };
+              }
+            : undefined,
           done: () => (stopped ? null : doneMsg(name, actionArgs, before)),
         },
       );
@@ -634,15 +674,24 @@ export const useRepo = create<RepoState>((set, get) => {
         { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}”` },
       ),
 
-    checkoutRemote: (ref) => {
+    checkoutRemote: (ref, allowWindowsSparse = false, expectedUnsupported) => {
       let branch = '';
       return guard(
         async () => {
-          branch = await api().checkoutRemote(get().repoPath, ref);
+          branch = await api().checkoutRemote(get().repoPath, ref, allowWindowsSparse, expectedUnsupported);
           await get().refresh();
+          const local = get().refs.local.find((item) => item.name === branch);
+          const remote = get().refs.remote.find((item) => item.name === ref);
+          if (local?.hash && remote?.hash && local.hash !== remote.hash)
+            throw new Error(`Local branch “${branch}” still does not match ${ref}; refresh the repository and try again.`);
         },
-        'Checking out…',
-        { blocking: true, fail: 'Checkout failed', done: () => `Checked out local branch “${branch}”` },
+        'Checking out and aligning…',
+        {
+          blocking: true,
+          fail: 'Checkout failed',
+          done: () =>
+            `Checked out “${branch}” and aligned it with ${ref}.${allowWindowsSparse ? ' Sparse checkout is active; Windows-incompatible paths are omitted from the working folder.' : ''}`,
+        },
       );
     },
 

@@ -8,6 +8,8 @@ Repository: <https://github.com/prapawity/GITVerse>.
 
 The release workflow builds each target on its native OS/architecture. It uploads only installers and SHA-256 checksum files, then creates a **draft** GitHub Release after all jobs succeed. Nothing is published automatically.
 
+Packaging generates `THIRD_PARTY_NOTICES.txt` from the installed packages on each build machine and includes it in the application resources. It includes build dependencies conservatively, because their code may be bundled. Review every missing license text flagged in that file against the corresponding upstream package and check the final application for Electron/Chromium notices and any separately bundled binaries before distribution. The generated inventory is a starting point, not a license clearance.
+
 macOS signing uses the optional `MAC_CERTIFICATE_P12` and `MAC_CERTIFICATE_PASSWORD` GitHub Actions secrets. Without them the build remains unsigned and macOS automatic updates will not work. Notarization and Windows signing are not configured; never put signing secrets in source.
 
 ## Before the first public push

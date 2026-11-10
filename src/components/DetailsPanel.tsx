@@ -3,6 +3,7 @@ import { FileMinus, FilePen, FilePlus, FileSymlink, Folder, List, ListTree } fro
 import { useRepo } from '../store/repoStore';
 import { DetailsSkeleton, Skeleton } from './Loading';
 import type { StashDetail, StashRef } from '../shared/types';
+import { askConfirm } from './Dialogs';
 
 export type ChangedFile = { status: string; path: string; oldPath?: string; untracked?: boolean };
 type F = ChangedFile;
@@ -42,14 +43,15 @@ function FileRow({
     <button
       onClick={() => onSelect(f)}
       aria-pressed={selected}
-      className={`flex min-h-[36px] w-full items-center gap-2 px-4 text-left hover:bg-surface/40 focus-visible:bg-surface ${selected ? 'bg-[#4cc2ff]/20' : ''}`}
+      className={`flex min-h-[44px] w-full items-center gap-2 px-4 text-left hover:bg-surface/40 focus-visible:bg-surface ${selected ? 'border-l-2 border-[#4cc2ff] bg-[#4cc2ff]/15' : 'border-l-2 border-transparent'}`}
       title={f.path}
     >
       {icon(f.status)}
-      <span className="min-w-0 flex-1 truncate">
-        {!tree && <span className="text-sub">{f.path.slice(0, i + 1)}</span>}
-        <span className="font-medium">{f.path.slice(i + 1)}</span>
+      <span className="min-w-0 flex-1 py-1">
+        <span className="block truncate font-medium">{f.path.slice(i + 1)}</span>
+        {!tree && i >= 0 && <span className="block truncate text-xs text-sub">{f.path.slice(0, i + 1)}</span>}
       </span>
+      <span className="shrink-0 text-[11px] text-sub">{LABEL[f.status] ?? f.status}</span>
       {f.untracked && <span className="shrink-0 text-[11px] text-sub">untracked</span>}
     </button>
   );
@@ -70,6 +72,8 @@ export function DetailsPanel({
   const [stashName, setStashName] = useState('');
   const [stashEditError, setStashEditError] = useState('');
   const [savingStashName, setSavingStashName] = useState(false);
+  const [stashActionBusy, setStashActionBusy] = useState(false);
+  const [stashActionError, setStashActionError] = useState('');
   const stashKey = stash ? `${repoPath}:${stash.hash ?? stash.id}` : '';
   const [snapshot, setSnapshot] = useState<{ key: string; data?: StashDetail; error?: string } | null>(null);
   useEffect(() => {
@@ -146,13 +150,71 @@ export function DetailsPanel({
     </button>
   );
 
+  const runStashAction = async (action: 'apply' | 'pop' | 'drop') => {
+    if (!repoPath || !stash?.hash || stashActionBusy || state.working) return;
+    const selectedRepo = repoPath;
+    const selectedHash = stash.hash;
+    const description =
+      action === 'drop'
+        ? 'Permanently remove this stash entry. Its saved changes will no longer be listed.'
+        : action === 'pop'
+          ? 'Apply this stash to the working tree and remove it only if the apply succeeds. Conflicts can require manual resolution.'
+          : 'Apply this stash to the working tree and keep the stash. Conflicts can require manual resolution.';
+    if (
+      !(await askConfirm(`${action[0].toUpperCase()}${action.slice(1)} stash?`, `${stash.message}\n\n${description}`, {
+        label: `${action[0].toUpperCase()}${action.slice(1)} stash`,
+        danger: action === 'drop',
+      }))
+    )
+      return;
+    if (useRepo.getState().repoPath !== selectedRepo) {
+      useRepo.getState().notify('warning', 'Stash action cancelled', 'The active repository changed.');
+      return;
+    }
+    setStashActionBusy(true);
+    setStashActionError('');
+    let failure = '';
+    await useRepo.getState().track(`Stash ${action}…`, async () => {
+      try {
+        await (window as any).gitApi.stashAction(selectedRepo, selectedHash, action);
+      } catch (error) {
+        failure = String((error as Error).message).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+      } finally {
+        if (useRepo.getState().repoPath === selectedRepo) await useRepo.getState().refresh();
+      }
+    }, { blocking: true });
+    setStashActionBusy(false);
+    if (useRepo.getState().repoPath !== selectedRepo) return;
+    if (failure) {
+      const hasConflicts = useRepo
+        .getState()
+        .status.some((file) => ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(file.index + file.worktree));
+      setStashActionError(
+        hasConflicts
+          ? `Stash ${action} stopped with conflicts. The stash was kept. Resolve the conflicted files in Working changes.\n${failure}`
+          : failure,
+      );
+      useRepo
+        .getState()
+        .notify(
+          'error',
+          `Could not ${action} stash`,
+          hasConflicts ? 'Resolve conflicted files in Working changes. The stash was kept.' : failure,
+        );
+    } else {
+      useRepo
+        .getState()
+        .notify('success', `Stash ${action === 'apply' ? 'applied' : action === 'pop' ? 'popped' : 'dropped'}`);
+    }
+  };
+
   return (
     <div
       role="region"
       aria-label={stash ? 'Stash details' : 'Commit details'}
       className="flex h-full flex-col overflow-hidden"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-surface px-4 py-3 text-sub">
+      <div className="glass-detail-header flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-surface px-4 py-3 text-sub">
         <span>
           {stash ? 'stash' : 'commit'}:{' '}
           <span className="font-mono text-[15px] font-semibold text-text">{c.hash.slice(0, 6)}</span>
@@ -164,7 +226,30 @@ export function DetailsPanel({
         </span>
       </div>
 
-      <div className="m-4 max-h-[38%] overflow-auto rounded-lg border border-surface bg-crust p-4">
+      {stash && (
+        <div className="border-b border-surface px-4 py-3">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Stash actions">
+            {(['apply', 'pop', 'drop'] as const).map((action) => (
+              <button
+                key={action}
+                type="button"
+                disabled={stashActionBusy || !!state.working || !!state.operation || !stash.hash}
+                onClick={() => void runStashAction(action)}
+                className={`min-h-[36px] rounded-md border px-3 text-sm font-medium disabled:opacity-40 ${action === 'drop' ? 'border-[#f38ba8]/40 text-[#f38ba8] hover:bg-[#f38ba8]/10' : 'border-surface hover:bg-surface/60'}`}
+              >
+                {action[0].toUpperCase() + action.slice(1)}
+              </button>
+            ))}
+          </div>
+          {stashActionError && (
+            <p role="alert" className="mt-2 whitespace-pre-wrap text-xs text-[#f38ba8]">
+              {stashActionError}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="glass-detail-card m-4 max-h-[38%] overflow-auto rounded-xl border border-surface p-4">
         {stash ? (
           <>
             <input
@@ -254,13 +339,14 @@ export function DetailsPanel({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-surface px-4 pt-3 text-[#fab387]">
+      <div className="flex items-center gap-2 border-t border-surface px-4 pt-3 text-text">
         <FilePen size={15} aria-hidden />
-        <span aria-live="polite">
+        <span className="text-sm font-semibold" aria-live="polite">
           {detail ? summary(detail.files) : <Skeleton className="inline-block h-4 w-32 align-middle" />}
         </span>
       </div>
       <div className="flex items-center justify-between px-4 py-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-sub">Changed files</span>
         <div
           role="group"
           aria-label="File list layout"

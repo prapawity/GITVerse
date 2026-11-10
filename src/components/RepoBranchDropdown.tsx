@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, FolderOpen, GitBranch, Search } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
+import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 
 export function RepoBranchDropdown({ current }: { current: string }) {
-  const { repoPath, recentRepos, refs, loading, openRepo, checkout, checkoutRemote } = useRepo();
+  const { repoPath, recentRepos, refs, loading, openRepo, checkout } = useRepo();
   const [open, setOpen] = useState<'repo' | 'branch' | null>(null);
   const [query, setQuery] = useState('');
   const container = useRef<HTMLDivElement>(null);
@@ -55,11 +56,12 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           aria-label="Choose repository"
           aria-expanded={open === 'repo'}
           aria-controls="repository-list"
+          title={repoPath ?? undefined}
           className="block max-w-full rounded px-1 text-left hover:bg-surface/50"
         >
           <span className="block text-[12px] text-sub">repository</span>
           <span className="flex min-w-0 items-center gap-1 text-[18px] font-semibold leading-tight">
-            <span className="truncate">{repoPath?.split('/').pop() ?? '—'}</span>
+            <span className="truncate">{repoPath?.split(/[\\/]/).filter(Boolean).pop() ?? '—'}</span>
             <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
           </span>
         </button>
@@ -93,7 +95,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
                 >
                   <FolderOpen size={15} className="shrink-0 text-sub" aria-hidden />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">{path.split('/').pop()}</span>
+                    <span className="block truncate">{path.split(/[\\/]/).filter(Boolean).pop()}</span>
                     <span className="block truncate text-xs text-sub">{path}</span>
                   </span>
                   {path === repoPath && (
@@ -125,6 +127,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           aria-label="Choose branch"
           aria-expanded={open === 'branch'}
           aria-controls="branch-list"
+          title={current}
           className="block max-w-full rounded px-1 text-left hover:bg-surface/50 disabled:opacity-50"
         >
           <span className="block text-[12px] text-sub">branch</span>
@@ -177,7 +180,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
                   key={b.name}
                   onClick={() => {
                     setOpen(null);
-                    void checkoutRemote(b.name);
+                    void checkoutRemoteWithSparseRecovery(b.name);
                   }}
                   title={b.name}
                   className={item}

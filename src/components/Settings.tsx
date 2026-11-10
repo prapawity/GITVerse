@@ -48,19 +48,18 @@ function Row({
   warn?: string;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(160px,300px)_1fr] items-start gap-x-6 gap-y-1 py-3">
-      <label htmlFor={htmlFor} className="pt-2 text-right text-[15px]">
-        {label}
-      </label>
+    <div className="grid max-w-[850px] grid-cols-1 items-start gap-x-8 gap-y-2 border-b border-surface/60 py-5 sm:grid-cols-[minmax(160px,220px)_1fr]">
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="text-[14px] font-medium sm:pt-2">
+          {label}
+        </label>
+      ) : (
+        <div className="text-[14px] font-medium sm:pt-2">{label}</div>
+      )}
       <div className="min-w-0">
         {children}
         {hint && <p className="mt-2 max-w-[640px] text-[13px] leading-relaxed text-sub">{hint}</p>}
-        {warn && (
-          <p className="mt-1.5 flex max-w-[640px] gap-1.5 text-[13px] text-[#f9e2af]">
-            <span aria-hidden>⚠</span>
-            {warn}
-          </p>
-        )}
+        {warn && <p className="mt-1.5 flex max-w-[640px] gap-1.5 text-[13px] text-[#f9e2af]">{warn}</p>}
       </div>
     </div>
   );
@@ -391,12 +390,11 @@ function AiSettings() {
         <p className="mt-1 text-[13px] text-sub">
           Used for chat and Auto-resolve with AI. You can also switch providers in chat.
         </p>
-        <div role="radiogroup" aria-label="AI provider" className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div role="group" aria-label="AI provider" className="mt-4 grid gap-3 sm:grid-cols-3">
           {PROVIDERS.map((p) => (
             <button
               key={p.id}
-              role="radio"
-              aria-checked={st.aiProvider === p.id}
+              aria-pressed={st.aiProvider === p.id}
               onClick={() => st.set('aiProvider', p.id)}
               className={`min-h-[84px] rounded-lg border px-4 py-3 text-left transition-colors ${st.aiProvider === p.id ? 'border-[#4cc2ff] bg-[#4cc2ff]/10' : 'border-surface bg-crust/50 hover:border-sub/60 hover:bg-surface/40'}`}
             >
@@ -695,7 +693,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
   const [section, setSection] = useState<Section>(initial);
   const st = useSettings();
   const { repoPath, recentRepos } = useRepo();
-  const repoName = repoPath?.split('/').pop();
+  const repoName = repoPath?.split(/[\\/]/).filter(Boolean).pop();
   const set =
     <K extends keyof S>(k: K) =>
     (v: S[K]) =>
@@ -720,7 +718,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
       aria-current={section === id ? 'page' : undefined}
       aria-label={label}
       title={label}
-      className={`flex min-h-[48px] w-full items-center gap-4 px-4 text-left text-[16px] sm:px-6 ${section === id ? 'bg-[#4cc2ff]/15 text-text' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
+      className={`flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-[14px] ${section === id ? 'bg-[#4cc2ff]/15 font-medium text-text' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
     >
       <I size={19} className="shrink-0" aria-hidden /> <span className="hidden sm:inline">{label}</span>
     </button>
@@ -740,246 +738,281 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
   );
 
   return (
-    <div className="flex h-full min-h-0">
-      <nav
-        aria-label="Preferences"
-        className="flex w-14 shrink-0 flex-col overflow-y-auto border-r border-surface bg-mantle py-3 sm:w-[300px]"
-      >
+    <div className="flex h-full min-h-0 flex-col bg-canvas">
+      <header className="glass-toolbar flex min-h-[68px] shrink-0 items-center gap-4 border-b border-surface px-4 sm:px-7">
         <button
+          type="button"
+          autoFocus
           onClick={onExit}
-          aria-label="Exit Preferences"
-          title="Exit Preferences"
-          className="mb-3 flex min-h-[44px] items-center gap-3 px-4 text-left text-[17px] hover:text-[#4cc2ff] sm:px-6"
+          className="flex min-h-[40px] items-center gap-2 rounded-lg border border-surface/80 bg-mantle/60 px-3 text-sm font-medium hover:bg-surface/60"
         >
-          <Undo2 size={18} className="shrink-0" aria-hidden />{' '}
-          <span className="hidden sm:inline">Exit Preferences</span>
+          <Undo2 size={17} aria-hidden /> Back to workspace
         </button>
-        <div className="hidden px-6 pb-1 pt-2 text-[14px] text-sub sm:block">Preferences</div>
-        {nav('general', 'General', Gear)}
-        {nav('appearance', 'Appearance', Palette)}
-        {nav('about', 'Application / About', Info)}
-        {nav('profiles', 'Profiles', UserRound)}
-        {nav('terminal', 'In-App Terminal', SquareTerminal)}
-        {nav('conflicts', 'Conflicts', GitMerge)}
-        {nav('ai', 'AI Assistant', Sparkles)}
-        <div className="hidden px-6 pb-1 pt-6 text-[14px] text-sub sm:block">Repo-Specific Preferences</div>
-        <div className="hidden px-6 pb-2 text-[14px] sm:block">
-          {repoName ? (
-            <>
-              Repo: <span className="font-medium">{repoName}</span>
-            </>
-          ) : (
-            <span className="text-sub">Open a repository first</span>
-          )}
+        <div className="h-7 w-px bg-surface" aria-hidden />
+        <div>
+          <div className="text-base font-semibold">Settings</div>
+          <div className="text-xs text-sub">Changes save automatically</div>
         </div>
-        {repoName && nav('gitflow', 'Gitflow', Workflow)}
-      </nav>
+      </header>
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label="Preferences"
+          className="glass-panel flex w-14 shrink-0 flex-col overflow-y-auto border-r border-surface bg-mantle px-1.5 py-5 sm:w-[240px] sm:px-3"
+        >
+          <div className="hidden px-3 pb-2 pt-1 text-[12px] font-medium text-sub sm:block">Preferences</div>
+          {nav('general', 'General', Gear)}
+          {nav('appearance', 'Appearance', Palette)}
+          {nav('about', 'Application / About', Info)}
+          {nav('profiles', 'Profiles', UserRound)}
+          {nav('terminal', 'In-App Terminal', SquareTerminal)}
+          {nav('conflicts', 'Conflicts', GitMerge)}
+          {nav('ai', 'AI Assistant', Sparkles)}
+          <div className="hidden px-3 pb-1 pt-6 text-[12px] font-medium text-sub sm:block">Repository settings</div>
+          <div className="hidden truncate px-3 pb-2 text-[13px] sm:block" title={repoPath ?? undefined}>
+            {repoName ? (
+              <>
+                Repo: <span className="font-medium">{repoName}</span>
+              </>
+            ) : (
+              <span className="text-sub">Open a repository first</span>
+            )}
+          </div>
+          {repoName && nav('gitflow', 'Gitflow', Workflow)}
+        </nav>
 
-      <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10">
-        {section === 'about' && <ApplicationAbout />}
-        {section === 'general' && (
-          <>
-            <h1 className="mb-4 text-[28px] font-semibold">General</h1>
-            <Row
-              label="Check for updates automatically"
-              htmlFor="auto-update"
-              hint="Check for a new stable release when GITVerse starts."
-            >
-              <Check id="auto-update" checked={st.autoCheckUpdates} onChange={set('autoCheckUpdates')} />
-            </Row>
-            <Row
-              label="Auto-Fetch Interval"
-              htmlFor="af"
-              hint="In minutes, between 0 and 60 (0 disables auto-fetch). Fetches from every remote in the background."
-              warn="If a repository has many remotes, frequent fetching may impact performance."
-            >
-              <Num id="af" value={st.autoFetchMinutes} min={0} max={60} onCommit={set('autoFetchMinutes')} />
-            </Row>
-            <Row
-              label="Auto-Prune"
-              hint="Remove remote-tracking branches that no longer exist on the remote whenever you fetch."
-            >
-              <Check id="ap" checked={st.autoPrune} onChange={set('autoPrune')} />
-            </Row>
-            <Row
-              label="Show All Commits in Graph"
-              warn="Loads the entire history at once. Enabling this may adversely affect performance on large repositories."
-            >
-              <Check id="sa" checked={st.showAll} onChange={set('showAll')} />
-            </Row>
-            <Row
-              label="Initial Commits in Graph"
-              htmlFor="ic"
-              hint="Minimum 100. When lazy loading is on, more commits are loaded as you scroll to the end of the graph."
-              warn="Increasing this value may adversely affect performance."
-            >
-              <Num id="ic" value={st.initialCommits} min={100} max={100000} onCommit={set('initialCommits')} />
-            </Row>
-            <Row
-              label="Lazy Load Commits in Graph"
-              hint="Load older commits page by page as you scroll. When off, only the initial commits are shown."
-            >
-              <Check id="ll" checked={st.lazyLoad && !st.showAll} onChange={set('lazyLoad')} />
-            </Row>
-            <Row label="Remember tabs" hint="Reopen the repositories that were open when you last quit.">
-              <Check id="rt" checked={st.rememberTabs} onChange={set('rememberTabs')} />
-            </Row>
-            <Row label="Forget remembered repositories">
-              <button
-                disabled={!recentRepos.length}
-                onClick={async () => {
-                  if (
-                    await askConfirm(
-                      'Forget repositories',
-                      'Close every repository tab and clear the remembered list. Nothing on disk is deleted.',
-                      { label: 'Forget', danger: true },
-                    )
-                  )
-                    recentRepos.slice().forEach((r) => useRepo.getState().closeRepo(r));
-                }}
-                className="min-h-[36px] rounded-md border border-[#f38ba8]/60 px-4 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
-              >
-                Forget All
-              </button>
-            </Row>
-            <Row label="Restore defaults">
-              <button
-                onClick={() => st.reset()}
-                className="min-h-[36px] rounded-md border border-surface px-4 hover:bg-surface/60"
-              >
-                Reset general settings
-              </button>
-            </Row>
-          </>
-        )}
-
-        {section === 'appearance' && (
-          <>
-            <h1 className="mb-2 text-[28px] font-semibold">Appearance</h1>
-            <p className="mb-6 text-sm text-sub">Choose a theme for GITVerse. Changes apply immediately.</p>
-            <div role="radiogroup" aria-label="Theme" className="grid max-w-[700px] grid-cols-1 gap-3 sm:grid-cols-3">
-              {(
-                [
-                  { id: 'light', name: 'Light', colors: ['#ffffff', '#f5f7fa', '#d7dce4'] },
-                  { id: 'dark', name: 'Dark', colors: ['#11111b', '#181825', '#313244'] },
-                  { id: 'midnight', name: 'Midnight', colors: ['#081120', '#0c182a', '#293d54'] },
-                  { id: 'graphite', name: 'Graphite', colors: ['#161618', '#1e1e21', '#444449'] },
-                ] as const
-              ).map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={st.theme === option.id}
-                  onClick={() => st.set('theme', option.id)}
-                  className={`rounded-lg border p-3 text-left transition-colors ${st.theme === option.id ? 'border-[#4cc2ff] bg-[#4cc2ff]/10' : 'border-surface hover:bg-surface/50'}`}
+        <main className="min-w-0 flex-1 overflow-y-auto px-5 py-7 sm:px-10 lg:px-14">
+          <div className="mx-auto w-full max-w-4xl">
+            {section === 'about' && <ApplicationAbout />}
+            {section === 'general' && (
+              <>
+                <h1 className="text-[28px] font-semibold">General</h1>
+                <p className="mb-5 mt-1 text-sm text-sub">
+                  Manage updates, repository history, and your workspace. Changes save automatically.
+                </p>
+                <Row
+                  label="Check for updates automatically"
+                  htmlFor="auto-update"
+                  hint="Check for a new stable release when GITVerse starts."
                 >
-                  <span
-                    className="mb-3 flex h-16 overflow-hidden rounded-md border border-white/10"
-                    style={{ background: option.colors[0] }}
+                  <Check id="auto-update" checked={st.autoCheckUpdates} onChange={set('autoCheckUpdates')} />
+                </Row>
+                <Row
+                  label="Auto-Fetch Interval"
+                  htmlFor="af"
+                  hint="In minutes, between 0 and 60 (0 disables auto-fetch). Fetches from every remote in the background."
+                  warn="If a repository has many remotes, frequent fetching may impact performance."
+                >
+                  <Num id="af" value={st.autoFetchMinutes} min={0} max={60} onCommit={set('autoFetchMinutes')} />
+                </Row>
+                <Row
+                  label="Auto-Prune"
+                  htmlFor="ap"
+                  hint="Remove remote-tracking branches that no longer exist on the remote whenever you fetch."
+                >
+                  <Check id="ap" checked={st.autoPrune} onChange={set('autoPrune')} />
+                </Row>
+                <Row
+                  label="Show All Commits in Graph"
+                  htmlFor="sa"
+                  warn="Loads the entire history at once. Enabling this may adversely affect performance on large repositories."
+                >
+                  <Check id="sa" checked={st.showAll} onChange={set('showAll')} />
+                </Row>
+                <Row
+                  label="Initial Commits in Graph"
+                  htmlFor="ic"
+                  hint="Minimum 100. When lazy loading is on, more commits are loaded as you scroll to the end of the graph."
+                  warn="Increasing this value may adversely affect performance."
+                >
+                  <Num id="ic" value={st.initialCommits} min={100} max={100000} onCommit={set('initialCommits')} />
+                </Row>
+                <Row
+                  label="Lazy Load Commits in Graph"
+                  htmlFor="ll"
+                  hint="Load older commits page by page as you scroll. When off, only the initial commits are shown."
+                >
+                  <Check id="ll" checked={st.lazyLoad && !st.showAll} onChange={set('lazyLoad')} />
+                </Row>
+                <Row
+                  label="Remember tabs"
+                  htmlFor="rt"
+                  hint="Reopen the repositories that were open when you last quit."
+                >
+                  <Check id="rt" checked={st.rememberTabs} onChange={set('rememberTabs')} />
+                </Row>
+                <Row label="Forget remembered repositories">
+                  <button
+                    disabled={!recentRepos.length}
+                    onClick={async () => {
+                      if (
+                        await askConfirm(
+                          'Forget repositories',
+                          'Close every repository tab and clear the remembered list. Nothing on disk is deleted.',
+                          { label: 'Forget', danger: true },
+                        )
+                      )
+                        recentRepos.slice().forEach((r) => useRepo.getState().closeRepo(r));
+                    }}
+                    className="min-h-[36px] rounded-md border border-[#f38ba8]/60 px-4 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
                   >
-                    <span className="w-1/3" style={{ background: option.colors[1] }} />
-                    <span className="m-2 h-3 flex-1 rounded" style={{ background: option.colors[2] }} />
-                  </span>
-                  <span className="font-medium">{option.name}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+                    Forget All
+                  </button>
+                </Row>
+                <Row
+                  label="Restore general settings"
+                  hint="Git Flow settings, profiles, repository groups, and remembered tabs are kept."
+                >
+                  <button
+                    onClick={async () => {
+                      if (
+                        await askConfirm(
+                          'Restore general settings',
+                          'Appearance, fetch, history, and terminal settings will return to their defaults. Git Flow settings, profiles, repository groups, and remembered tabs will be kept.',
+                          {
+                            label: 'Reset',
+                            danger: true,
+                          },
+                        )
+                      )
+                        st.reset();
+                    }}
+                    className="min-h-[36px] rounded-md border border-surface px-4 hover:bg-surface/60"
+                  >
+                    Restore defaults
+                  </button>
+                </Row>
+              </>
+            )}
 
-        {section === 'terminal' && (
-          <>
-            <h1 className="mb-4 text-[28px] font-semibold">In-App Terminal</h1>
-            <Row
-              label="Shell"
-              htmlFor="sh"
-              hint="Full path to the shell to start in new terminals. Leave empty to use your system default."
-            >
-              <input
-                id="sh"
-                value={st.termShell}
-                onChange={(e) => st.set('termShell', e.target.value)}
-                placeholder="/bin/zsh"
-                className={input}
-              />
-            </Row>
-            <Row
-              label="Font family"
-              htmlFor="ff"
-              hint={
-                <>
-                  Leave empty to use a Nerd Font automatically (MesloLGS NF, Hack, FiraCode, JetBrains Mono…), which
-                  oh-my-zsh / powerlevel10k / starship prompts need for their icons. Applies to open terminals
-                  immediately.
-                </>
-              }
-            >
-              <input
-                id="ff"
-                value={st.termFontFamily}
-                onChange={(e) => st.set('termFontFamily', e.target.value)}
-                placeholder="MesloLGS NF"
-                className={input}
-              />
-            </Row>
-            <Row label="Font size" htmlFor="fs" hint="Between 10 and 24. Applies to open terminals immediately.">
-              <Num id="fs" value={st.termFontSize} min={10} max={24} onCommit={set('termFontSize')} />
-            </Row>
-            <Row
-              label="Scrollback lines"
-              htmlFor="sb"
-              hint="How many lines each terminal remembers. Applies to new terminals."
-            >
-              <Num id="sb" value={st.termScrollback} min={500} max={100000} onCommit={set('termScrollback')} />
-            </Row>
-            <Row label="Blinking cursor">
-              <Check id="cb" checked={st.termCursorBlink} onChange={set('termCursorBlink')} />
-            </Row>
-          </>
-        )}
+            {section === 'appearance' && (
+              <>
+                <h1 className="mb-2 text-[28px] font-semibold">Appearance</h1>
+                <p className="mb-6 text-sm text-sub">Choose a theme for GITVerse. Changes apply immediately.</p>
+                <div role="group" aria-label="Theme" className="grid max-w-[700px] grid-cols-1 gap-3 sm:grid-cols-3">
+                  {(
+                    [
+                      { id: 'light', name: 'Light', colors: ['#ffffff', '#f5f7fa', '#d7dce4'] },
+                      { id: 'dark', name: 'Dark', colors: ['#11111b', '#181825', '#313244'] },
+                      { id: 'midnight', name: 'Midnight', colors: ['#081120', '#0c182a', '#293d54'] },
+                      { id: 'graphite', name: 'Graphite', colors: ['#161618', '#1e1e21', '#444449'] },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={st.theme === option.id}
+                      onClick={() => st.set('theme', option.id)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${st.theme === option.id ? 'border-[#4cc2ff] bg-[#4cc2ff]/10' : 'border-surface hover:bg-surface/50'}`}
+                    >
+                      <span
+                        className="mb-3 flex h-16 overflow-hidden rounded-md border border-white/10"
+                        style={{ background: option.colors[0] }}
+                      >
+                        <span className="w-1/3" style={{ background: option.colors[1] }} />
+                        <span className="m-2 h-3 flex-1 rounded" style={{ background: option.colors[2] }} />
+                      </span>
+                      <span className="font-medium">{option.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
-        {section === 'conflicts' && (
-          <>
-            <h1 className="mb-4 text-[28px] font-semibold">Conflicts</h1>
-            <Row
-              label="Auto-scroll to conflicts"
-              hint="When a conflicted file opens in the merge tool, and when you move between conflicts, scroll every pane so the conflict you are working on is in view."
-            >
-              <Check id="cs" checked={st.conflictAutoScroll} onChange={set('conflictAutoScroll')} />
-            </Row>
-          </>
-        )}
+            {section === 'terminal' && (
+              <>
+                <h1 className="mb-4 text-[28px] font-semibold">In-App Terminal</h1>
+                <Row
+                  label="Shell"
+                  htmlFor="sh"
+                  hint="Full path to the shell to start in new terminals. Leave empty to use your system default."
+                >
+                  <input
+                    id="sh"
+                    value={st.termShell}
+                    onChange={(e) => st.set('termShell', e.target.value)}
+                    placeholder="/bin/zsh"
+                    className={input}
+                  />
+                </Row>
+                <Row
+                  label="Font family"
+                  htmlFor="ff"
+                  hint={
+                    <>
+                      Leave empty to use a Nerd Font automatically (MesloLGS NF, Hack, FiraCode, JetBrains Mono…), which
+                      oh-my-zsh / powerlevel10k / starship prompts need for their icons. Applies to open terminals
+                      immediately.
+                    </>
+                  }
+                >
+                  <input
+                    id="ff"
+                    value={st.termFontFamily}
+                    onChange={(e) => st.set('termFontFamily', e.target.value)}
+                    placeholder="MesloLGS NF"
+                    className={input}
+                  />
+                </Row>
+                <Row label="Font size" htmlFor="fs" hint="Between 10 and 24. Applies to open terminals immediately.">
+                  <Num id="fs" value={st.termFontSize} min={10} max={24} onCommit={set('termFontSize')} />
+                </Row>
+                <Row
+                  label="Scrollback lines"
+                  htmlFor="sb"
+                  hint="How many lines each terminal remembers. Applies to new terminals."
+                >
+                  <Num id="sb" value={st.termScrollback} min={500} max={100000} onCommit={set('termScrollback')} />
+                </Row>
+                <Row label="Blinking cursor" htmlFor="cb">
+                  <Check id="cb" checked={st.termCursorBlink} onChange={set('termCursorBlink')} />
+                </Row>
+              </>
+            )}
 
-        {section === 'ai' && <AiSettings />}
-        {section === 'profiles' && <ProfileSettings key={repoPath ?? ''} repo={repoPath} />}
+            {section === 'conflicts' && (
+              <>
+                <h1 className="mb-4 text-[28px] font-semibold">Conflicts</h1>
+                <Row
+                  label="Auto-scroll to conflicts"
+                  htmlFor="cs"
+                  hint="When a conflicted file opens in the merge tool, and when you move between conflicts, scroll every pane so the conflict you are working on is in view."
+                >
+                  <Check id="cs" checked={st.conflictAutoScroll} onChange={set('conflictAutoScroll')} />
+                </Row>
+              </>
+            )}
 
-        {section === 'gitflow' && repoPath && (
-          <>
-            <h1 className="mb-1 text-[28px] font-semibold">Gitflow</h1>
-            <p className="mb-4 text-[14px] text-sub">
-              Used by the Branch button for <span className="font-medium text-text">{repoName}</span>. Prefixes include
-              the trailing slash.
-            </p>
-            {flowRow('develop', 'Development branch', 'Where feature, bugfix and release branches start.')}
-            {flowRow('main', 'Production branch', 'Where hotfix and support branches start.')}
-            {flowRow('feature', 'Feature prefix', 'e.g. feature/')}
-            {flowRow('bugfix', 'Bugfix prefix', 'e.g. bugfix/')}
-            {flowRow('release', 'Release prefix', 'e.g. release/')}
-            {flowRow('hotfix', 'Hotfix prefix', 'e.g. hotfix/')}
-            {flowRow('support', 'Support prefix', 'e.g. support/')}
-            <Row label="Restore defaults">
-              <button
-                onClick={() => st.setFlow(repoPath, FLOW_DEFAULTS)}
-                className="min-h-[36px] rounded-md border border-surface px-4 hover:bg-surface/60"
-              >
-                Reset Gitflow settings
-              </button>
-            </Row>
-          </>
-        )}
-        <div className="h-10" aria-hidden />
-      </main>
+            {section === 'ai' && <AiSettings />}
+            {section === 'profiles' && <ProfileSettings key={repoPath ?? ''} repo={repoPath} />}
+
+            {section === 'gitflow' && repoPath && (
+              <>
+                <h1 className="mb-1 text-[28px] font-semibold">Gitflow</h1>
+                <p className="mb-4 text-[14px] text-sub">
+                  Used by the Branch button for <span className="font-medium text-text">{repoName}</span>. Prefixes
+                  include the trailing slash.
+                </p>
+                {flowRow('develop', 'Development branch', 'Where feature, bugfix and release branches start.')}
+                {flowRow('main', 'Production branch', 'Where hotfix and support branches start.')}
+                {flowRow('feature', 'Feature prefix', 'e.g. feature/')}
+                {flowRow('bugfix', 'Bugfix prefix', 'e.g. bugfix/')}
+                {flowRow('release', 'Release prefix', 'e.g. release/')}
+                {flowRow('hotfix', 'Hotfix prefix', 'e.g. hotfix/')}
+                {flowRow('support', 'Support prefix', 'e.g. support/')}
+                <Row label="Restore defaults">
+                  <button
+                    onClick={() => st.setFlow(repoPath, FLOW_DEFAULTS)}
+                    className="min-h-[36px] rounded-md border border-surface px-4 hover:bg-surface/60"
+                  >
+                    Reset Gitflow settings
+                  </button>
+                </Row>
+              </>
+            )}
+            <div className="h-10" aria-hidden />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

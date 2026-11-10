@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,15 +9,30 @@ import {
   agentCheckpoints,
   checkoutRemote,
   commit,
+  deleteBranch,
   deleteRemoteBranch,
   historyPosition,
   log,
   pushBranch,
   pushInfo,
   refs,
+  reset,
+  windowsIncompatiblePaths,
 } from './git';
 
 const run = promisify(execFile);
+
+const runWithInput = (cwd: string, args: string[], input: string) =>
+  new Promise<string>((resolve, reject) => {
+    const child = spawn('git', args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => (stdout += chunk));
+    child.stderr.setEncoding('utf8').on('data', (chunk) => (stderr += chunk));
+    child.on('error', reject);
+    child.on('close', (code) => (code === 0 ? resolve(stdout.trim()) : reject(new Error(stderr.trim()))));
+    child.stdin.end(input);
+  });
 
 test('separates agent checkpoint refs from branch history without matching commit messages', async (t) => {
   const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-history-'));
@@ -173,6 +188,40 @@ test('deletes a remote branch without affecting its local counterpart', async (t
   await assert.rejects(command(cwd, 'rev-parse', 'refs/remotes/origin/feature'));
 });
 
+test('deletes a local branch merged into a fetched remote tip, but keeps unmerged work', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-delete-local-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const cwd = path.join(dir, 'local');
+  const remote = path.join(dir, 'remote.git');
+  const command = async (repo: string, ...args: string[]) => (await run('git', args, { cwd: repo })).stdout.trim();
+  await command(dir, 'init', '--bare', '--initial-branch=main', remote);
+  await command(dir, 'init', '--initial-branch=main', cwd);
+  await command(cwd, 'config', 'user.name', 'Test');
+  await command(cwd, 'config', 'user.email', 'test@example.com');
+  await command(cwd, 'commit', '--allow-empty', '-m', 'Initial');
+  await command(cwd, 'remote', 'add', 'origin', remote);
+  await command(cwd, 'push', '-u', 'origin', 'main');
+  await command(cwd, 'checkout', '-b', 'feature');
+  await command(cwd, 'commit', '--allow-empty', '-m', 'Feature work');
+  await command(cwd, 'push', 'origin', 'feature');
+  await command(cwd, 'checkout', 'main');
+  await command(cwd, 'merge', '--no-ff', 'feature', '-m', 'Merge feature');
+  await command(cwd, 'push', 'origin', 'main');
+  await command(cwd, 'fetch', 'origin');
+
+  await deleteBranch(cwd, 'feature');
+  await assert.rejects(command(cwd, 'rev-parse', '--verify', 'refs/heads/feature'));
+
+  await command(cwd, 'checkout', '-b', 'unmerged');
+  await command(cwd, 'commit', '--allow-empty', '-m', 'Unmerged work');
+  await command(cwd, 'checkout', 'main');
+  await assert.rejects(
+    deleteBranch(cwd, 'unmerged'),
+    /not merged into the current branch or any fetched remote branch/,
+  );
+  assert.ok(await command(cwd, 'rev-parse', '--verify', 'refs/heads/unmerged'));
+});
+
 test('hides the remote HEAD alias but keeps and deletes a real nested HEAD branch', async (t) => {
   const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-remote-head-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -209,7 +258,7 @@ test('hides the remote HEAD alias but keeps and deletes a real nested HEAD branc
   assert.ok(await command(remote, 'rev-parse', '--verify', 'refs/heads/main'));
 });
 
-test('checking out a remote uses a tracking branch and preserves its local history', async (t) => {
+test('checking out a remote uses its tracking branch and fast-forwards it to the remote tip', async (t) => {
   const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-checkout-remote-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const cwd = path.join(dir, 'local');
@@ -247,8 +296,21 @@ test('checking out a remote uses a tracking branch and preserves its local histo
   await command(peer, 'push');
   await command(cwd, 'fetch', 'origin');
   assert.notEqual(await command(cwd, 'rev-parse', 'origin/feature'), localHead);
+  const untracked = path.join(cwd, 'keep-me.txt');
+  await writeFile(untracked, 'preserve');
+  await assert.rejects(checkoutRemote(cwd, 'origin/feature'), /local changes/);
+  assert.equal(await command(cwd, 'branch', '--show-current'), 'main');
+  assert.equal(await command(cwd, 'rev-parse', 'feature'), localHead);
+  assert.equal(await command(cwd, 'status', '--porcelain'), '?? keep-me.txt');
+  await rm(untracked);
   assert.equal(await checkoutRemote(cwd, 'origin/feature'), 'feature');
-  assert.equal(await command(cwd, 'rev-parse', 'HEAD'), localHead);
+  assert.equal(await command(cwd, 'rev-parse', 'HEAD'), await command(cwd, 'rev-parse', 'origin/feature'));
+  assert.notEqual(await command(cwd, 'rev-parse', 'HEAD'), localHead);
+  assert.equal(await command(cwd, 'branch', '--show-current'), 'feature');
+  await command(cwd, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'Local only');
+  const localOnly = await command(cwd, 'rev-parse', 'HEAD');
+  await assert.rejects(checkoutRemote(cwd, 'origin/feature'), /local branch has commits that are not on the remote/);
+  assert.equal(await command(cwd, 'rev-parse', 'HEAD'), localOnly);
   assert.equal(await command(cwd, 'branch', '--show-current'), 'feature');
 
   await command(cwd, 'switch', 'main');
@@ -258,4 +320,34 @@ test('checking out a remote uses a tracking branch and preserves its local histo
   await command(cwd, 'branch', '--set-upstream-to=origin/main', 'conflict');
   await assert.rejects(checkoutRemote(cwd, 'origin/conflict'), /tracks a different remote branch/);
   assert.equal(await command(cwd, 'branch', '--show-current'), 'main');
+});
+
+test('Windows-incompatible tree names are detected before remote checkout', () => {
+  assert.deepEqual(
+    windowsIncompatiblePaths([
+      'assets/kit:bathroommirror.png',
+      'assets/normal.png',
+      'docs/trailing./file.txt',
+      'docs/CON.txt',
+    ]),
+    ['assets/kit:bathroommirror.png', 'docs/trailing./file.txt', 'docs/CON.txt'],
+  );
+});
+
+test('Windows reset preflight rejects an unsupported target tree without moving HEAD or the index', { skip: process.platform !== 'win32' }, async (t) => {
+  const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-reset-invalid-path-'));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+  await command('init', '--quiet', '--initial-branch=main');
+  await command('config', 'user.name', 'Test');
+  await command('config', 'user.email', 'test@example.com');
+  await command('commit', '--allow-empty', '--no-gpg-sign', '-m', 'Initial');
+  const originalHead = await command('rev-parse', 'HEAD');
+  const blob = await runWithInput(cwd, ['hash-object', '-w', '--stdin'], 'asset');
+  const tree = await runWithInput(cwd, ['mktree', '-z'], `100644 blob ${blob}\tkit:bathroom.png\0`);
+  const target = await command('commit-tree', tree, '-p', originalHead, '-m', 'Invalid Windows path');
+  const originalIndex = await command('write-tree');
+  await assert.rejects(reset(cwd, target, 'mixed'), /unsupported file names/);
+  assert.equal(await command('rev-parse', 'HEAD'), originalHead);
+  assert.equal(await command('write-tree'), originalIndex);
 });

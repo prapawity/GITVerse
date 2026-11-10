@@ -19,6 +19,7 @@ import { parseResolution } from './openai';
  */
 const TOKEN = 'ai.copilot.token';
 let cached: { token: string | null; client: CopilotClient } | null = null;
+let starting: { token: string | null; promise: Promise<CopilotClient> } | null = null;
 let login: { session: CopilotSession; flowId: string } | null = null;
 const sessions = new Map<number, { session: CopilotSession; hooks: Hooks | null; model?: string }>();
 
@@ -27,14 +28,35 @@ async function getClient(): Promise<CopilotClient> {
   if (cached && cached.token !== token) {
     await stopAll();
   }
+  if (starting) {
+    if (starting.token === token) return starting.promise;
+    await starting.promise.catch(() => {});
+    await stopAll();
+    return getClient();
+  }
   if (!cached) {
     const client = new CopilotClient({ ...(token ? { gitHubToken: token } : {}), logLevel: 'error' });
-    await client.start();
-    cached = { token, client };
+    const promise = client.start().then(() => {
+      cached = { token, client };
+      return client;
+    });
+    starting = { token, promise };
+    try {
+      await promise;
+    } catch (error) {
+      await client.stop().catch(() => {});
+      throw error;
+    } finally {
+      if (starting?.promise === promise) starting = null;
+    }
   }
+  if (!cached) throw new Error('Copilot runtime startup did not produce a client.');
   return cached.client;
 }
 async function stopAll() {
+  const pending = starting?.promise;
+  starting = null;
+  await pending?.catch(() => {});
   for (const s of sessions.values()) await s.session.disconnect().catch(() => {});
   sessions.clear();
   await cached?.client.stop().catch(() => {});
@@ -221,12 +243,19 @@ export async function copilotTurn(
 ): Promise<TurnResult> {
   const last = [...msgs].reverse().find((m) => m.role === 'user');
   if (!last || last.role !== 'user') return { ok: false, error: err('other', 'Nothing to send.') };
+  let holder: Awaited<ReturnType<typeof ensureSession>> | null = null;
   try {
-    const holder = await ensureSession(convId, model);
+    holder = await ensureSession(convId, model);
     const r = await run(holder, last.text, h);
     if ('aborted' in r) return { ok: false, aborted: true };
     return { ok: true, text: r.text, calls: [], stop: 'end', model }; // tools already ran inside the runtime
   } catch (e) {
+    // A failed stream (including "write after a stream was destroyed") leaves
+    // the SDK session unusable. Drop it so the next turn gets a fresh session.
+    if (!h.signal.aborted && holder && sessions.get(convId) === holder) {
+      sessions.delete(convId);
+      await holder.session.disconnect().catch(() => {});
+    }
     return h.signal.aborted ? { ok: false, aborted: true } : { ok: false, error: describe(e) };
   }
 }

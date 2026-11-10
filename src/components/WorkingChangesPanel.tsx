@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDownUp, Check, FilePen, Loader2, Minus, Plus, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ArrowDownUp,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FilePen,
+  Loader2,
+  Minus,
+  Plus,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
 import type { FileChangeCount, FileStatus } from '../shared/types';
@@ -11,6 +22,10 @@ const api = () => (window as any).gitApi;
 const isConflict = (f: FileStatus) => ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(f.index + f.worktree);
 const clean = (e: unknown) =>
   String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+const isStaleWorkingChangesError = (message: string) =>
+  /(?:no longer .*working changes|no longer untracked|no longer available|cannot be discarded)\. Refresh (?:the list|the working changes)\./i.test(
+    message,
+  );
 const EMPTY_DRAFT = { summary: '', description: '', amend: false, signoff: false };
 const SORT_MODES = [
   { id: 'az', label: 'A-Z' },
@@ -33,14 +48,24 @@ export function WorkingChangesPanel({
   const { repoPath, status, refs, operation, working, notify, openConflict, refresh, commitDrafts, setCommitDraft } =
     useRepo();
   const [pending, setPending] = useState(false);
+  const [collapsed, setCollapsed] = useState({ staged: false, unstaged: false });
   const [generating, setGenerating] = useState(false);
   const provider = useSettings((s) => s.aiProvider);
   const draft = repoPath ? (commitDrafts[repoPath] ?? EMPTY_DRAFT) : EMPTY_DRAFT;
   const { summary, description, amend } = draft;
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
+  useEffect(() => {
+    setDescriptionOpen(!!(repoPath && useRepo.getState().commitDrafts[repoPath]?.description));
+  }, [repoPath]);
   const updateDraft = (changes: Partial<typeof draft>) => {
     if (repoPath) setCommitDraft(repoPath, { ...draft, ...changes });
   };
   const [error, setError] = useState('');
+  const [staleErrorDismissed, setStaleErrorDismissed] = useState(false);
+  const reportError = (message: string) => {
+    setStaleErrorDismissed(false);
+    setError(message);
+  };
   const [sort, setSort] = useState<'az' | 'za' | 'most' | 'fewest'>('az');
   const sortMenu = useRef<HTMLDetailsElement>(null);
   const [sortOpen, setSortOpen] = useState(false);
@@ -188,8 +213,29 @@ export function WorkingChangesPanel({
         await onRefresh();
       }
     } catch (e) {
-      if (useRepo.getState().repoPath === cwd) setError(clean(e));
+      if (useRepo.getState().repoPath === cwd) reportError(clean(e));
       useRepo.getState().recordActivity('error', 'Discard failed', clean(e), cwd);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const refreshAfterStaleError = async () => {
+    if (!repoPath || pending) return;
+    const cwd = repoPath;
+    setPending(true);
+    setStaleErrorDismissed(true);
+    setError('');
+    try {
+      await onRefresh();
+      if (useRepo.getState().repoPath !== cwd) return;
+      setSelection(null);
+      if (selected) onClear();
+      // Clear after refresh too, so a render caused by updated repository
+      // status cannot leave the stale operation error visible.
+      setError('');
+    } catch (e) {
+      if (useRepo.getState().repoPath === cwd) reportError(clean(e));
     } finally {
       setPending(false);
     }
@@ -207,7 +253,7 @@ export function WorkingChangesPanel({
     try {
       await useRepo.getState().prefillAmendDraft(cwd);
     } catch (e) {
-      if (useRepo.getState().repoPath === cwd) setError(clean(e));
+      if (useRepo.getState().repoPath === cwd) reportError(clean(e));
     } finally {
       setPending(false);
     }
@@ -237,7 +283,7 @@ export function WorkingChangesPanel({
         await onRefresh();
       }
     } catch (e) {
-      setError(clean(e));
+      reportError(clean(e));
       useRepo.getState().recordActivity('error', `${action === 'stage' ? 'Stage' : 'Unstage'} failed`, clean(e), cwd);
     } finally {
       setPending(false);
@@ -283,7 +329,7 @@ export function WorkingChangesPanel({
       setCommitDraft(cwd, { ...latest, summary: first.trim(), description: rest.join('\n').trim() });
       useRepo.getState().recordActivity('success', 'AI generated a commit message', undefined, cwd);
     } catch (e) {
-      if (useRepo.getState().repoPath === cwd) setError(clean(e));
+      if (useRepo.getState().repoPath === cwd) reportError(clean(e));
     } finally {
       setGenerating(false);
     }
@@ -312,7 +358,7 @@ export function WorkingChangesPanel({
       }
       notify('success', amend ? 'Commit amended' : 'Commit created');
     } catch (e) {
-      setError(clean(e));
+      reportError(clean(e));
       useRepo.getState().recordActivity('error', 'Commit failed', clean(e), cwd);
     } finally {
       setPending(false);
@@ -322,16 +368,15 @@ export function WorkingChangesPanel({
   const group = (label: string, files: FileStatus[], area: 'staged' | 'unstaged') => (
     <section aria-label={`${label} files`}>
       <div className="flex items-center gap-2 border-b border-surface/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sub">
-        <span className="flex-1">
+        <button
+          type="button"
+          aria-expanded={!collapsed[area]}
+          onClick={() => setCollapsed((value) => ({ ...value, [area]: !value[area] }))}
+          className="flex min-w-0 flex-1 items-center gap-1 text-left hover:text-text"
+        >
+          {collapsed[area] ? <ChevronRight size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
           {label} · {files.length}
-          {selection?.repo === repoPath &&
-            selection.area === area &&
-            files.filter((file) => selectedPaths.includes(file.path)).length > 1 && (
-              <span className="ml-2 normal-case text-[#4cc2ff]">
-                {files.filter((file) => selectedPaths.includes(file.path)).length} selected
-              </span>
-            )}
-        </span>
+        </button>
         <button
           disabled={!files.length || busy}
           onClick={() => changeStage(area === 'staged' ? 'unstage' : 'stage', files)}
@@ -340,65 +385,99 @@ export function WorkingChangesPanel({
           {area === 'staged' ? 'Unstage all' : 'Stage all'}
         </button>
       </div>
-      {files.map((f) => {
-        const kind = area === 'unstaged' && f.index === '?' ? 'untracked' : area;
-        const code = kind === 'untracked' ? '?' : kind === 'staged' ? f.index : f.worktree;
-        const active = selected?.path === f.path && selected.area === kind;
-        const chosen = selection?.repo === repoPath && selection.area === area && selectedPaths.includes(f.path);
-        const discardFiles = discardSelection.some((file) => file.path === f.path) ? discardSelection : [f];
-        return (
-          <div
-            key={f.path}
-            className={`group flex items-center ${chosen ? 'bg-[#4cc2ff]/20' : active ? 'bg-surface/25' : 'hover:bg-surface/40'}`}
+      {!collapsed[area] && selection?.repo === repoPath && selection.area === area && selectedPaths.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#4cc2ff]/20 bg-[#4cc2ff]/10 px-4 py-2 text-xs">
+          <span className="mr-auto font-medium text-[#4cc2ff]">{selectedPaths.length} selected</span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              changeStage(
+                area === 'staged' ? 'unstage' : 'stage',
+                files.filter((file) => selectedPaths.includes(file.path)),
+              )
+            }
+            className="rounded border border-surface px-2 py-1 hover:bg-surface/70 disabled:opacity-40"
           >
+            {area === 'staged' ? 'Unstage selected' : 'Stage selected'}
+          </button>
+          {area === 'unstaged' && (
             <button
-              onClick={(event) => selectFile({ path: f.path, status: code, area: kind }, area, files, event)}
-              aria-pressed={chosen}
-              disabled={busy}
-              title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
-              className="flex min-h-[38px] min-w-0 flex-1 select-none items-center gap-2 px-4 text-left"
+              type="button"
+              disabled={busy || !!operation}
+              onClick={() => void discard(discardSelection)}
+              className="rounded border border-[#f38ba8]/40 px-2 py-1 text-[#f38ba8] hover:bg-[#f38ba8]/10 disabled:opacity-40"
             >
-              <span
-                className={`w-4 shrink-0 text-center font-mono text-xs font-semibold ${code === 'D' ? 'text-[#f38ba8]' : code === 'A' || code === '?' ? 'text-[#a6e3a1]' : 'text-[#fab387]'}`}
-              >
-                {code}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{f.path}</span>
-              {byChanges && changeCounts.has(f.path) && (
-                <span
-                  className="min-w-[28px] shrink-0 text-right font-mono text-[11px] text-sub"
-                  title="Added and deleted lines"
-                >
-                  {changeCounts.get(f.path)?.[area] ?? 'bin'}
-                </span>
-              )}
+              Discard selected
             </button>
-            {area === 'unstaged' && (
+          )}
+        </div>
+      )}
+      {!collapsed[area] &&
+        files.map((f) => {
+          const kind = area === 'unstaged' && f.index === '?' ? 'untracked' : area;
+          const code = kind === 'untracked' ? '?' : kind === 'staged' ? f.index : f.worktree;
+          const active = selected?.path === f.path && selected.area === kind;
+          const chosen = selection?.repo === repoPath && selection.area === area && selectedPaths.includes(f.path);
+          const parts = f.path.split('/');
+          const filename = parts.pop() || f.path;
+          const directory = parts.join('/');
+          return (
+            <div
+              key={f.path}
+              className={`group flex items-center ${chosen ? 'bg-[#4cc2ff]/20' : active ? 'bg-surface/25' : 'hover:bg-surface/40'}`}
+            >
               <button
-                disabled={busy || !!operation}
-                onClick={() => void discard(discardFiles)}
-                aria-label={
-                  discardFiles.length > 1 ? `Discard ${discardFiles.length} selected files` : `Discard ${f.path}`
-                }
-                title={discardFiles.length > 1 ? `Discard ${discardFiles.length} selected files` : `Discard ${f.path}`}
-                className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+                onClick={(event) => selectFile({ path: f.path, status: code, area: kind }, area, files, event)}
+                aria-pressed={chosen}
+                disabled={busy}
+                title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
+                className="flex min-h-[38px] min-w-0 flex-1 select-none items-center gap-2 px-4 text-left"
               >
-                <Trash2 size={15} aria-hidden />
+                <span
+                  className={`w-4 shrink-0 text-center font-mono text-xs font-semibold ${code === 'D' ? 'text-[#f38ba8]' : code === 'A' || code === '?' ? 'text-[#a6e3a1]' : 'text-[#fab387]'}`}
+                >
+                  {code}
+                </span>
+                <span className="min-w-0 flex-1 py-1">
+                  <span className="block truncate font-medium">{filename}</span>
+                  {directory && <span className="block truncate text-xs text-sub">{directory}/</span>}
+                </span>
+                {byChanges && changeCounts.has(f.path) && (
+                  <span
+                    className="min-w-[28px] shrink-0 text-right font-mono text-[11px] text-sub"
+                    title="Added and deleted lines"
+                  >
+                    {changeCounts.get(f.path)?.[area] ?? 'bin'}
+                  </span>
+                )}
               </button>
-            )}
-            <button
-              disabled={busy}
-              onClick={() => changeStage(area === 'staged' ? 'unstage' : 'stage', [f])}
-              aria-label={`${area === 'staged' ? 'Unstage' : 'Stage'} ${f.path}`}
-              title={area === 'staged' ? 'Unstage file' : 'Stage file'}
-              className="mr-2 rounded p-1.5 text-sub hover:bg-surface hover:text-text disabled:opacity-40"
-            >
-              {area === 'staged' ? <Minus size={15} /> : <Plus size={15} />}
-            </button>
-          </div>
-        );
-      })}
-      {!files.length && <p className="px-4 py-2 text-xs text-sub">No {label.toLowerCase()} files.</p>}
+              {area === 'unstaged' && (
+                <button
+                  disabled={busy || !!operation}
+                  onClick={() => void discard([f])}
+                  aria-label={`Discard ${f.path}`}
+                  title={`Discard ${f.path}`}
+                  className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+                >
+                  <Trash2 size={15} aria-hidden />
+                </button>
+              )}
+              <button
+                disabled={busy}
+                onClick={() => changeStage(area === 'staged' ? 'unstage' : 'stage', [f])}
+                aria-label={`${area === 'staged' ? 'Unstage' : 'Stage'} ${f.path}`}
+                title={area === 'staged' ? 'Unstage file' : 'Stage file'}
+                className="mr-2 rounded p-1.5 text-sub hover:bg-surface hover:text-text disabled:opacity-40"
+              >
+                {area === 'staged' ? <Minus size={15} /> : <Plus size={15} />}
+              </button>
+            </div>
+          );
+        })}
+      {!collapsed[area] && !files.length && (
+        <p className="px-4 py-2 text-xs text-sub">No {label.toLowerCase()} files.</p>
+      )}
     </section>
   );
   return (
@@ -549,10 +628,20 @@ export function WorkingChangesPanel({
         className="max-h-[65%] shrink-0 space-y-3 overflow-y-auto border-t border-surface p-4"
       >
         <div className="font-semibold">Commit</div>
-        {error && (
-          <p role="alert" className="max-h-24 overflow-auto whitespace-pre-wrap text-xs text-[#f38ba8]">
-            {error}
-          </p>
+        {error && !(staleErrorDismissed && isStaleWorkingChangesError(error)) && (
+          <div role="alert" className="space-y-2 text-xs text-[#f38ba8]">
+            <p className="max-h-24 overflow-auto whitespace-pre-wrap">{error}</p>
+            {isStaleWorkingChangesError(error) && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void refreshAfterStaleError()}
+                className="min-h-[36px] rounded-md border border-[#4cc2ff]/60 px-3 font-medium text-[#4cc2ff] hover:bg-[#4cc2ff]/10 disabled:opacity-50"
+              >
+                {pending ? 'Refreshing…' : 'Refresh working changes'}
+              </button>
+            )}
+          </div>
         )}
         {operation && (
           <p className="text-xs text-[#f9e2af]">Finish or abort the {operation.kind} using the conflict panel.</p>
@@ -599,18 +688,23 @@ export function WorkingChangesPanel({
             {summary.length}/72
           </span>
         </div>
-        <label className="sr-only" htmlFor="commit-description">
-          Commit description
-        </label>
-        <textarea
-          id="commit-description"
-          value={description}
-          disabled={busy}
-          onChange={(e) => updateDraft({ description: e.target.value })}
-          placeholder="Description (optional)"
-          rows={3}
-          className="w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
-        />
+        <details open={descriptionOpen} onToggle={(event) => setDescriptionOpen(event.currentTarget.open)}>
+          <summary className="cursor-pointer rounded py-1 text-sm text-sub hover:text-text">
+            Description (optional)
+          </summary>
+          <label className="sr-only" htmlFor="commit-description">
+            Commit description
+          </label>
+          <textarea
+            id="commit-description"
+            value={description}
+            disabled={busy}
+            onChange={(e) => updateDraft({ description: e.target.value })}
+            placeholder="Add more context…"
+            rows={3}
+            className="mt-2 w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
+          />
+        </details>
         <button
           type="submit"
           disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}

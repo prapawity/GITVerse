@@ -148,7 +148,7 @@ export function DialogHost() {
     };
     return (
       <Shell title={req.title} onCancel={() => done(false)}>
-        <p className="mb-4 text-sub">{req.message}</p>
+        <p className="mb-4 whitespace-pre-wrap break-words text-sub">{req.message}</p>
         <div className="flex justify-end gap-2">
           <button className={`${btn} hover:bg-surface/60`} onClick={() => done(false)}>
             Cancel

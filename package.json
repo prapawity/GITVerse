@@ -24,8 +24,9 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "security:audit": "npm audit --audit-level=high --registry=https://registry.npmjs.org",
-    "test": "tsx --test electron/updates.test.ts electron/repositoryScan.test.ts electron/git/history.test.ts electron/git/discard.test.ts electron/git/stash.test.ts src/store/repoStore.test.ts scripts/smoke-electron.test.cjs",
+    "test": "tsx --test electron/updates.test.ts electron/repositoryScan.test.ts electron/git/history.test.ts electron/git/discard.test.ts electron/git/stash.test.ts electron/git/reflog.test.ts src/store/repoStore.test.ts scripts/smoke-electron.test.cjs",
     "test:electron": "npm run build && node scripts/smoke-electron.cjs",
+    "test:terminal": "node scripts/terminal-pty-smoke.cjs",
     "dist": "npm run build && electron-builder --publish never"
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "electron-updater": "^6.8.11",
     "jose": "^6.2.15",
     "lucide-react": "^1.67.0",
+    "node-pty": "^1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-resizable-panels": "^2.1.0",

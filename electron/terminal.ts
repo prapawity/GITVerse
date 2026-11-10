@@ -1,6 +1,7 @@
 import { ipcMain, type WebContents } from 'electron';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 /**
  * Integrated terminal backend.
@@ -93,33 +94,64 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
   } as Record<string, string>;
   const shell = shellPath(customShell);
 
+  let ptyError = '';
   if (pty) {
-    const p = pty.spawn(shell, process.platform === 'win32' ? [] : ['-l'], {
-      name: 'xterm-256color',
-      cols,
-      rows,
-      cwd,
-      env,
-    });
-    p.onData((d: string) => send('term:data', d));
-    p.onExit(({ exitCode }: { exitCode: number }) => {
-      terms.delete(id);
-      send('term:exit', exitCode);
-    });
-    terms.set(id, { write: (d) => p.write(d), resize: (c, r) => p.resize(c, r), kill: () => p.kill() });
-    return id;
+    try {
+      const p = pty.spawn(shell, process.platform === 'win32' ? [] : ['-l'], {
+        name: 'xterm-256color', cols, rows, cwd, env,
+      });
+      p.onData((d: string) => send('term:data', d));
+      p.onExit(({ exitCode }: { exitCode: number }) => {
+        terms.delete(id);
+        send('term:exit', exitCode);
+      });
+      terms.set(id, { write: (d) => p.write(d), resize: (c, r) => p.resize(c, r), kill: () => p.kill() });
+      return id;
+    } catch (error) {
+      ptyError = error instanceof Error ? error.message : String(error);
+    }
   }
 
   if (process.platform === 'win32') {
-    // no PTY without node-pty on Windows: plain pipes still run commands, without line editing
+    // Pipes do not provide terminal echo or line editing. Buffer basic input locally.
     const p = spawn(shell, [], { cwd, env });
+    let line = '';
+    setImmediate(() =>
+      send(
+        'term:data',
+        `[GITVerse] ${ptyError ? `PTY unavailable: ${ptyError}\r\n` : ''}Basic terminal mode: input is visible; interactive and password prompts are not supported.\r\n`,
+      ),
+    );
     p.stdout.on('data', (d: Buffer) => send('term:data', d.toString('utf8')));
     p.stderr.on('data', (d: Buffer) => send('term:data', d.toString('utf8')));
     p.on('exit', (code) => {
       terms.delete(id);
       send('term:exit', code ?? 0);
     });
-    terms.set(id, { write: (d) => p.stdin.write(d), resize: () => {}, kill: () => p.kill() });
+    terms.set(id, {
+      write: (data) => {
+        // Escape sequences require a real PTY and must not become shell input.
+        // eslint-disable-next-line no-control-regex
+        data = data.replace(/\x1b\[[0-9;]*[A-Za-z~]/g, '').replace(/\r\n/g, '\r');
+        for (const char of data) {
+          if (char === '\r' || char === '\n') {
+            p.stdin.write(`${line}\r\n`);
+            line = '';
+            send('term:data', '\r\n');
+          } else if (char === '\x7f' || char === '\b') {
+            if (line) {
+              line = line.slice(0, -1);
+              send('term:data', '\b \b');
+            }
+          } else if (char >= ' ' && char !== '\x7f') {
+            line += char;
+            send('term:data', char);
+          }
+        }
+      },
+      resize: () => {},
+      kill: () => p.kill(),
+    });
     return id;
   }
 
@@ -147,7 +179,7 @@ export function registerTerminal() {
   ipcMain.handle('term:spawn', (e, cwd: string, cols: number, rows: number, shell?: string) =>
     start(
       e.sender,
-      cwd && existsSync(cwd) ? cwd : process.env.HOME || '/',
+      cwd && existsSync(cwd) ? cwd : homedir(),
       Math.max(20, cols | 0),
       Math.max(5, rows | 0),
       shell,

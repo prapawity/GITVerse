@@ -70,7 +70,9 @@ export function LaunchScreen({
         </p>
         {children && <div className="launch-actions">{children}</div>}
       </div>
-      <small className="launch-credit">Nebula: NASA / ESA / STScI</small>
+      <small className="launch-credit">
+        Orion Nebula: NASA, ESA, M. Robberto (STScI/ESA), Hubble Space Telescope Orion Treasury Project Team
+      </small>
     </section>
   );
 }

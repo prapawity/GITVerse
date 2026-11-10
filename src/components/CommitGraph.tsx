@@ -53,6 +53,7 @@ interface Props {
   onSelectWip: () => void;
   navigate?: { hash: string; id: number } | null;
   onLocateCurrent?: () => void;
+  upstream?: { name: string; ahead: number; behind: number; gone: boolean };
 }
 
 const matches = (r: GraphRow, q: string) => {
@@ -127,6 +128,7 @@ export function CommitGraph({
   onSelectWip,
   navigate,
   onLocateCurrent,
+  upstream,
 }: Props) {
   const light = useSettings((s) => s.theme === 'light');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -134,6 +136,8 @@ export function CommitGraph({
   const anchor = useRef<string | null>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [hover, setHover] = useState<number | null>(null);
+  const [keyboardRow, setKeyboardRow] = useState<number | null>(null);
+  const [graphFocused, setGraphFocused] = useState(false);
   const [hoverX, setHoverX] = useState(0);
   const [hoveredLane, setHoveredLane] = useState<{ layout: GraphLayout; color: number } | null>(null);
   const highlightedLane = hoveredLane?.layout === layout ? hoveredLane.color : null;
@@ -149,10 +153,10 @@ export function CommitGraph({
   const wipOffset = wipRows * LANE_W;
   const totalRows = rows.length + wipRows;
   // GitKraken keeps the graph column a fixed (user-resizable) width and lets wide histories scroll sideways
-  const [colW, setColW] = useState(240);
+  const [colW, setColW] = useState<number | null>(null);
   const [gScroll, setGScroll] = useState(0);
   const naturalW = PAD * 2 + Math.max(2, layout.maxLanes) * LANE_W + wipOffset;
-  const graphW = colW;
+  const graphW = colW ?? Math.max(GRAPH_MIN, Math.min(naturalW, Math.max(GRAPH_MIN, size.w - REF_W - 240)));
   const maxGScroll = Math.max(0, naturalW - graphW);
   const gs = Math.min(gScroll, maxGScroll);
   const gx = (lane: number) => REF_W + PAD + wipOffset + lane * LANE_W + LANE_W / 2 - gs;
@@ -228,6 +232,11 @@ export function CommitGraph({
       ctx.font = FONT;
       ctx.fillStyle = light ? '#9b5a00' : '#e3ad62';
       ctx.fillText(`${changeCount} changed · ${stagedCount} staged`, msgX + 64, top + ROW_H / 2);
+      if (graphFocused && keyboardRow === -1) {
+        ctx.strokeStyle = light ? '#006f9e' : '#8fe8ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, top + 1, Math.max(0, size.w - 2), ROW_H - 2);
+      }
     }
 
     // pass 1: row highlight, node→message band, date-group separators
@@ -237,9 +246,18 @@ export function CommitGraph({
       const cx = gx(showLines ? row.col : 0);
       const lane = col(row.color, light);
       const selected = selectedHashes.includes(row.commit.hash) || row.commit.hash === selectedHash;
-      if (selected || i === hover) {
-        ctx.fillStyle = selected ? 'rgba(79,193,233,0.14)' : 'rgba(255,255,255,0.04)';
+      if (selected || i === hover || row.commit.hash === headHash) {
+        ctx.fillStyle = selected
+          ? 'rgba(79,193,233,0.18)'
+          : row.commit.hash === headHash
+            ? 'rgba(79,193,233,0.09)'
+            : 'rgba(255,255,255,0.04)';
         ctx.fillRect(0, top, size.w, ROW_H);
+      }
+      if (graphFocused && keyboardRow === i) {
+        ctx.strokeStyle = light ? '#006f9e' : '#8fe8ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, top + 1, Math.max(0, size.w - 2), ROW_H - 2);
       }
       // band from the node across to the message column, ending in a lane-coloured bar
       const bx = clampX(cx);
@@ -448,10 +466,21 @@ export function CommitGraph({
       }
       ctx.restore();
 
-      // message: subject, then dim body preview (GitKraken shows this for merges)
+      if (c.hash === headHash && cx >= gL && cx <= gR) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, mid, 12, 0, Math.PI * 2);
+        ctx.strokeStyle = light ? '#0077a3' : '#9cefff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // message: subject, then dim body preview
       ctx.font = FONT;
       const subjW = ctx.measureText(c.subject).width;
-      const total = c.body ? subjW + 24 + ctx.measureText(c.body).width : subjW;
+      const metadata = `${c.author} · ${relTime(c.date)}`;
+      const total = subjW + 24 + ctx.measureText(metadata).width + (c.hash === headHash ? 44 : 0);
       if (total > maxMsgW.current + 1) {
         maxMsgW.current = total;
         grew = true;
@@ -461,11 +490,16 @@ export function CommitGraph({
       ctx.rect(msgX, top, size.w - msgX, ROW_H); // clip so scrolled text never bleeds into the graph
       ctx.clip();
       ctx.fillStyle = light ? '#1d2939' : '#e8eef6';
-      ctx.fillText(c.subject, msgX - ms, mid + 0.5);
-      if (c.body) {
-        ctx.fillStyle = light ? '#586b81' : '#8b96a8';
-        ctx.fillText(c.body, msgX - ms + subjW + 24, mid + 0.5);
+      const prefix = c.hash === headHash ? 'HEAD  ' : '';
+      if (prefix) {
+        ctx.fillStyle = light ? '#006b91' : '#8fe8ff';
+        ctx.fillText(prefix, msgX - ms, mid + 0.5);
+        ctx.fillStyle = light ? '#1d2939' : '#e8eef6';
       }
+      const prefixW = ctx.measureText(prefix).width;
+      ctx.fillText(c.subject, msgX - ms + prefixW, mid + 0.5);
+      ctx.fillStyle = light ? '#586b81' : '#a2afbf';
+      ctx.fillText(metadata, msgX - ms + prefixW + subjW + 24, mid + 0.5);
       ctx.restore();
 
       // date badge on the last row of each relative-date bucket
@@ -490,6 +524,8 @@ export function CommitGraph({
     selectedHash,
     selectedHashes,
     hover,
+    keyboardRow,
+    graphFocused,
     showLines,
     graphW,
     msgX,
@@ -554,7 +590,7 @@ export function CommitGraph({
             className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-[#4cc2ff]/60"
             onMouseDown={(e) => {
               const x0 = e.clientX,
-                w0 = colW;
+                w0 = graphW;
               const move = (ev: MouseEvent) =>
                 setColW(Math.max(GRAPH_MIN, Math.min(size.w - REF_W - 200, w0 + ev.clientX - x0)));
               const up = () => {
@@ -568,11 +604,103 @@ export function CommitGraph({
             title="Drag to resize · double-click to fit all lanes"
           />
         </div>
-        <div className={headCls + ' flex-1'}>Commit message</div>
+        <div className={headCls + ' min-w-0 flex-1 justify-between gap-2'}>
+          <span>Commit message</span>
+          {upstream && (
+            <span
+              className="truncate normal-case tracking-normal"
+              title={
+                upstream.gone
+                  ? `Upstream ${upstream.name} is unavailable`
+                  : `Compared with ${upstream.name}: ${upstream.ahead} ahead, ${upstream.behind} behind`
+              }
+            >
+              {upstream.gone ? `${upstream.name} · gone` : `${upstream.name}  ↑${upstream.ahead} ↓${upstream.behind}`}
+            </span>
+          )}
+        </div>
       </div>
       <div
         ref={scrollRef}
+        role="region"
+        aria-label="Commit history. Use arrow keys to navigate, Enter to open details, and Shift F10 for actions."
+        aria-describedby="graph-keyboard-description"
+        tabIndex={0}
         className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+        onFocus={(event) => {
+          if (event.target !== event.currentTarget) return;
+          setGraphFocused(true);
+          const selectedIndex = rows.findIndex((row) => row.commit.hash === selectedHash);
+          const visibleStart = Math.max(-wipRows, Math.floor(event.currentTarget.scrollTop / ROW_H) - wipRows);
+          const next =
+            keyboardRow !== null && keyboardRow >= -wipRows && keyboardRow < rows.length
+              ? keyboardRow
+              : selectedIndex >= 0
+                ? selectedIndex
+                : rows.length || wipRows
+                  ? visibleStart
+                  : null;
+          if (next !== null) {
+            const top = (next + wipRows) * ROW_H;
+            if (
+              top < event.currentTarget.scrollTop ||
+              top + ROW_H > event.currentTarget.scrollTop + event.currentTarget.clientHeight
+            )
+              event.currentTarget.scrollTop = top;
+          }
+          setKeyboardRow(next);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setGraphFocused(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || keyboardRow === null) return;
+          const scrollToRow = (index: number) => {
+            const el = scrollRef.current;
+            if (!el) return;
+            const top = (index + wipRows) * ROW_H;
+            if (top < el.scrollTop) el.scrollTop = top;
+            else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight;
+          };
+          if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            const next =
+              event.key === 'Home'
+                ? -wipRows
+                : event.key === 'End'
+                  ? rows.length - 1
+                  : Math.max(-wipRows, Math.min(rows.length - 1, keyboardRow + (event.key === 'ArrowDown' ? 1 : -1)));
+            if (next >= -wipRows && next < rows.length) {
+              setKeyboardRow(next);
+              scrollToRow(next);
+            }
+          } else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            if (keyboardRow === -1) onSelectWip();
+            else if (rows[keyboardRow]) {
+              const hash = rows[keyboardRow].commit.hash;
+              anchor.current = hash;
+              onSelect(hash, [hash]);
+            }
+          } else if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
+            if (keyboardRow < 0 || !rows[keyboardRow] || rows[keyboardRow].commit.stashId) return;
+            event.preventDefault();
+            const hash = rows[keyboardRow].commit.hash;
+            if (!selectedHashes.includes(hash)) onSelect(hash, [hash]);
+            const bounds = event.currentTarget.getBoundingClientRect();
+            onContextMenu?.(
+              hash,
+              bounds.left + Math.min(bounds.width - 8, msgX),
+              Math.max(
+                bounds.top,
+                Math.min(
+                  bounds.bottom - 8,
+                  bounds.top + (keyboardRow + wipRows) * ROW_H - event.currentTarget.scrollTop + ROW_H,
+                ),
+              ),
+            );
+          }
+        }}
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
         onWheel={(e) => {
           const dx = e.shiftKey ? e.deltaY : e.deltaX;
@@ -600,11 +728,13 @@ export function CommitGraph({
         onClick={(e) => {
           const i = rowAt(e);
           if (i === -1) {
+            setKeyboardRow(-1);
             anchor.current = null;
             onSelectWip();
             return;
           }
           if (i === null) return;
+          setKeyboardRow(i);
           const hash = rows[i].commit.hash;
           if (rows[i].commit.stashId) {
             anchor.current = hash;
@@ -645,6 +775,13 @@ export function CommitGraph({
           onContextMenu?.(hash, e.clientX, e.clientY);
         }}
       >
+        <div id="graph-keyboard-description" className="sr-only" aria-live="polite">
+          {graphFocused && keyboardRow === -1
+            ? `Local changes, ${changeCount} files, ${stagedCount} staged`
+            : graphFocused && keyboardRow !== null && rows[keyboardRow]
+              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${relTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, ${rows[keyboardRow].commit.stashId}` : ''}`
+              : ''}
+        </div>
         <div style={{ height: totalRows * ROW_H }} />
         {rows.map(
           (row, index) =>

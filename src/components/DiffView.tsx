@@ -210,6 +210,8 @@ export function DiffView({
   );
 
   const parsed = useMemo(() => (diff?.data == null ? null : parseDiff(diff.data)), [diff]);
+  const staleWorkingFile =
+    !!area && /This file is no longer (?:untracked|in the working changes|available)/i.test(diff?.error ?? '');
   const canDiscardFile = (area === 'unstaged' || area === 'untracked') && !!onRefresh;
   const canDiscardHunks =
     area === 'unstaged' &&
@@ -218,6 +220,34 @@ export function DiffView({
     !/^(?:new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|Binary files|GIT binary patch)/m.test(
       diff?.data ?? '',
     );
+  const canStageHunks =
+    (area === 'unstaged' || area === 'staged') &&
+    !!onRefresh &&
+    !parsed?.binary &&
+    !/^(?:new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|Binary files|GIT binary patch)/m.test(
+      diff?.data ?? '',
+    );
+  const stageHunk = async (hunk: number) => {
+    if (!canStageHunks || !area || discarding || working || operation || diff?.data == null) return;
+    setDiscarding(true);
+    setDiscardError('');
+    try {
+      await api().stageWorkingHunk(repoPath, file.path, area, diff.data, hunk);
+      if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
+        setDiscardRevision((value) => value + 1);
+        await onRefresh?.();
+      }
+    } catch (e) {
+      if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
+        setDiscardError(
+          String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, ''),
+        );
+        setDiscardRevision((value) => value + 1);
+      }
+    } finally {
+      setDiscarding(false);
+    }
+  };
   const discard = async (hunk?: number) => {
     if (!canDiscardFile || discarding || working || operation || diff?.data == null) return;
     const snapshot = diff.data;
@@ -313,14 +343,14 @@ export function DiffView({
 
   return (
     <section className="flex h-full min-w-0 flex-col bg-[#1b1f27]" aria-label="File changes">
-      <div className="flex min-h-[48px] items-center gap-2 border-b border-surface bg-mantle px-4">
+      <div className="glass-detail-header flex min-h-[56px] items-center gap-2 border-b border-surface bg-mantle px-4">
         <FilePen size={15} className="shrink-0 text-[#fab387]" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-[15px]" title={file.path}>
-          <span className="text-sub">{file.path.slice(0, i + 1)}</span>
-          <span className="font-medium">{file.path.slice(i + 1)}</span>
+        <span className="min-w-0 flex-1 py-1" title={file.path}>
+          <span className="block truncate text-[15px] font-semibold">{file.path.slice(i + 1)}</span>
+          {i >= 0 && <span className="block truncate text-xs text-sub">{file.path.slice(0, i + 1)}</span>}
         </span>
         <span className="text-[12px] text-sub">UTF-8</span>
-        <span className="font-mono text-[12px] text-sub">
+        <span className="rounded-md border border-surface bg-crust/50 px-2 py-1 font-mono text-[12px] text-sub">
           {area ?? (readOnlySnapshot ? 'stash' : hash.slice(0, 7))}
         </span>
         {canDiscardFile && (
@@ -344,8 +374,10 @@ export function DiffView({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-surface/60 px-4 py-2">
-        <span className="text-[12px] italic text-sub">{area ? 'Local changes' : 'read-only'}</span>
+      <div className="glass-detail-tools flex flex-wrap items-center gap-3 border-b border-surface/60 px-4 py-2">
+        <span className="text-[12px] font-medium text-sub">
+          {area ? 'Local changes' : readOnlySnapshot ? 'Stash snapshot · read-only' : 'Commit · read-only'}
+        </span>
         <div className="mx-auto flex items-center gap-3">
           {!area && (
             <div role="group" aria-label="View" className={grp}>
@@ -422,7 +454,30 @@ export function DiffView({
         <div className="min-h-0 min-w-0 flex-1 overflow-auto font-mono text-[13px] leading-[22px]">
           {err(discardError)}
           {mode === 'diff' && !diff && <CodeSkeleton label="Loading changes…" />}
-          {mode === 'diff' && err(diff?.error)}
+          {mode === 'diff' && staleWorkingFile ? (
+            <div role="alert" className="m-4 rounded-md border border-[#f9e2af]/40 bg-[#f9e2af]/10 p-4 font-sans">
+              <p className="text-sm font-medium text-[#f9e2af]">This change has moved since you opened it.</p>
+              <p className="mt-1 text-sm text-sub">
+                Refresh the working changes to see its current staged or unstaged status.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => void onRefresh?.()}
+                  className="min-h-[40px] rounded-md bg-[#4cc2ff] px-3 text-sm font-medium text-crust hover:brightness-110"
+                >
+                  Refresh changes
+                </button>
+                <button
+                  onClick={onClose}
+                  className="min-h-[40px] rounded-md border border-surface px-3 text-sm hover:bg-surface/60"
+                >
+                  Close diff
+                </button>
+              </div>
+            </div>
+          ) : (
+            mode === 'diff' && err(diff?.error)
+          )}
           {mode === 'diff' && parsed?.binary && canPreviewMedia && (
             <MediaPreview path={file.path} loadAfter={loadAfterBlob} loadBefore={loadBeforeBlob} deps={key} />
           )}
@@ -437,6 +492,17 @@ export function DiffView({
               <section key={hi} className="mb-3 min-w-0">
                 <div className="sticky top-0 z-10 flex min-h-[32px] items-center gap-3 border-y border-surface bg-[#232a35] px-4 text-[12px] text-[#8b96a8]">
                   <span className="min-w-0 flex-1 truncate">{h.header}</span>
+                  {canStageHunks && (
+                    <button
+                      type="button"
+                      onClick={() => void stageHunk(hi)}
+                      disabled={discarding || !!working || !!operation}
+                      aria-label={`${area === 'staged' ? 'Unstage' : 'Stage'} hunk ${hi + 1}`}
+                      className="shrink-0 rounded border border-[#4cc2ff]/40 px-2 py-1 font-sans text-[#a9e5ff] hover:bg-[#4cc2ff]/15 disabled:opacity-40"
+                    >
+                      {area === 'staged' ? 'Unstage hunk' : 'Stage hunk'}
+                    </button>
+                  )}
                   {canDiscardHunks && (
                     <button
                       onClick={() => void discard(hi)}

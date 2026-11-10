@@ -76,7 +76,33 @@ export function ConflictPanel() {
       </>
     );
 
-  const markAll = () => op.files.forEach((f) => exec('resolveFile', f, 'mark'));
+  const markAll = async () => {
+    if (
+      !(await askConfirm(
+        'Mark all resolved?',
+        `Stage all ${left} conflicted files as they are now? Review each file first; unresolved conflict markers may remain.`,
+        { label: 'Mark all resolved', danger: true },
+      ))
+    )
+      return;
+    for (const f of op.files) {
+      const current = useRepo.getState();
+      if (
+        current.repoPath !== repoPath ||
+        current.operation?.kind !== op.kind ||
+        !current.operation.files.includes(f)
+      ) {
+        current.notify(
+          'warning',
+          'Mark all stopped',
+          'The repository or conflict list changed. Review the remaining files.',
+        );
+        break;
+      }
+      await exec('resolveFile', f, 'mark');
+      if (useRepo.getState().operation?.files.includes(f)) break;
+    }
+  };
   const abort = async () => {
     if (
       await askConfirm(
@@ -115,6 +141,16 @@ export function ConflictPanel() {
         {headline}
         {op.step && <div className="text-[12px] text-sub">commit {op.step.replace('/', ' of ')}</div>}
       </div>
+      <div role="status" className="mx-4 mt-3 rounded-lg border border-surface bg-crust/50 px-3 py-2 text-sm">
+        <div className="font-medium">
+          {left ? `${left} file${left === 1 ? '' : 's'} still need resolution` : 'All conflicts resolved'}
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-sub">
+          {left
+            ? 'Open each conflicted file, resolve it, then mark it resolved.'
+            : `Review the staged files, then ${op.kind === 'merge' ? 'commit the merge' : `continue the ${name.toLowerCase()}`}.`}
+        </p>
+      </div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-auto">
         <Section
@@ -123,7 +159,7 @@ export function ConflictPanel() {
           action={
             left > 0 && (
               <button
-                onClick={markAll}
+                onClick={() => void markAll()}
                 disabled={busy}
                 title="Stage every conflicted file as it is now"
                 className="min-h-[30px] rounded border border-[#f5a623]/70 px-2.5 text-[13px] text-[#f5c26b] hover:bg-[#f5a623]/15 disabled:opacity-40"
@@ -166,8 +202,9 @@ export function ConflictPanel() {
           })}
         </Section>
 
-        <Section title="Resolved Files" count={op.resolved.length}>
-          {!op.resolved.length && <div className="px-6 py-1 text-[13px] text-sub">Files you resolve appear here.</div>}
+        <Section title="Staged Files" count={op.resolved.length}>
+          <p className="px-6 pb-1 text-xs text-sub">Includes all staged files in this operation.</p>
+          {!op.resolved.length && <div className="px-6 py-1 text-[13px] text-sub">Files you stage appear here.</div>}
           {op.resolved.map((f) => {
             const [dir, base] = split(f.path);
             const I = f.status === 'A' ? FilePlus : f.status === 'D' ? FileMinus : FilePen;
