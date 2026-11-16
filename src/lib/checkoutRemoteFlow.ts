@@ -1,7 +1,8 @@
 import { askConfirm } from '../components/Dialogs';
 import { useRepo } from '../store/repoStore';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 
 /** Offer a sparse checkout only when a remote tree has paths Windows cannot materialize. */
 export async function checkoutRemoteWithSparseRecovery(ref: string) {

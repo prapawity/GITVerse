@@ -4,8 +4,9 @@ import { askConfirm, askFlow, askText } from './Dialogs';
 import { useRepo } from '../store/repoStore';
 import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 import { groupRefs } from '../lib/refGroups';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 
 /** git@host:o/r.git | https://[user@]host/o/r.git  ->  https://host/o/r */
 export function webUrl(remote: string): string | null {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import type { AppUpdateCheck } from '../shared/updates';
 import { ReleasePicker } from './ReleasePicker';
+import { desktopApi } from '../platform/api';
 
 export function UpdateNotice({
   update,
@@ -18,12 +19,14 @@ export function UpdateNotice({
   const [error, setError] = useState('');
   const [download, setDownload] = useState<{ state: string; percent?: number } | null>(null);
   const [manualInstall, setManualInstall] = useState(false);
-  useEffect(() => (window as any).gitApi.updates.onStatus(setDownload), []);
+  useEffect(() => desktopApi().updates.onStatus(setDownload), []);
   useEffect(() => {
     let active = true;
-    (window as any).gitApi.updates.environment().then((environment: { manualInstall?: boolean }) => {
-      if (active) setManualInstall(!!environment.manualInstall);
-    });
+    desktopApi()
+      .updates.environment()
+      .then((environment: { manualInstall?: boolean }) => {
+        if (active) setManualInstall(!!environment.manualInstall);
+      });
     return () => {
       active = false;
     };
@@ -92,7 +95,7 @@ export function UpdateNotice({
             onClick={async () => {
               if (download?.state === 'downloaded') {
                 try {
-                  await (window as any).gitApi.updates.install();
+                  await desktopApi().updates.install();
                 } catch (reason) {
                   setError(String((reason as Error)?.message ?? reason));
                 }
@@ -101,7 +104,7 @@ export function UpdateNotice({
               setOpening(true);
               setError('');
               try {
-                await (window as any).gitApi.updates.download(update.version);
+                await desktopApi().updates.download(update.version);
               } catch (reason) {
                 setDownload(null);
                 setError(String((reason as Error)?.message ?? reason));

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { UserRound } from 'lucide-react';
 import { useSettings } from '../store/settingsStore';
 import { useRepo } from '../store/repoStore';
+import { desktopApi } from '../platform/api';
 
 export function ProfilePicker({ onManage }: { onManage: () => void }) {
   const profiles = useSettings((s) => s.sharedIdentityProfiles);
@@ -17,9 +18,7 @@ export function ProfilePicker({ onManage }: { onManage: () => void }) {
     if (id && !profile) return;
     setBusy(true);
     try {
-      await (window as any).gitApi.setActiveIdentity(
-        profile ? { name: profile.authorName, email: profile.email } : null,
-      );
+      await desktopApi().setActiveIdentity(profile ? { name: profile.authorName, email: profile.email } : null);
       selectProfile(id);
       if (profile)
         useRepo.getState().notify('success', `Commit identity set to ${profile.authorName} <${profile.email}>`);

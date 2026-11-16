@@ -16,9 +16,10 @@ import { askConfirm } from './Dialogs';
 import type { FileChangeCount, FileStatus } from '../shared/types';
 import { useSettings } from '../store/settingsStore';
 import { providerLabel } from '../shared/aiTypes';
+import { desktopApi } from '../platform/api';
 
 export type WorkingFile = { path: string; status: string; area: 'staged' | 'unstaged' | 'untracked' };
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 const isConflict = (f: FileStatus) => ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(f.index + f.worktree);
 const clean = (e: unknown) =>
   String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');

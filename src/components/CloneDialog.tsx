@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 text-sm outline-none focus:border-[#4cc2ff]';
 
 export function CloneDialog({ onClose }: { onClose: () => void }) {

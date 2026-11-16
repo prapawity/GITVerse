@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2, Upload } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { useSettings } from '../store/settingsStore';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]';
 type Info = { branch: string; remotes: string[]; remote: string; target: string; remoteHash: string | null };
 

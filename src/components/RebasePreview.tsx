@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
+import { desktopApi } from '../platform/api';
 
 type Commit = { hash: string; subject: string };
 type Plan = { branch: string; head: string; base: string; upstream: string; commits: Commit[] };
@@ -14,7 +15,7 @@ export function RebasePreview({ repo, base, onClose }: { repo: string; base: str
   useEffect(() => {
     dialog.current?.showModal();
     let active = true;
-    (window as any).gitApi.rebasePreview(repo, base).then((result: Plan) => {
+    desktopApi().rebasePreview(repo, base).then((result: Plan) => {
       if (!active) return;
       setPlan(result);
       setEntries(result.commits.map((commit) => ({ ...commit, action: 'pick' })));

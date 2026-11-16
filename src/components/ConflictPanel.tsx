@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, FileMinus, FilePen, FilePlus } from 'lucide-react';
 import { askConfirm } from './Dialogs';
 import { useRepo } from '../store/repoStore';
+import { desktopApi } from '../platform/api';
 
 const NAME = { rebase: 'Rebase', merge: 'Merge', 'cherry-pick': 'Cherry-pick', revert: 'Revert' } as const;
 const Chip = ({ children, tone }: { children: React.ReactNode; tone: 'branch' | 'commit' }) => (
@@ -125,7 +126,7 @@ export function ConflictPanel() {
     exec('opContinue', op.kind, message.trim() && message.trim() !== original ? message.trim() : undefined);
   const openExternal = async (f: string) => {
     try {
-      await (window as any).gitApi.openFile(repoPath, f);
+      await desktopApi().openFile(repoPath, f);
     } catch (e: any) {
       toast(e.message);
     }

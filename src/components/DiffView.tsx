@@ -8,6 +8,7 @@ import type { ChangedFile } from './DetailsPanel';
 import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
 import { isJsonFile, isSvgFile, JsonPreview, MediaPreview, mediaType } from './MediaPreview';
+import { desktopApi } from '../platform/api';
 
 const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-[#f38ba8]/[0.14]', ctx: '' } as const;
 const SIGN = { add: '+', del: '−', ctx: '' } as const;
@@ -57,7 +58,7 @@ const Code = ({ text, change }: { text: string; change?: [number, number] }) => 
   );
 };
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 const useLoad = <T,>(enabled: boolean, load: () => Promise<T>, deps: unknown[]): Res<T> => {
   const [r, setR] = useState<Res<T>>(null);
   useEffect(() => {

@@ -52,6 +52,7 @@ import { RebasePreview } from './components/RebasePreview';
 import { WorkspaceInspectionPanel } from './components/WorkspaceInspectionPanel';
 import type { ScanProgress, ScanResult } from './shared/repositoryScan';
 import type { StashRef } from './shared/types';
+import { platformApi, desktopApi } from './platform/api';
 
 let restored = false;
 const shortcutModifier = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
@@ -338,7 +339,7 @@ export default function App() {
     const cwd = repoPath;
     if (!cwd) return;
     try {
-      const hash: string = await (window as any).gitApi.tagCommit(cwd, name);
+      const hash: string = await desktopApi().tagCommit(cwd, name);
       if (useRepo.getState().repoPath === cwd) await navigateToHash(hash);
     } catch (error: any) {
       useRepo
@@ -385,7 +386,7 @@ export default function App() {
 
   const importFolders = async (paths: string[]) => {
     if (scanRequest.current) return;
-    const api = (window as any).gitApi;
+    const api = desktopApi();
     if (!paths.length) {
       useRepo
         .getState()
@@ -468,13 +469,13 @@ export default function App() {
     if (!request || request.cancelled) return;
     request.cancelled = true;
     setCancellingScan(true);
-    (window as any).gitApi.cancelScan(request.id);
+    desktopApi().cancelScan(request.id);
   };
   const dropFolders = (event: React.DragEvent) => {
     event.preventDefault();
     dragDepth.current = 0;
     setDraggingFolders(false);
-    const api = (window as any).gitApi;
+    const api = platformApi();
     const paths = Array.from(event.dataTransfer.files)
       .map((file) => api?.pathForFile?.(file))
       .filter(Boolean) as string[];
@@ -482,7 +483,7 @@ export default function App() {
   };
   const chooseFolder = async () => {
     try {
-      const api = (window as any).gitApi;
+      const api = platformApi();
       if (typeof api?.openRepoDialog !== 'function') {
         useRepo
           .getState()

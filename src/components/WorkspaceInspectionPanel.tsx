@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
+import { platformApi } from '../platform/api';
 
 type Inspection = {
   remotes: { name: string; fetch: string[]; push: string[] }[];
@@ -16,7 +17,7 @@ export function WorkspaceInspectionPanel({ repoPath, onClose }: { repoPath: stri
     setLoading(true);
     setResult(null);
     setError('');
-    const api = (window as any).gitApi;
+    const api = platformApi();
     if (!api?.inspectWorkspace) {
       setError('Workspace inspection is available in the desktop app.');
       setLoading(false);

@@ -28,6 +28,7 @@ import {
 import { useRepo } from '../store/repoStore';
 import { ProfileSettings } from './ProfileSettings';
 import { ApplicationAbout } from './ApplicationAbout';
+import { desktopApi, platformApi } from '../platform/api';
 
 export type Section = 'general' | 'appearance' | 'terminal' | 'conflicts' | 'ai' | 'gitflow' | 'profiles' | 'about';
 
@@ -212,7 +213,7 @@ function ModelPick({
   provider: 'openai' | 'copilot';
   enabled: boolean;
 }) {
-  const ai = (window as any).gitApi?.ai;
+  const ai = platformApi()?.ai;
   const [list, setList] = useState<string[] | null>(null);
   const [err, setErr] = useState('');
   const load = () => {
@@ -258,7 +259,7 @@ function ModelPick({
 
 /** Which AI answers the chat and "Auto-resolve with AI", and how each one is connected — always with the user's own account. */
 function AiSettings() {
-  const ai = (window as any).gitApi?.ai;
+  const ai = platformApi()?.ai;
   const st = useSettings();
   const [status, setStatus] = useState<any>(null);
   const [cop, setCop] = useState<any>(null);
@@ -295,7 +296,7 @@ function AiSettings() {
     setCopSigning(true);
     say('copilot', null);
     try {
-      let response = await ai.copilotBeginLogin();
+      let response = await desktopApi().ai.copilotBeginLogin();
       while (copLoginActive.current) {
         if (!response.ok) throw new Error(response.message);
         const step = response.value;
@@ -312,19 +313,19 @@ function AiSettings() {
         if (step.kind === 'input-required')
           throw new Error('This GitHub account requires an additional input. Use the terminal sign-in below.');
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        if (copLoginActive.current) response = await ai.copilotAdvanceLogin();
+        if (copLoginActive.current) response = await desktopApi().ai.copilotAdvanceLogin();
       }
     } catch (error) {
       if (copLoginActive.current) say('copilot', { ok: false, text: clean(error) });
     } finally {
       copLoginActive.current = false;
-      await ai.copilotCancelLogin();
+      await desktopApi().ai.copilotCancelLogin();
       setCopSigning(false);
     }
   };
 
   const setKey = (provider: 'claude' | 'openai' | 'copilot', k: string) => async (value: string | null) => {
-    const r = await ai.setKey(provider, value);
+    const r = await desktopApi().ai.setKey(provider, value);
     say(
       k,
       r.ok
@@ -337,7 +338,7 @@ function AiSettings() {
   const signIn = async () => {
     setSigning(true);
     say('openai', null);
-    const r = await ai.openaiSignIn();
+    const r = await desktopApi().ai.openaiSignIn();
     setSigning(false);
     say(
       'openai',
@@ -491,7 +492,7 @@ function AiSettings() {
             </span>
             {signing ? (
               <button
-                onClick={() => ai.openaiCancel()}
+                onClick={() => desktopApi().ai.openaiCancel()}
                 className="min-h-[38px] rounded-md border border-surface px-4 hover:bg-surface/60"
               >
                 Cancel
@@ -499,7 +500,7 @@ function AiSettings() {
             ) : o?.signedIn ? (
               <button
                 onClick={async () => {
-                  await ai.openaiSignOut();
+                  await desktopApi().ai.openaiSignOut();
                   say('openai', { ok: true, text: 'Signed out.' });
                   load();
                 }}
@@ -601,7 +602,7 @@ function AiSettings() {
               <button
                 onClick={() => {
                   copLoginActive.current = false;
-                  void ai.copilotCancelLogin();
+                  void desktopApi().ai.copilotCancelLogin();
                 }}
                 className="min-h-[38px] rounded-md border border-surface px-3 hover:bg-surface/60"
               >

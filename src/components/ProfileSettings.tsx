@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Check, CheckCircle2, Plus, UserRound } from 'lucide-react';
 import { useSettings, type IdentityProfile, type PushProfile } from '../store/settingsStore';
 import { askConfirm } from './Dialogs';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]';
 const button = 'rounded-md border border-surface px-3 py-2 hover:bg-surface/60 disabled:opacity-40';
 const errorText = (e: unknown) =>

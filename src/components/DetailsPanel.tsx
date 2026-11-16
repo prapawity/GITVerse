@@ -4,6 +4,7 @@ import { useRepo } from '../store/repoStore';
 import { DetailsSkeleton, Skeleton } from './Loading';
 import type { StashDetail, StashRef } from '../shared/types';
 import { askConfirm } from './Dialogs';
+import { desktopApi } from '../platform/api';
 
 export type ChangedFile = { status: string; path: string; oldPath?: string; untracked?: boolean };
 type F = ChangedFile;
@@ -80,7 +81,7 @@ export function DetailsPanel({
     if (!stash || !repoPath) return;
     let active = true;
     setSnapshot({ key: stashKey });
-    (window as any).gitApi
+    desktopApi()
       .stashDetail(repoPath, stash.hash ?? stash.id)
       .then((data: StashDetail) => {
         if (active) setSnapshot({ key: stashKey, data });
@@ -176,7 +177,7 @@ export function DetailsPanel({
     let failure = '';
     await useRepo.getState().track(`Stash ${action}…`, async () => {
       try {
-        await (window as any).gitApi.stashAction(selectedRepo, selectedHash, action);
+        await desktopApi().stashAction(selectedRepo, selectedHash, action);
       } catch (error) {
         failure = String((error as Error).message).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
       } finally {
@@ -279,7 +280,7 @@ export function DetailsPanel({
                     setSavingStashName(true);
                     setStashEditError('');
                     try {
-                      await (window as any).gitApi.stashRename(repoPath, stash.hash ?? stash.id, stashName.trim());
+                      await desktopApi().stashRename(repoPath, stash.hash ?? stash.id, stashName.trim());
                       await state.refresh();
                       setEditingStash(false);
                     } catch (error) {

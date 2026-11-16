@@ -3,11 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppLaunch } from './components/AppLaunch';
 import './index.css';
+import { platformApi } from './platform/api';
 
 const root = document.getElementById('root')!;
-const bridge = 'gitApi' in window ? window.gitApi : undefined;
-const hasDesktopStorage =
-  typeof bridge === 'object' && bridge !== null && 'stateStorage' in bridge && bridge.stateStorage != null;
+const hasDesktopStorage = platformApi()?.stateStorage != null;
 if (navigator.userAgent.includes('Electron/') && !hasDesktopStorage) {
   console.error('[startup] Electron preload bridge is unavailable; saved repositories were not changed.');
   const heading = document.createElement('h1');

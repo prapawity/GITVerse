@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, RefreshCw, X } from 'lucide-react';
+import { platformApi } from '../platform/api';
 
 type Entry = { hash: string; selector: string; message: string };
 
@@ -25,7 +26,7 @@ export function RecoveryPanel({
     setEntries([]);
     setError('');
     setMessage('');
-    const api = (window as any).gitApi;
+    const api = platformApi();
     if (!api?.reflog) {
       setError('Recovery history is available in the desktop app.');
       setLoading(false);

@@ -16,8 +16,9 @@ import { highlight } from '../lib/diff';
 import { CodeSkeleton } from './Loading';
 import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 const LH = 21; // output line height in px — gutter, bands and textarea must agree
 const OUT_PAD = 8;
 const BAND = { a: '#4fc1e9', b: '#a855f7', ab: '#34d399', ai: '#f472b6', none: '#f5a623' } as const;

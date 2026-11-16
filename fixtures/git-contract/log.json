@@ -1,0 +1,77 @@
+[
+  {
+    "hash": "bbb599bb87f351c65576034282edf1172e1b1e43",
+    "parents": [
+      "91c715e205d487e2b1de6f2a295ab25fe528f877",
+      "a09ece8d194bc68dc38cbc13e94f265015b85b1c"
+    ],
+    "refs": [
+      {
+        "name": "main",
+        "kind": "local",
+        "current": true
+      }
+    ],
+    "author": "Ada Lovelace",
+    "email": "ada@example.com",
+    "date": "2023-11-15T05:25:20+07:00",
+    "subject": "Merge branch 'feature/login'"
+  },
+  {
+    "hash": "a09ece8d194bc68dc38cbc13e94f265015b85b1c",
+    "parents": [
+      "4930805154d05c106bbfe081cefa3f1f0f453cff"
+    ],
+    "refs": [
+      {
+        "name": "feature/login",
+        "kind": "local"
+      }
+    ],
+    "author": "Ada Lovelace",
+    "email": "ada@example.com",
+    "date": "2023-11-15T05:22:20+07:00",
+    "subject": "Add login"
+  },
+  {
+    "hash": "91c715e205d487e2b1de6f2a295ab25fe528f877",
+    "parents": [
+      "4930805154d05c106bbfe081cefa3f1f0f453cff"
+    ],
+    "refs": [],
+    "author": "Ada Lovelace",
+    "email": "ada@example.com",
+    "date": "2023-11-15T05:24:20+07:00",
+    "subject": "Update readme"
+  },
+  {
+    "hash": "4930805154d05c106bbfe081cefa3f1f0f453cff",
+    "parents": [
+      "5e4de02f7e55973569a28e63579575b5f5d31b3a"
+    ],
+    "refs": [
+      {
+        "name": "v1.0.1",
+        "kind": "tag"
+      },
+      {
+        "name": "v1.0.0",
+        "kind": "tag"
+      }
+    ],
+    "author": "Ada Lovelace",
+    "email": "ada@example.com",
+    "date": "2023-11-15T05:17:20+07:00",
+    "subject": "Change app",
+    "body": "Longer body line."
+  },
+  {
+    "hash": "5e4de02f7e55973569a28e63579575b5f5d31b3a",
+    "parents": [],
+    "refs": [],
+    "author": "Ada Lovelace",
+    "email": "ada@example.com",
+    "date": "2023-11-15T05:16:20+07:00",
+    "subject": "Initial commit"
+  }
+]

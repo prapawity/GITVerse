@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import { layoutGraph, withStashes } from '../lib/graphLayout';
 import type { Commit, FileStatus, GraphLayout, StashRef } from '../shared/types';
 import { useSettings } from './settingsStore';
+import { desktopApi, type AnyAsync } from '../platform/api';
 
-const api = () => (window as any).gitApi;
+const api = () => desktopApi();
 // page size follows the user's settings: "show all" means one unbounded page, otherwise the initial-commits value
 const pageSize = () => {
   const s = useSettings.getState();
@@ -426,7 +427,7 @@ export const useRepo = create<RepoState>((set, get) => {
       const op = OPS[name] ?? { label: 'Working…', fail: 'Action failed' };
       return guard(
         async () => {
-          stopped = await attempt(() => api()[name](get().repoPath, ...args));
+          stopped = await attempt(() => (api() as unknown as Record<string, AnyAsync>)[name](get().repoPath, ...args));
           await get().refresh();
         },
         op.label,

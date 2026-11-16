@@ -21,6 +21,7 @@ import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 import { SidebarSkeleton } from './Loading';
 import type { StashRef } from '../shared/types';
 import { askConfirm } from './Dialogs';
+import { desktopApi } from '../platform/api';
 
 function Section({
   icon,
@@ -338,7 +339,7 @@ export function Sidebar({
     let failure = '';
     await useRepo.getState().track(`Stash ${action}…`, async () => {
       try {
-        await (window as any).gitApi.stashAction(selectedRepo, selectedHash, action);
+        await desktopApi().stashAction(selectedRepo, selectedHash, action);
       } catch (error) {
         failure = String((error as Error).message).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
       } finally {

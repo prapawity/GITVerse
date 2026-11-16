@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReleaseUpdate } from '../shared/updates';
+import { desktopApi } from '../platform/api';
 
 export function ReleasePicker({ currentVersion, onClose }: { currentVersion: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -19,7 +20,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
     setReleases(null);
     setError('');
     Promise.resolve()
-      .then(() => (window as any).gitApi.updates.list())
+      .then(() => desktopApi().updates.list())
       .then((items: ReleaseUpdate[]) => {
         if (active) {
           setReleases(items);
@@ -84,7 +85,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
           disabled={opening}
           onClick={async () => {
             try {
-              await (window as any).gitApi.updates.openReleaseList();
+              await desktopApi().updates.openReleaseList();
             } catch (reason) {
               setError(String((reason as Error)?.message ?? reason));
             }
@@ -114,7 +115,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
             setOpening(true);
             setError('');
             try {
-              await (window as any).gitApi.updates.openDownloads(selected);
+              await desktopApi().updates.openDownloads(selected);
               onClose();
             } catch (reason) {
               setError(String((reason as Error)?.message ?? reason));

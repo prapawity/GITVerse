@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { ChevronDown, Plus, SquareTerminal, Trash2, X } from 'lucide-react';
 import { termFont, useSettings } from '../store/settingsStore';
+import { desktopApi, platformApi } from '../platform/api';
 
 /**
  * Bottom terminal with tabs. Sessions live at module level so hiding the panel (or switching
@@ -26,18 +27,19 @@ const pending = new Map<number, string[]>(); // output that arrived before spawn
 const listeners = new Set<() => void>();
 let wired = false;
 let keySeq = 0;
-const api = () => (window as any).gitApi?.term;
+const api = () => platformApi()?.term;
 const notify = () => listeners.forEach((l) => l());
 
 function wire() {
-  if (wired || !api()) return;
+  const term = api();
+  if (wired || !term) return;
   wired = true;
-  api().onData((id: number, data: string) => {
+  term.onData((id: number, data: string) => {
     const s = byId.get(id);
     if (s) s.term.write(data);
     else pending.set(id, [...(pending.get(id) ?? []), data]);
   });
-  api().onExit((id: number) => {
+  term.onExit((id: number) => {
     const s = byId.get(id);
     if (!s) return;
     s.ended = true;
@@ -93,13 +95,18 @@ async function create(cwd: string | null): Promise<Session> {
     term.write('Terminal is available in the desktop app.\r\n');
     return s;
   }
-  const id: number = await api().spawn(cwd ?? '', term.cols || 80, term.rows || 24, cfg.termShell || undefined);
+  const id: number = await desktopApi().term.spawn(
+    cwd ?? '',
+    term.cols || 80,
+    term.rows || 24,
+    cfg.termShell || undefined,
+  );
   s.id = id;
   byId.set(id, s);
   (pending.get(id) ?? []).forEach((d) => term.write(d));
   pending.delete(id);
-  term.onData((d) => !s.ended && api().write(id, d));
-  term.onResize(({ cols, rows }) => api().resize(id, cols, rows));
+  term.onData((d) => !s.ended && desktopApi().term.write(id, d));
+  term.onResize(({ cols, rows }) => desktopApi().term.resize(id, cols, rows));
   return s;
 }
 

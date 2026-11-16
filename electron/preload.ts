@@ -1,67 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { ScanProgress } from '../src/shared/repositoryScan';
+import { GIT_METHODS } from '../src/shared/gitMethods';
 
-const names = [
-  'log',
-  'status',
-  'commit',
-  'checkout',
-  'checkoutRemote',
-  'windowsUnsupportedPathsForRef',
-  'stage',
-  'unstage',
-  'refs',
-  'reflog',
-  'inspectWorkspace',
-  'historyPosition',
-  'commitDetail',
-  'commitFileDiff',
-  'stashDetail',
-  'stashRename',
-  'stashFileDiff',
-  'stashFileAt',
-  'workingFileDiff',
-  'fileChangeCounts',
-  'discardWorkingFiles',
-  'discardWorkingHunk',
-  'stageWorkingHunk',
-  'fetch',
-  'pull',
-  'push',
-  'pushInfo',
-  'commitIdentity',
-  'setCommitIdentity',
-  'createBranch',
-  'stash',
-  'stashPop',
-  'stashAction',
-  'reset',
-  'cherryPick',
-  'revert',
-  'rebaseOnto',
-  'rebasePreview',
-  'createTag',
-  'branchAt',
-  'fileAt',
-  'fileBlobAt',
-  'workingFileBlob',
-  'worktreeAdd',
-  'remoteUrl',
-  'formatPatch',
-  'createAnnotatedTag',
-  'fileBlame',
-  'fileHistory',
-  'opState',
-  'opContinue',
-  'opAbort',
-  'opSkip',
-  'resolveFile',
-  'merge',
-  'deleteBranch',
-  'deleteRemoteBranch',
-  'readWorkFile',
-  'writeWorkFile',
-];
 const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   openRepoDialog: () => ipcRenderer.invoke('repo:open'),
   openThirdPartyNotices: () => ipcRenderer.invoke('app:openThirdPartyNotices'),
@@ -101,16 +41,7 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   ipcRenderer.on('repo:scanProgress', handler);
   return () => ipcRenderer.removeListener('repo:scanProgress', handler);
 };
-for (const n of names) gitApi[n] = (...a) => ipcRenderer.invoke(`git:${n}`, ...a);
-gitApi.squashCommits = (...a) => ipcRenderer.invoke('git:squashCommits', ...a);
-gitApi.stagedForCommitMessage = (...a) => ipcRenderer.invoke('git:stagedForCommitMessage', ...a);
-gitApi.cherryPickMany = (...a) => ipcRenderer.invoke('git:cherryPickMany', ...a);
-gitApi.tagCommit = (...a) => ipcRenderer.invoke('git:tagCommit', ...a);
-gitApi.stashDiff = (...a) => ipcRenderer.invoke('git:stashDiff', ...a);
-gitApi.agentCheckpoints = (...a) => ipcRenderer.invoke('git:agentCheckpoints', ...a);
-gitApi.trackedStage = (...a) => ipcRenderer.invoke('git:trackedStage', ...a);
-gitApi.indexUndoState = (...a) => ipcRenderer.invoke('git:indexUndoState', ...a);
-gitApi.moveIndexHistory = (...a) => ipcRenderer.invoke('git:moveIndexHistory', ...a);
+for (const n of GIT_METHODS) gitApi[n] = (...a) => ipcRenderer.invoke(`git:${n}`, ...a);
 (gitApi as any).setActiveIdentity = (identity: { name: string; email: string } | null) =>
   ipcRenderer.invoke('profile:setIdentity', identity);
 (gitApi as any).pushProfiles = {

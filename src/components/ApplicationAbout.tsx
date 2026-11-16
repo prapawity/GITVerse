@@ -4,6 +4,7 @@ import { version } from '../../package.json';
 import type { AppUpdateCheck } from '../shared/updates';
 import { UpdateNotice } from './UpdateNotice';
 import { ReleasePicker } from './ReleasePicker';
+import { platformApi, desktopApi } from '../platform/api';
 
 export function ApplicationAbout() {
   const [environment, setEnvironment] = useState<{ enabled: boolean; currentVersion: string } | null>(null);
@@ -16,7 +17,7 @@ export function ApplicationAbout() {
   const [openingNotice, setOpeningNotice] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    const updates = (window as any).gitApi?.updates;
+    const updates = platformApi()?.updates;
     const request = updates?.environment
       ? updates.environment()
       : Promise.resolve({ enabled: false, currentVersion: version });
@@ -37,7 +38,7 @@ export function ApplicationAbout() {
     setMessage('');
     setError('');
     try {
-      const result: AppUpdateCheck = await (window as any).gitApi.updates.check();
+      const result: AppUpdateCheck = await desktopApi().updates.check();
       if (result.kind === 'optional') setUpdate(result);
       else if (result.kind === 'current') setMessage('You are on the latest version.');
       else if (result.kind === 'error') setError(result.message);
@@ -53,7 +54,7 @@ export function ApplicationAbout() {
     setOpeningNotice(kind);
     setNoticesError('');
     try {
-      const api = (window as any).gitApi;
+      const api = platformApi();
       const open =
         kind === 'third-party'
           ? typeof api?.openThirdPartyNotices === 'function'
