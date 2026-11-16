@@ -139,3 +139,10 @@
 - `repo_open_file` (refuses paths outside the repository), `app_open_third_party_notices`; `app_open_runtime_notice` explains that the Tauri build uses the system web view.
 - The generated `sidecar/` bundle is excluded from ESLint and Prettier.
 - Still open: the updater (needs a signing key pair and an update feed), bundling Node + Copilot runtime, release/signing CI.
+
+### Phase 6B — installers with Copilot (done)
+
+- `npm run release:tauri` = notices + `scripts/stage-copilot.mjs` + `tauri build --config src-tauri/tauri.release.conf.json`. Staging copies the Node that runs the build (Tauri `externalBin`, `binaries/node-<triple>`), the sidecar and `@github/copilot-sdk` with this platform's runtime and dependencies (`src-tauri/copilot/`, a bundled resource). The app prefers the bundled Node and sidecar, then falls back to Node on PATH and `<repo>/sidecar/` in development.
+- `scripts/sidecar-smoke.mjs` copies the staged sidecar out of the repository and checks that the Copilot runtime starts with the staged Node.
+- `.github/workflows/release-tauri.yml` builds Windows (NSIS/MSI), macOS arm64/x64 (DMG) and Linux (AppImage/deb) installers as workflow artifacts, on release tags, by hand, and when the packaging files change. They are not attached to GitHub Releases until the Tauri build replaces Electron.
+- Still open: signing (Windows certificate, Apple notarization), the updater key pair and feed, Rust crate licenses in the notices.

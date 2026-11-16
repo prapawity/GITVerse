@@ -18,8 +18,8 @@ use crate::AppState;
 #[derive(Default)]
 pub struct AiRequests(Mutex<HashMap<u64, CancellationToken>>);
 
-/// The Copilot sidecar client. Script: GITVERSE_COPILOT_SIDECAR, the bundled resource, or the
-/// dev build in `<repo>/sidecar/`. Node: GITVERSE_NODE or `node` on PATH.
+/// The Copilot sidecar client. Script: GITVERSE_COPILOT_SIDECAR, the bundled `copilot/` resource,
+/// or the dev build in `<repo>/sidecar/`. Node: GITVERSE_NODE, the bundled one, or `node` on PATH.
 pub fn copilot_client(
     handle: &tauri::AppHandle,
     secrets: std::sync::Arc<dyn gitverse_core::secrets::SecretStore>,
@@ -33,7 +33,7 @@ pub fn copilot_client(
                 .path()
                 .resource_dir()
                 .ok()?
-                .join("sidecar")
+                .join("copilot")
                 .join(NAME);
             p.is_file().then_some(p)
         })
@@ -45,7 +45,15 @@ pub fn copilot_client(
                     .join(NAME),
             )
         });
-    let node = std::env::var("GITVERSE_NODE").unwrap_or_else(|_| "node".into());
+    // release builds ship Node next to the app (tauri.release.conf.json externalBin)
+    let bundled_node = std::env::current_exe().ok().and_then(|exe| {
+        let p = exe.with_file_name(if cfg!(windows) { "node.exe" } else { "node" });
+        p.is_file().then(|| p.to_string_lossy().into_owned())
+    });
+    let node = std::env::var("GITVERSE_NODE")
+        .ok()
+        .or(bundled_node)
+        .unwrap_or_else(|| "node".into());
     let events = handle.clone();
     copilot::Copilot::new(node, script, secrets, move |event| match event {
         copilot::Event::Delta { req_id, text } => {
