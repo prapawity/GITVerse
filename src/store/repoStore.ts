@@ -129,11 +129,7 @@ export const useRepo = create<RepoState>((set, get) => {
       const message = clean(e?.message ?? e);
       const specificFailure = meta.failure?.(message);
       if (specificFailure) {
-        get().notify(
-          'error',
-          specificFailure.title,
-          specificFailure.detail,
-        );
+        get().notify('error', specificFailure.title, specificFailure.detail);
       } else {
         get().notify(
           'error',
@@ -684,7 +680,9 @@ export const useRepo = create<RepoState>((set, get) => {
           const local = get().refs.local.find((item) => item.name === branch);
           const remote = get().refs.remote.find((item) => item.name === ref);
           if (local?.hash && remote?.hash && local.hash !== remote.hash)
-            throw new Error(`Local branch “${branch}” still does not match ${ref}; refresh the repository and try again.`);
+            throw new Error(
+              `Local branch “${branch}” still does not match ${ref}; refresh the repository and try again.`,
+            );
         },
         'Checking out and aligning…',
         {

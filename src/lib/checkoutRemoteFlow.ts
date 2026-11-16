@@ -22,21 +22,30 @@ export async function checkoutRemoteWithSparseRecovery(ref: string) {
     return;
   }
 
-  const currentStatus = await api().status(repoPath).catch((error: unknown) => {
-    useRepo.getState().notify('error', 'Could not inspect working changes', String((error as Error).message ?? error));
-    return null;
-  });
+  const currentStatus = await api()
+    .status(repoPath)
+    .catch((error: unknown) => {
+      useRepo
+        .getState()
+        .notify('error', 'Could not inspect working changes', String((error as Error).message ?? error));
+      return null;
+    });
   if (!currentStatus) return;
   if (currentStatus.length) {
-    useRepo.getState().notify(
-      'warning',
-      'Commit or stash changes first',
-      `Sparse checkout needs a clean working tree. ${currentStatus.length} changed entr${currentStatus.length === 1 ? 'y is' : 'ies are'} present.`,
-    );
+    useRepo
+      .getState()
+      .notify(
+        'warning',
+        'Commit or stash changes first',
+        `Sparse checkout needs a clean working tree. ${currentStatus.length} changed entr${currentStatus.length === 1 ? 'y is' : 'ies are'} present.`,
+      );
     return;
   }
 
-  const examples = unsupported.slice(0, 5).map((filePath) => `'${filePath}'`).join('\n');
+  const examples = unsupported
+    .slice(0, 5)
+    .map((filePath) => `'${filePath}'`)
+    .join('\n');
   const more = unsupported.length > 5 ? `\n…and ${unsupported.length - 5} more.` : '';
   const confirmed = await askConfirm(
     'Use sparse checkout for Windows?',

@@ -77,48 +77,47 @@ export function CommitMenu({
       : (refs.remote.find((branch) => branch.name === `origin/${pairedLocal.name}`) ??
         refs.remote.find((branch) => branch.name.endsWith(`/${pairedLocal.name}`))));
   const sameTip = !!pairedLocal && !!pairedRemote && pairedLocal.hash === pairedRemote.hash;
-  const deleteLocal = (name: string) =>
-    async () => {
-      if (
-        !(await askConfirm(
-          'Delete local branch',
-          `Delete local branch ${name}? If Git cannot verify that it was merged, GITVerse will ask before force deleting it.`,
-          { label: 'Delete local', danger: true },
-        ))
-      )
-        return;
-      const selectedRepo = repoPath;
-      if (!selectedRepo) return;
-      let deleted = false;
-      await track(
-        'Deleting branch…',
-        async () => {
-          try {
-            await api().deleteBranch(selectedRepo, name);
-          } catch (error) {
-            const message = String((error as Error)?.message ?? error).replace(
-              /^Error invoking remote method '[^']*': (Error: )?/,
-              '',
-            );
-            if (!/not fully merged|not merged into the current branch or any fetched remote branch/i.test(message))
-              throw error;
-            const force = await askConfirm(
-              'Branch is not verified as merged',
-              `${message}\n\nForce deleting removes the local branch reference. Commits may eventually be pruned if no other branch, tag, or reflog entry refers to them.`,
-              { label: 'Force delete local', danger: true },
-            );
-            if (!force || useRepo.getState().repoPath !== selectedRepo) return;
-            await api().deleteBranch(selectedRepo, name, true);
-          }
-          if (useRepo.getState().repoPath === selectedRepo) {
-            await useRepo.getState().refresh();
-            deleted = true;
-          }
-        },
-        { blocking: false, fail: 'Could not delete the branch' },
-      );
-      if (deleted) useRepo.getState().notify('success', `Deleted branch “${name}”`);
-    };
+  const deleteLocal = (name: string) => async () => {
+    if (
+      !(await askConfirm(
+        'Delete local branch',
+        `Delete local branch ${name}? If Git cannot verify that it was merged, GITVerse will ask before force deleting it.`,
+        { label: 'Delete local', danger: true },
+      ))
+    )
+      return;
+    const selectedRepo = repoPath;
+    if (!selectedRepo) return;
+    let deleted = false;
+    await track(
+      'Deleting branch…',
+      async () => {
+        try {
+          await api().deleteBranch(selectedRepo, name);
+        } catch (error) {
+          const message = String((error as Error)?.message ?? error).replace(
+            /^Error invoking remote method '[^']*': (Error: )?/,
+            '',
+          );
+          if (!/not fully merged|not merged into the current branch or any fetched remote branch/i.test(message))
+            throw error;
+          const force = await askConfirm(
+            'Branch is not verified as merged',
+            `${message}\n\nForce deleting removes the local branch reference. Commits may eventually be pruned if no other branch, tag, or reflog entry refers to them.`,
+            { label: 'Force delete local', danger: true },
+          );
+          if (!force || useRepo.getState().repoPath !== selectedRepo) return;
+          await api().deleteBranch(selectedRepo, name, true);
+        }
+        if (useRepo.getState().repoPath === selectedRepo) {
+          await useRepo.getState().refresh();
+          deleted = true;
+        }
+      },
+      { blocking: false, fail: 'Could not delete the branch' },
+    );
+    if (deleted) useRepo.getState().notify('success', `Deleted branch “${name}”`);
+  };
   const deleteRemote = (name: string) =>
     sure(
       'Delete remote branch',
@@ -152,8 +151,7 @@ export function CommitMenu({
                 '-' as const,
                 {
                   label: `Checkout ${refName}`,
-                  run: () =>
-                    ref.kind === 'local' ? checkout(refName) : checkoutRemoteWithSparseRecovery(refName),
+                  run: () => (ref.kind === 'local' ? checkout(refName) : checkoutRemoteWithSparseRecovery(refName)),
                 },
                 '-' as const,
               ]),
@@ -184,9 +182,7 @@ export function CommitMenu({
                 },
               ]
             : ref.kind === 'local' && !isCurrent
-              ? [
-                  { label: `Delete ${refName}`, danger: true, run: deleteLocal(refName) },
-                ]
+              ? [{ label: `Delete ${refName}`, danger: true, run: deleteLocal(refName) }]
               : ref.kind === 'remote'
                 ? [{ label: `Delete remote ${refName}`, danger: true, run: deleteRemote(refName) }]
                 : []),
@@ -225,168 +221,168 @@ export function CommitMenu({
         ),
       }))
     : [
-    ...(selected.length > 1
-      ? [
-          {
-            label: `Squash ${selected.length} commits`,
-            run: async () => {
-              const repo = repoPath;
-              const message = await askText('Squash commits', 'New commit message');
-              if (!message) return;
-              if (
-                !(await askConfirm(
-                  'Squash commits',
-                  `Replace ${selected.length} selected commits on ${current} with one commit? This rewrites history and uses the current commit identity. If already pushed, the remote may need a force push.`,
-                  { label: 'Squash commits', danger: true },
-                ))
-              )
-                return;
-              if (useRepo.getState().repoPath !== repo) {
-                useRepo.getState().notify('error', 'Squash cancelled', 'The active repository changed.');
-                return;
-              }
-              await exec('squashCommits', selected, message);
-            },
-          },
-          {
-            label: `Copy ${selected.length} commit SHAs`,
-            run: attempt(async () => {
-              await navigator.clipboard.writeText(selected.join('\n'));
-              toast('Commit SHAs copied');
-            }),
-          },
-          '-' as const,
-        ]
-      : branchItems),
-    {
-      label: 'Checkout this commit',
-      run: sure(
-        'Checkout commit',
-        `Check out ${short} in detached HEAD mode? New commits will not belong to a branch until you create or check out one.`,
-        'Checkout',
-        () => checkout(hash),
-      ),
-    },
-    '-',
-    {
-      label: 'Create worktree from this commit',
-      run: attempt(async () => {
-        const p = await askText('Create worktree', 'Absolute path of the new worktree folder');
-        if (p) await exec('worktreeAdd', p, hash);
-      }),
-    },
-    '-',
-    {
-      label: 'Create branch here',
-      run: async () => {
-        const n = await askFlow(
-          useRepo.getState().refs.local.map((b) => b.name),
-          `commit ${short}`,
-        );
-        if (n) exec('branchAt', n, hash);
-      },
-    },
-    selected.length > 1
-      ? {
-          label: `Cherry pick ${selected.length} commits`,
+        ...(selected.length > 1
+          ? [
+              {
+                label: `Squash ${selected.length} commits`,
+                run: async () => {
+                  const repo = repoPath;
+                  const message = await askText('Squash commits', 'New commit message');
+                  if (!message) return;
+                  if (
+                    !(await askConfirm(
+                      'Squash commits',
+                      `Replace ${selected.length} selected commits on ${current} with one commit? This rewrites history and uses the current commit identity. If already pushed, the remote may need a force push.`,
+                      { label: 'Squash commits', danger: true },
+                    ))
+                  )
+                    return;
+                  if (useRepo.getState().repoPath !== repo) {
+                    useRepo.getState().notify('error', 'Squash cancelled', 'The active repository changed.');
+                    return;
+                  }
+                  await exec('squashCommits', selected, message);
+                },
+              },
+              {
+                label: `Copy ${selected.length} commit SHAs`,
+                run: attempt(async () => {
+                  await navigator.clipboard.writeText(selected.join('\n'));
+                  toast('Commit SHAs copied');
+                }),
+              },
+              '-' as const,
+            ]
+          : branchItems),
+        {
+          label: 'Checkout this commit',
           run: sure(
-            'Cherry-pick commits',
-            `Cherry-pick ${selected.length} selected commits onto ${current}, oldest first?`,
-            'Cherry-pick',
-            () => exec('cherryPickMany', [...selected].reverse()),
-          ),
-        }
-      : { label: 'Cherry pick commit', run: () => exec('cherryPick', hash) },
-    {
-      label: `Rebase ${current} onto this commit`,
-      run: sure('Rebase', `Rebase ${current} onto ${short}?`, 'Rebase', () => exec('rebaseOnto', hash)),
-    },
-    {
-      label: `Reset ${current} to this commit`,
-      sub: [
-        {
-          label: 'Soft — keep all changes staged',
-          run: sure('Soft reset', `Move ${current} to ${short}; changes stay staged.`, 'Reset', () =>
-            exec('reset', hash, 'soft'),
+            'Checkout commit',
+            `Check out ${short} in detached HEAD mode? New commits will not belong to a branch until you create or check out one.`,
+            'Checkout',
+            () => checkout(hash),
           ),
         },
+        '-',
         {
-          label: 'Mixed — keep changes unstaged',
-          run: sure('Mixed reset', `Move ${current} to ${short}; changes stay in the working tree.`, 'Reset', () =>
-            exec('reset', hash, 'mixed'),
-          ),
+          label: 'Create worktree from this commit',
+          run: attempt(async () => {
+            const p = await askText('Create worktree', 'Absolute path of the new worktree folder');
+            if (p) await exec('worktreeAdd', p, hash);
+          }),
         },
+        '-',
         {
-          label: 'Hard — discard all changes',
-          danger: true,
-          run: sure(
-            'Hard reset',
-            `Move ${current} to ${short} and DISCARD all uncommitted changes. This cannot be undone.`,
-            'Hard reset',
-            () => exec('reset', hash, 'hard'),
-            true,
-          ),
-        },
-      ],
-    },
-    { label: 'Revert commit', run: () => exec('revert', hash) },
-    '-',
-    {
-      label: 'Copy commit sha',
-      run: attempt(async () => {
-        await navigator.clipboard.writeText(hash);
-        toast(`Copied ${short}`);
-      }),
-    },
-    {
-      label: 'Copy link to this commit on remote: origin',
-      run: () =>
-        track('Preparing link…', async () => {
-          const base = webUrl(await api().remoteUrl(repoPath));
-          if (!base) throw new Error('Could not turn the origin remote into a web URL.');
-          await navigator.clipboard.writeText(commitLink(base, hash));
-          toast('Commit link copied');
-        }),
-    },
-    {
-      label: selected.length > 1 ? `Create patch from ${selected.length} commits` : 'Create patch from commit',
-      run: () =>
-        track('Creating patch…', async () => {
-          const patches: string[] = await Promise.all(
-            (selected.length > 1 ? [...selected].reverse() : [hash]).map((commit) =>
-              api().formatPatch(repoPath, commit),
-            ),
-          );
-          if (patches.some((patch) => !patch.trim()))
-            throw new Error(
-              'Could not create a patch for every selected commit. Merge commits cannot be exported this way.',
+          label: 'Create branch here',
+          run: async () => {
+            const n = await askFlow(
+              useRepo.getState().refs.local.map((b) => b.name),
+              `commit ${short}`,
             );
-          const patch = patches.join('\n');
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(new Blob([patch], { type: 'text/plain' }));
-          a.download = `${short}.patch`;
-          a.click();
-          URL.revokeObjectURL(a.href);
-          toast(`Saved ${short}.patch`);
-        }),
-    },
-    '-',
-    {
-      label: 'Create tag here',
-      run: async () => {
-        const n = await askText('Create tag', 'Tag name');
-        if (n) exec('createTag', n, hash);
-      },
-    },
-    {
-      label: 'Create annotated tag here',
-      run: attempt(async () => {
-        const n = await askText('Create annotated tag', 'Tag name');
-        if (!n) return;
-        const m = await askText('Tag message', 'Message');
-        if (m) await exec('createAnnotatedTag', n, hash, m);
-      }),
-    },
+            if (n) exec('branchAt', n, hash);
+          },
+        },
+        selected.length > 1
+          ? {
+              label: `Cherry pick ${selected.length} commits`,
+              run: sure(
+                'Cherry-pick commits',
+                `Cherry-pick ${selected.length} selected commits onto ${current}, oldest first?`,
+                'Cherry-pick',
+                () => exec('cherryPickMany', [...selected].reverse()),
+              ),
+            }
+          : { label: 'Cherry pick commit', run: () => exec('cherryPick', hash) },
+        {
+          label: `Rebase ${current} onto this commit`,
+          run: sure('Rebase', `Rebase ${current} onto ${short}?`, 'Rebase', () => exec('rebaseOnto', hash)),
+        },
+        {
+          label: `Reset ${current} to this commit`,
+          sub: [
+            {
+              label: 'Soft — keep all changes staged',
+              run: sure('Soft reset', `Move ${current} to ${short}; changes stay staged.`, 'Reset', () =>
+                exec('reset', hash, 'soft'),
+              ),
+            },
+            {
+              label: 'Mixed — keep changes unstaged',
+              run: sure('Mixed reset', `Move ${current} to ${short}; changes stay in the working tree.`, 'Reset', () =>
+                exec('reset', hash, 'mixed'),
+              ),
+            },
+            {
+              label: 'Hard — discard all changes',
+              danger: true,
+              run: sure(
+                'Hard reset',
+                `Move ${current} to ${short} and DISCARD all uncommitted changes. This cannot be undone.`,
+                'Hard reset',
+                () => exec('reset', hash, 'hard'),
+                true,
+              ),
+            },
+          ],
+        },
+        { label: 'Revert commit', run: () => exec('revert', hash) },
+        '-',
+        {
+          label: 'Copy commit sha',
+          run: attempt(async () => {
+            await navigator.clipboard.writeText(hash);
+            toast(`Copied ${short}`);
+          }),
+        },
+        {
+          label: 'Copy link to this commit on remote: origin',
+          run: () =>
+            track('Preparing link…', async () => {
+              const base = webUrl(await api().remoteUrl(repoPath));
+              if (!base) throw new Error('Could not turn the origin remote into a web URL.');
+              await navigator.clipboard.writeText(commitLink(base, hash));
+              toast('Commit link copied');
+            }),
+        },
+        {
+          label: selected.length > 1 ? `Create patch from ${selected.length} commits` : 'Create patch from commit',
+          run: () =>
+            track('Creating patch…', async () => {
+              const patches: string[] = await Promise.all(
+                (selected.length > 1 ? [...selected].reverse() : [hash]).map((commit) =>
+                  api().formatPatch(repoPath, commit),
+                ),
+              );
+              if (patches.some((patch) => !patch.trim()))
+                throw new Error(
+                  'Could not create a patch for every selected commit. Merge commits cannot be exported this way.',
+                );
+              const patch = patches.join('\n');
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(new Blob([patch], { type: 'text/plain' }));
+              a.download = `${short}.patch`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+              toast(`Saved ${short}.patch`);
+            }),
+        },
+        '-',
+        {
+          label: 'Create tag here',
+          run: async () => {
+            const n = await askText('Create tag', 'Tag name');
+            if (n) exec('createTag', n, hash);
+          },
+        },
+        {
+          label: 'Create annotated tag here',
+          run: attempt(async () => {
+            const n = await askText('Create annotated tag', 'Tag name');
+            if (!n) return;
+            const m = await askText('Tag message', 'Message');
+            if (m) await exec('createAnnotatedTag', n, hash, m);
+          }),
+        },
       ];
 
   const W = Math.min(390, window.innerWidth - 16);

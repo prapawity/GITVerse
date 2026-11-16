@@ -307,7 +307,17 @@ test('checking out a remote uses its tracking branch and fast-forwards it to the
   assert.equal(await command(cwd, 'rev-parse', 'HEAD'), await command(cwd, 'rev-parse', 'origin/feature'));
   assert.notEqual(await command(cwd, 'rev-parse', 'HEAD'), localHead);
   assert.equal(await command(cwd, 'branch', '--show-current'), 'feature');
-  await command(cwd, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'Local only');
+  await command(
+    cwd,
+    '-c',
+    'user.name=Test',
+    '-c',
+    'user.email=test@example.com',
+    'commit',
+    '--allow-empty',
+    '-m',
+    'Local only',
+  );
   const localOnly = await command(cwd, 'rev-parse', 'HEAD');
   await assert.rejects(checkoutRemote(cwd, 'origin/feature'), /local branch has commits that are not on the remote/);
   assert.equal(await command(cwd, 'rev-parse', 'HEAD'), localOnly);
@@ -334,20 +344,24 @@ test('Windows-incompatible tree names are detected before remote checkout', () =
   );
 });
 
-test('Windows reset preflight rejects an unsupported target tree without moving HEAD or the index', { skip: process.platform !== 'win32' }, async (t) => {
-  const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-reset-invalid-path-'));
-  t.after(() => rm(cwd, { recursive: true, force: true }));
-  const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
-  await command('init', '--quiet', '--initial-branch=main');
-  await command('config', 'user.name', 'Test');
-  await command('config', 'user.email', 'test@example.com');
-  await command('commit', '--allow-empty', '--no-gpg-sign', '-m', 'Initial');
-  const originalHead = await command('rev-parse', 'HEAD');
-  const blob = await runWithInput(cwd, ['hash-object', '-w', '--stdin'], 'asset');
-  const tree = await runWithInput(cwd, ['mktree', '-z'], `100644 blob ${blob}\tkit:bathroom.png\0`);
-  const target = await command('commit-tree', tree, '-p', originalHead, '-m', 'Invalid Windows path');
-  const originalIndex = await command('write-tree');
-  await assert.rejects(reset(cwd, target, 'mixed'), /unsupported file names/);
-  assert.equal(await command('rev-parse', 'HEAD'), originalHead);
-  assert.equal(await command('write-tree'), originalIndex);
-});
+test(
+  'Windows reset preflight rejects an unsupported target tree without moving HEAD or the index',
+  { skip: process.platform !== 'win32' },
+  async (t) => {
+    const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-reset-invalid-path-'));
+    t.after(() => rm(cwd, { recursive: true, force: true }));
+    const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+    await command('init', '--quiet', '--initial-branch=main');
+    await command('config', 'user.name', 'Test');
+    await command('config', 'user.email', 'test@example.com');
+    await command('commit', '--allow-empty', '--no-gpg-sign', '-m', 'Initial');
+    const originalHead = await command('rev-parse', 'HEAD');
+    const blob = await runWithInput(cwd, ['hash-object', '-w', '--stdin'], 'asset');
+    const tree = await runWithInput(cwd, ['mktree', '-z'], `100644 blob ${blob}\tkit:bathroom.png\0`);
+    const target = await command('commit-tree', tree, '-p', originalHead, '-m', 'Invalid Windows path');
+    const originalIndex = await command('write-tree');
+    await assert.rejects(reset(cwd, target, 'mixed'), /unsupported file names/);
+    assert.equal(await command('rev-parse', 'HEAD'), originalHead);
+    assert.equal(await command('write-tree'), originalIndex);
+  },
+);

@@ -190,7 +190,11 @@ test('remote checkout does not report success if the refreshed branch still diff
     remote: [{ name: 'origin/main', hash: 'remote' }],
   });
   await useRepo.getState().checkoutRemote('origin/main');
-  assert.ok(useRepo.getState().toasts.some((toast) => toast.kind === 'error' && /still does not match origin\/main/.test(toast.detail ?? '')));
+  assert.ok(
+    useRepo
+      .getState()
+      .toasts.some((toast) => toast.kind === 'error' && /still does not match origin\/main/.test(toast.detail ?? '')),
+  );
   assert.ok(!useRepo.getState().toasts.some((toast) => toast.kind === 'success'));
 });
 

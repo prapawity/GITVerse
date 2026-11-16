@@ -98,7 +98,11 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
   if (pty) {
     try {
       const p = pty.spawn(shell, process.platform === 'win32' ? [] : ['-l'], {
-        name: 'xterm-256color', cols, rows, cwd, env,
+        name: 'xterm-256color',
+        cols,
+        rows,
+        cwd,
+        env,
       });
       p.onData((d: string) => send('term:data', d));
       p.onExit(({ exitCode }: { exitCode: number }) => {
@@ -177,13 +181,7 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
 
 export function registerTerminal() {
   ipcMain.handle('term:spawn', (e, cwd: string, cols: number, rows: number, shell?: string) =>
-    start(
-      e.sender,
-      cwd && existsSync(cwd) ? cwd : homedir(),
-      Math.max(20, cols | 0),
-      Math.max(5, rows | 0),
-      shell,
-    ),
+    start(e.sender, cwd && existsSync(cwd) ? cwd : homedir(), Math.max(20, cols | 0), Math.max(5, rows | 0), shell),
   );
   ipcMain.handle('term:write', (_e, id: number, data: string) => terms.get(id)?.write(data));
   ipcMain.handle('term:resize', (_e, id: number, c: number, r: number) =>

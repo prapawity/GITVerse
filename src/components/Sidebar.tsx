@@ -337,28 +337,36 @@ export function Sidebar({
 
     setStashBusy(true);
     let failure = '';
-    await useRepo.getState().track(`Stash ${action}…`, async () => {
-      try {
-        await desktopApi().stashAction(selectedRepo, selectedHash, action);
-      } catch (error) {
-        failure = String((error as Error).message).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
-      } finally {
-        if (useRepo.getState().repoPath === selectedRepo) await useRepo.getState().refresh();
-      }
-    }, { blocking: true });
+    await useRepo.getState().track(
+      `Stash ${action}…`,
+      async () => {
+        try {
+          await desktopApi().stashAction(selectedRepo, selectedHash, action);
+        } catch (error) {
+          failure = String((error as Error).message).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+        } finally {
+          if (useRepo.getState().repoPath === selectedRepo) await useRepo.getState().refresh();
+        }
+      },
+      { blocking: true },
+    );
     setStashBusy(false);
     if (useRepo.getState().repoPath !== selectedRepo) return;
     if (failure) {
       const hasConflicts = useRepo
         .getState()
         .status.some((file) => ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(file.index + file.worktree));
-      useRepo.getState().notify(
-        'error',
-        `Could not ${action} stash`,
-        hasConflicts ? 'Resolve conflicted files in Working changes. The stash was kept.' : failure,
-      );
+      useRepo
+        .getState()
+        .notify(
+          'error',
+          `Could not ${action} stash`,
+          hasConflicts ? 'Resolve conflicted files in Working changes. The stash was kept.' : failure,
+        );
     } else {
-      useRepo.getState().notify('success', `Stash ${action === 'apply' ? 'applied' : action === 'pop' ? 'popped' : 'dropped'}`);
+      useRepo
+        .getState()
+        .notify('success', `Stash ${action === 'apply' ? 'applied' : action === 'pop' ? 'popped' : 'dropped'}`);
     }
   };
   if (loading && empty)
@@ -464,40 +472,44 @@ export function Sidebar({
           onNavigate={onTag}
         />
       </Section>
-      {stashMenu && createPortal(
-        <div
-          className="fixed inset-0 z-[100]"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setStashMenu(null);
-          }}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            setStashMenu(null);
-          }}
-        >
+      {stashMenu &&
+        createPortal(
           <div
-            role="menu"
-            aria-label={`Actions for stash ${stashMenu.stash.message}`}
-            className="glass-context-menu fixed z-[101] w-56 rounded-xl border border-white/15 p-1.5 shadow-2xl"
-            style={{ left: Math.min(stashMenu.x, window.innerWidth - 240), top: Math.min(stashMenu.y, window.innerHeight - 170) }}
-            onMouseDown={(event) => event.stopPropagation()}
+            className="fixed inset-0 z-[100]"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setStashMenu(null);
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setStashMenu(null);
+            }}
           >
-            {(['apply', 'pop', 'drop'] as const).map((action) => (
-              <button
-                key={action}
-                type="button"
-                role="menuitem"
-                disabled={stashBusy || !!working || !!operation || !stashMenu.stash.hash}
-                onClick={() => void runStashAction(action)}
-                className={`flex min-h-9 w-full items-center rounded-lg px-3 text-left text-[13px] capitalize hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff] disabled:opacity-40 ${action === 'drop' ? 'text-[#f38ba8]' : 'text-text'}`}
-              >
-                {action === 'apply' ? 'Apply stash' : action === 'pop' ? 'Pop stash' : 'Drop stash'}
-              </button>
-            ))}
-          </div>
-        </div>,
-        document.body,
-      )}
+            <div
+              role="menu"
+              aria-label={`Actions for stash ${stashMenu.stash.message}`}
+              className="glass-context-menu fixed z-[101] w-56 rounded-xl border border-white/15 p-1.5 shadow-2xl"
+              style={{
+                left: Math.min(stashMenu.x, window.innerWidth - 240),
+                top: Math.min(stashMenu.y, window.innerHeight - 170),
+              }}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              {(['apply', 'pop', 'drop'] as const).map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  role="menuitem"
+                  disabled={stashBusy || !!working || !!operation || !stashMenu.stash.hash}
+                  onClick={() => void runStashAction(action)}
+                  className={`flex min-h-9 w-full items-center rounded-lg px-3 text-left text-[13px] capitalize hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff] disabled:opacity-40 ${action === 'drop' ? 'text-[#f38ba8]' : 'text-text'}`}
+                >
+                  {action === 'apply' ? 'Apply stash' : action === 'pop' ? 'Pop stash' : 'Drop stash'}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

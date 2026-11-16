@@ -224,7 +224,10 @@ export async function stagedForCommitMessage(cwd: string) {
   return { tree, diff };
 }
 function windowsPathBlocker(action: string, ref: string, paths: string[]) {
-  const examples = paths.slice(0, 6).map((filePath) => `'${filePath}'`).join('\n');
+  const examples = paths
+    .slice(0, 6)
+    .map((filePath) => `'${filePath}'`)
+    .join('\n');
   const more = paths.length > 6 ? `\n…and ${paths.length - 6} more.` : '';
   return `Cannot ${action} ${ref} on Windows because the target tree contains unsupported file names:\n${examples}${more}\nAsk the repository owner to rename these paths. No repository state was changed.`;
 }
@@ -247,7 +250,9 @@ export async function checkout(cwd: string, ref: string) {
 export function windowsIncompatiblePaths(paths: string[]) {
   const reservedDevice = /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\..*)?$/i;
   return paths.filter((filePath) =>
-    filePath.split('/').some((part) => /[<>:"|?*\x00-\x1f]/.test(part) || /[ .]$/.test(part) || reservedDevice.test(part)),
+    filePath
+      .split('/')
+      .some((part) => /[<>:"|?*\x00-\x1f]/.test(part) || /[ .]$/.test(part) || reservedDevice.test(part)),
   );
 }
 /* eslint-enable no-control-regex */
@@ -259,8 +264,11 @@ async function unsupportedTreePaths(cwd: string, ref: string) {
 }
 
 function sparseExcludePattern(filePath: string) {
-  if (/[\r\n\0]/.test(filePath)) throw new Error('Cannot safely exclude a path containing a line break from sparse checkout.');
-  const escaped = filePath.replace(/[\\*?[\]]/g, '\\$&').replace(/ +$/, (spaces) => [...spaces].map(() => '\\ ').join(''));
+  if (/[\r\n\0]/.test(filePath))
+    throw new Error('Cannot safely exclude a path containing a line break from sparse checkout.');
+  const escaped = filePath
+    .replace(/[\\*?[\]]/g, '\\$&')
+    .replace(/ +$/, (spaces) => [...spaces].map(() => '\\ ').join(''));
   return `!/${escaped}`;
 }
 
@@ -272,7 +280,9 @@ async function sparseCheckoutPatterns(cwd: string) {
   const contents = await readFile(filePath, 'utf8').catch(() => '');
   const patterns = contents.split(/\r?\n/).filter(Boolean);
   if (!patterns.length)
-    throw new Error('Existing sparse-checkout rules could not be read. Review the repository sparse-checkout settings before continuing.');
+    throw new Error(
+      'Existing sparse-checkout rules could not be read. Review the repository sparse-checkout settings before continuing.',
+    );
   return { enabled: true, patterns };
 }
 
@@ -321,14 +331,17 @@ async function prepareWindowsSparsePaths(
     const expected = [...expectedUnsupported].sort();
     const actual = [...unexcluded].sort();
     if (expected.length !== actual.length || expected.some((filePath, index) => filePath !== actual[index]))
-      throw new Error('The remote branch changed while confirmation was open. Refresh and retry so you can review the files sparse checkout would omit.');
+      throw new Error(
+        'The remote branch changed while confirmation was open. Refresh and retry so you can review the files sparse checkout would omit.',
+      );
   }
-  if (unexcluded.length && !allowSparse)
-    throw new Error(windowsPathBlocker('check out', ref, unexcluded));
+  if (unexcluded.length && !allowSparse) throw new Error(windowsPathBlocker('check out', ref, unexcluded));
   if (unexcluded.length) {
     const changes = await git(cwd, ['status', '--porcelain', '--untracked-files=all']);
     if (changes.trim())
-      throw new Error('Cannot enable sparse checkout while the index or working tree has local changes. Commit or stash them first. No repository state was changed.');
+      throw new Error(
+        'Cannot enable sparse checkout while the index or working tree has local changes. Commit or stash them first. No repository state was changed.',
+      );
     await enableWindowsSparseCheckout(cwd, unexcluded);
   }
   return unexcluded;
@@ -342,15 +355,21 @@ async function ensureFastForwardSafe(cwd: string, branch: string, ref: string) {
   const unsupported = await sparseExcludedUnsupportedPaths(cwd, allUnsupported);
   const reasons: string[] = [];
   if (unsupported.length) {
-    const examples = unsupported.slice(0, 6).map((filePath) => `'${filePath}'`).join('\n');
+    const examples = unsupported
+      .slice(0, 6)
+      .map((filePath) => `'${filePath}'`)
+      .join('\n');
     const more = unsupported.length > 6 ? `\n…and ${unsupported.length - 6} more.` : '';
     reasons.push(
       `Windows cannot create file names in ${ref}:\n${examples}${more}\nAsk the repository owner to rename these paths.`,
     );
   }
-  if (changes.trim()) reasons.push(`The index or working tree has local changes. Commit or stash them before fast-forwarding ${branch}.`);
+  if (changes.trim())
+    reasons.push(`The index or working tree has local changes. Commit or stash them before fast-forwarding ${branch}.`);
   if (reasons.length)
-    throw new Error(`Cannot align ${branch} with ${ref} yet:\n\n${reasons.join('\n\n')}\n\nYour local branch and work have been preserved.`);
+    throw new Error(
+      `Cannot align ${branch} with ${ref} yet:\n\n${reasons.join('\n\n')}\n\nYour local branch and work have been preserved.`,
+    );
 }
 
 async function ensureBranchNotCheckedOutElsewhere(cwd: string, branch: string) {
@@ -403,10 +422,12 @@ export async function checkoutRemote(
       await prepareWindowsSparsePaths(cwd, remoteRef, allowWindowsSparse, expectedUnsupported);
       return existing.branch;
     }
-    const behind = localHash !== remoteHash && await git(cwd, ['merge-base', '--is-ancestor', localRef, remoteRef]).then(
-      () => true,
-      () => false,
-    );
+    const behind =
+      localHash !== remoteHash &&
+      (await git(cwd, ['merge-base', '--is-ancestor', localRef, remoteRef]).then(
+        () => true,
+        () => false,
+      ));
     if (localHash !== remoteHash && !behind) {
       const ahead = await git(cwd, ['merge-base', '--is-ancestor', remoteRef, localRef]).then(
         () => true,
@@ -1161,11 +1182,20 @@ export async function rebasePreview(cwd: string, base: string) {
   const branch = (await git(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')).trim();
   if (!branch) throw new Error('Check out a local branch before planning a rebase.');
   const head = (await git(cwd, ['rev-parse', '--verify', 'HEAD'])).trim();
-  const upstream = (await git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).catch(() => '')).trim();
+  const upstream = (
+    await git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).catch(() => '')
+  ).trim();
   if (!upstream) throw new Error('Set an upstream branch before planning unpublished commits.');
-  if (!(await git(cwd, ['merge-base', '--is-ancestor', base, head]).then(() => true, () => false)))
+  if (
+    !(await git(cwd, ['merge-base', '--is-ancestor', base, head]).then(
+      () => true,
+      () => false,
+    ))
+  )
     throw new Error('The selected base must be an ancestor of the current branch.');
-  const lines = (await git(cwd, ['rev-list', '--reverse', '--parents', `${base}..${head}`])).split('\n').filter(Boolean);
+  const lines = (await git(cwd, ['rev-list', '--reverse', '--parents', `${base}..${head}`]))
+    .split('\n')
+    .filter(Boolean);
   if (!lines.length) throw new Error('There are no commits after the selected base.');
   if (lines.length > 100) throw new Error('Choose a range of at most 100 commits.');
   let parent = base;
@@ -1173,7 +1203,12 @@ export async function rebasePreview(cwd: string, base: string) {
   for (const line of lines) {
     const [hash, ...parents] = line.split(' ');
     if (parents.length !== 1 || parents[0] !== parent) throw new Error('Choose a linear range without merge commits.');
-    if (await git(cwd, ['merge-base', '--is-ancestor', hash, upstream]).then(() => true, () => false))
+    if (
+      await git(cwd, ['merge-base', '--is-ancestor', hash, upstream]).then(
+        () => true,
+        () => false,
+      )
+    )
       throw new Error('The selected range contains commits already reachable from the upstream branch.');
     const subject = (await git(cwd, ['show', '-s', '--format=%s', hash])).trim();
     commits.push({ hash, subject });

@@ -23,7 +23,11 @@ if (process.env.GITVERSE_PTY_SMOKE) {
       function finish(error) {
         clearTimeout(timeout);
         writeFileSync(resultPath, error || 'ok');
-        try { terminal.kill(); } catch { /* already exited */ }
+        try {
+          terminal.kill();
+        } catch {
+          /* already exited */
+        }
         app.exit(error ? 1 : 0);
       }
       terminal.onData((data) => {
@@ -31,7 +35,13 @@ if (process.env.GITVERSE_PTY_SMOKE) {
         if (/PTY_SMOKE_OK/.test(output)) finish();
       });
       terminal.resize(100, 30);
-      setTimeout(() => terminal.write(process.platform === 'win32' ? 'echo PTY_%ComSpec:~0,0%SMOKE_OK\r' : "printf 'PTY_%s_OK\\n' SMOKE\r"), 500);
+      setTimeout(
+        () =>
+          terminal.write(
+            process.platform === 'win32' ? 'echo PTY_%ComSpec:~0,0%SMOKE_OK\r' : "printf 'PTY_%s_OK\\n' SMOKE\r",
+          ),
+        500,
+      );
     } catch (error) {
       writeFileSync(resultPath, String(error.stack || error));
       app.exit(1);

@@ -175,15 +175,19 @@ export function DetailsPanel({
     setStashActionBusy(true);
     setStashActionError('');
     let failure = '';
-    await useRepo.getState().track(`Stash ${action}…`, async () => {
-      try {
-        await desktopApi().stashAction(selectedRepo, selectedHash, action);
-      } catch (error) {
-        failure = String((error as Error).message).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
-      } finally {
-        if (useRepo.getState().repoPath === selectedRepo) await useRepo.getState().refresh();
-      }
-    }, { blocking: true });
+    await useRepo.getState().track(
+      `Stash ${action}…`,
+      async () => {
+        try {
+          await desktopApi().stashAction(selectedRepo, selectedHash, action);
+        } catch (error) {
+          failure = String((error as Error).message).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+        } finally {
+          if (useRepo.getState().repoPath === selectedRepo) await useRepo.getState().refresh();
+        }
+      },
+      { blocking: true },
+    );
     setStashActionBusy(false);
     if (useRepo.getState().repoPath !== selectedRepo) return;
     if (failure) {
