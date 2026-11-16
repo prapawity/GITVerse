@@ -106,3 +106,13 @@
 - [x] ConPTY: ปิด PTY เมื่อ process จบ (ไม่งั้น reader ไม่จบ) และตอบ DSR `ESC[6n` ใน test เหมือน xterm.js
 - [x] Commands `term_spawn/write/resize/kill` + events `term:data`/`term:exit`; adapter ใน `src/platform/tauri.ts`
 - [x] `TerminalPanel`: Ctrl+V / Ctrl+Shift+V / Ctrl+C (เมื่อมี selection) ทำงานเองไม่พึ่งเมนูแอป และใช้ `event.code` จึงใช้ได้กับคีย์บอร์ดภาษาไทย
+
+## Phase 5A — สถานะ (2026-11-16)
+
+- [x] Secrets ใน OS credential store (`core/src/secrets.rs`, crate `keyring`): Keychain / Credential Manager / Secret Service แทน `safeStorage`; key name เดิม (`ai.apiKey`, `push.token.<sha256>`) — ค่าเดิมที่ Electron เข้ารหัสไว้อ่านไม่ได้ ผู้ใช้ต้องใส่ใหม่ 1 ครั้ง
+- [x] Claude ใน Rust (`core/src/ai/claude.rs`): streaming turn (text / thinking / tool_use + signature), commit message, auto-resolve conflict ด้วย structured output, retry แบบ SDK, error message เดียวกับ TS; ทดสอบกับ mock server
+- [x] `src/shared/aiSpec.json` สร้างจาก `aiTools.ts` (`scripts/ai-spec.ts`) — Rust ใช้ไฟล์นี้ จึงส่ง tools / system prompt / schema เหมือน TS; test ฝั่ง TS กันไม่ให้ไฟล์ล้าสมัย
+- [x] HTTPS push token ที่บันทึกไว้ใช้ได้แล้วใน Tauri (`push:tokenStatus` / `push:setToken`)
+- [x] `profile.dev` ใช้ `debug = "line-tables-only"` — `target/` จาก 15 GB เหลือ ~2 GB
+- [ ] Phase 5B: OpenAI (API key + Sign in with ChatGPT)
+- [ ] Phase 5C: Copilot (Node sidecar)

@@ -91,9 +91,8 @@ export async function createTauriApi(): Promise<PlatformApi> {
       onStatus: noopSubscription,
     },
     pushProfiles: {
-      // saved HTTPS tokens move to the OS keychain in the secrets phase
-      tokenStatus: () => Promise.resolve(false),
-      setToken: notPorted('pushProfiles.setToken'),
+      tokenStatus: (repo: string, id: string) => call<boolean>('push_token_status', { repo, id }),
+      setToken: (repo: string, id: string, token: string | null) => call('push_set_token', { repo, id, token }),
       chooseKey: () => call<string | null>('push_choose_key'),
       push: (repo, remote, branch, target, profile, credentials, options) =>
         call('push_branch', { repo, remote, branch, target, profile, credentials, options }),
@@ -107,25 +106,26 @@ export async function createTauriApi(): Promise<PlatformApi> {
       onExit: (cb) => subscribe<{ id: number; code: number }>('term:exit', (p) => cb(p.id, p.code)),
     },
     ai: {
-      ...group('ai', [
-        'status',
-        'copilotStatus',
-        'copilotBeginLogin',
-        'copilotAdvanceLogin',
-        'copilotCancelLogin',
-        'setKey',
-        'openaiSignIn',
-        'openaiCancel',
-        'openaiSignOut',
-        'models',
-        'turn',
-        'abort',
-        'reset',
-        'toolResult',
-        'resolveConflict',
-        'commitMessage',
-      ] as const),
-      onDelta: noopSubscription,
+      status: () => call('ai_status'),
+      copilotStatus: () => call('ai_copilot_status'),
+      copilotBeginLogin: () => call('ai_sign_in_unavailable', { provider: 'copilot' }),
+      copilotAdvanceLogin: () => call('ai_sign_in_unavailable', { provider: 'copilot' }),
+      copilotCancelLogin: () => Promise.resolve(),
+      setKey: (provider: string, key: string | null) => call('ai_set_key', { provider, key }),
+      openaiSignIn: () => call('ai_sign_in_unavailable', { provider: 'openai' }),
+      openaiCancel: () => Promise.resolve(),
+      openaiSignOut: () => Promise.resolve(),
+      models: (provider: string) => call('ai_models', { provider }),
+      turn: (req: unknown) => call('ai_turn', { req }),
+      abort: (reqId: number) => call('ai_abort', { reqId }),
+      reset: () => call('ai_reset'),
+      toolResult: () => call('ai_tool_result'),
+      resolveConflict: (provider: string, model: string | undefined, prompt: string, count: number) =>
+        call('ai_resolve_conflict', { provider, model: model ?? null, prompt, count }),
+      commitMessage: (provider: string, model: string | undefined, diff: string) =>
+        call('ai_commit_message', { provider, model: model ?? null, diff }),
+      onDelta: (cb) => subscribe<{ reqId: number; text: string }>('ai:delta', (p) => cb(p.reqId, p.text)),
+      // only stateful providers (Copilot, a later migration step) hand tool calls back
       onToolCall: noopSubscription,
     },
     stateStorage: {

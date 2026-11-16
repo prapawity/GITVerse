@@ -457,6 +457,8 @@ pub async fn repo_clone(
 
 #[derive(serde::Deserialize)]
 pub struct PushProfile {
+    #[serde(default)]
+    pub id: String,
     pub kind: git::AuthKind,
     #[serde(default)]
     pub username: String,
@@ -470,8 +472,8 @@ pub struct PushCredentials {
     pub password: String,
 }
 
-/// `push:branch`. Explicit credentials win; otherwise the profile's kind decides. Saved HTTPS
-/// tokens move to the OS keychain in the secrets phase, so a saved-token profile is reported clearly.
+/// `push:branch`. Explicit credentials win; otherwise the profile's kind decides, and HTTPS
+/// profiles use the token saved in the OS keychain.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn push_branch(
@@ -492,10 +494,15 @@ pub async fn push_branch(
             ssh_key: None,
         }),
         (None, Some(p)) => Some(git::PushAuth {
+            token: (p.kind == git::AuthKind::Https)
+                .then(|| {
+                    app.secrets
+                        .get(&crate::ai_commands::push_token_key(&repo, &p.id))
+                })
+                .flatten(),
             kind: p.kind,
             username: Some(p.username).filter(|u| !u.is_empty()),
             ssh_key: Some(p.ssh_key).filter(|k| !k.is_empty()),
-            token: None,
         }),
         (None, None) => None,
     };

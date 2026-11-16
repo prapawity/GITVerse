@@ -23,6 +23,18 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+tokio-util = "0.7"
+tokio = { version = "1", features = ["time"] }
+
+# Keep debug builds small (target/ grew past 15 GB with full debug info): line tables are enough
+# for panics with file:line, and dependencies need no debug info at all.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
 
 [profile.release]
 lto = true

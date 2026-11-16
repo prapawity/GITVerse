@@ -1,5 +1,6 @@
 //! Tauri shell for GITVerse. Commands here are thin: argument decoding + calls into gitverse-core.
 //! The TS side is src/platform/tauri.ts; method names match the Electron `git:<name>` channels.
+mod ai_commands;
 mod commands;
 
 use std::path::PathBuf;
@@ -13,6 +14,9 @@ pub struct AppState {
     pub index_history: IndexHistory,
     /// Open integrated terminals; all are killed when the app exits.
     pub terminals: gitverse_core::terminal::Terminals,
+    /// API keys and tokens, in the OS credential store.
+    pub secrets: std::sync::Arc<dyn gitverse_core::secrets::SecretStore>,
+    pub ai_requests: ai_commands::AiRequests,
     /// Same folder Electron uses (`<appData>/GITVerse`), so both builds share repos and settings.
     pub data_dir: PathBuf,
 }
@@ -47,6 +51,10 @@ pub fn run() {
                 git,
                 index_history: IndexHistory::default(),
                 terminals: Default::default(),
+                secrets: std::sync::Arc::new(gitverse_core::secrets::Keychain::new(
+                    "io.github.prapawity.gitverse",
+                )),
+                ai_requests: Default::default(),
                 data_dir,
             });
             Ok(())
@@ -65,6 +73,19 @@ pub fn run() {
             commands::term_write,
             commands::term_resize,
             commands::term_kill,
+            ai_commands::ai_status,
+            ai_commands::ai_copilot_status,
+            ai_commands::ai_set_key,
+            ai_commands::ai_models,
+            ai_commands::ai_sign_in_unavailable,
+            ai_commands::ai_turn,
+            ai_commands::ai_abort,
+            ai_commands::ai_tool_result,
+            ai_commands::ai_reset,
+            ai_commands::ai_commit_message,
+            ai_commands::ai_resolve_conflict,
+            ai_commands::push_token_status,
+            ai_commands::push_set_token,
         ])
         .build(tauri::generate_context!())
         .expect("error while building GITVerse")
