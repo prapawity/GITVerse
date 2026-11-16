@@ -67,7 +67,9 @@ jobs:
         run: |
           if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && [ -n "$UPDATER_PUBKEY" ]; then
             echo "SIGNED_UPDATES=1" >> "$GITHUB_ENV"
-            GITVERSE_UPDATER_PUBKEY="$UPDATER_PUBKEY" npm run release:tauri -- --config src-tauri/tauri.updater.conf.json
+            # the CLI checks the signing key against plugins.updater.pubkey, so put the key in the config too
+            node -e "require('fs').writeFileSync('src-tauri/tauri.pubkey.conf.json', JSON.stringify({ plugins: { updater: { pubkey: process.env.UPDATER_PUBKEY.trim() } } }))"
+            GITVERSE_UPDATER_PUBKEY="$UPDATER_PUBKEY" npm run release:tauri -- --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.pubkey.conf.json
           else
             echo "::notice::Updater key not configured: building installers without in-app updates."
             npm run release:tauri

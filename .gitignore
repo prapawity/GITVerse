@@ -20,3 +20,4 @@ sidecar/
 src-tauri/copilot/
 src-tauri/binaries/
 updater-out/
+src-tauri/tauri.pubkey.conf.json
