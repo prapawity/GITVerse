@@ -13,7 +13,7 @@ fn invalid(message: &str) -> AppError {
     AppError::Invalid(message.to_owned())
 }
 
-fn conflicted(f: &FileStatus) -> bool {
+pub(crate) fn conflicted(f: &FileStatus) -> bool {
     matches!(
         format!("{}{}", f.index, f.worktree).as_str(),
         "DD" | "AU" | "UD" | "UA" | "DU" | "AA" | "UU"
@@ -577,11 +577,11 @@ fn resolve(base: &Path, rel: &str) -> PathBuf {
     out
 }
 
-fn within(root: &Path, target: &Path) -> bool {
+pub(crate) fn within(root: &Path, target: &Path) -> bool {
     target != root && target.starts_with(root)
 }
 
-fn canonical(p: &Path) -> Result<PathBuf> {
+pub(crate) fn canonical(p: &Path) -> Result<PathBuf> {
     let c = std::fs::canonicalize(p)?;
     // Windows canonical paths carry a \\?\ prefix; strip it so prefixes compare like Node's realpath
     #[cfg(windows)]
@@ -593,7 +593,7 @@ fn canonical(p: &Path) -> Result<PathBuf> {
     Ok(c)
 }
 
-fn work_path(cwd: &Path, rel: &str) -> Result<(PathBuf, PathBuf)> {
+pub(crate) fn work_path(cwd: &Path, rel: &str) -> Result<(PathBuf, PathBuf)> {
     let outside = || invalid("Path is outside the repository");
     let root = canonical(cwd)?;
     let full = resolve(&root, rel);

@@ -39,7 +39,7 @@ pub fn windows_incompatible_paths(paths: &[String]) -> Vec<String> {
         .collect()
 }
 
-fn path_blocker(action: &str, reference: &str, paths: &[String]) -> String {
+pub(crate) fn path_blocker(action: &str, reference: &str, paths: &[String]) -> String {
     let examples = paths
         .iter()
         .take(6)
@@ -74,7 +74,7 @@ pub fn sparse_exclude_pattern(path: &str) -> Result<String> {
     Ok(format!("!/{trimmed}{}", "\\ ".repeat(spaces)))
 }
 
-async fn unsupported_tree_paths(
+pub(crate) async fn unsupported_tree_paths(
     git: &GitRunner,
     cwd: &Path,
     reference: &str,
@@ -97,7 +97,7 @@ async fn unsupported_tree_paths(
     Ok(windows_incompatible_paths(&paths))
 }
 
-async fn sparse_patterns(git: &GitRunner, cwd: &Path) -> Result<Option<Vec<String>>> {
+pub(crate) async fn sparse_patterns(git: &GitRunner, cwd: &Path) -> Result<Option<Vec<String>>> {
     let enabled = git
         .run(
             cwd,
@@ -133,7 +133,11 @@ async fn sparse_patterns(git: &GitRunner, cwd: &Path) -> Result<Option<Vec<Strin
 }
 
 /// The unsupported paths that sparse checkout does not already exclude.
-async fn sparse_unexcluded(git: &GitRunner, cwd: &Path, paths: Vec<String>) -> Result<Vec<String>> {
+pub(crate) async fn sparse_unexcluded(
+    git: &GitRunner,
+    cwd: &Path,
+    paths: Vec<String>,
+) -> Result<Vec<String>> {
     if paths.is_empty() || !cfg!(windows) {
         return Ok(Vec::new());
     }

@@ -88,4 +88,13 @@
 - [x] Windows path preflight (`ensureTargetTreeSupported`, sparse rules) ported พร้อม unit test
 - [x] Golden **write scenarios**: 48 สถานการณ์ (`electron/git/contract.write.test.ts` ↔ `core/tests/golden_write.rs`) บันทึกผลลัพธ์/error + สถานะ repo หลังทำ — TS และ Rust ตรงกันทั้ง Linux และ Windows
 - [x] พบและแก้ bug ใน TS `stashRename`: rename stash ล่าสุดทำให้ stash หาย (หรือลบ stash อื่น) เพราะ `git stash store` ของ hash เดิมไม่เพิ่ม reflog
-- [ ] Batch B: `checkoutRemote`, `pushBranch`/`pushInfo`, `clone`, `discardWorkingFiles`, `discardWorkingHunk`, `stageWorkingHunk`, `trackedStage`, `indexUndoState`/`moveIndexHistory`, `squashCommits`, `cherryPickMany`, `stagedForCommitMessage`, `rebasePreview`, `worktreeAdd`, blobs, `inspectWorkspace`, `agentCheckpoints`
+- [x] Batch B: ดูหัวข้อถัดไป
+
+## Phase 3 batch B — สถานะ (2026-11-16)
+
+- [x] Rust: `checkoutRemote` (+ Windows sparse, fast-forward, worktree guard), `clone` (progress event `repo:cloneProgress`), `pushInfo`/`pushBranch` (system / SSH key / HTTPS token ผ่าน askpass), `stagedForCommitMessage`, stage/discard ทีละ hunk, `discardWorkingFiles`, undo/redo ของ index (`trackedStage`, `indexUndoState`, `moveIndexHistory`), `squashCommits`, `cherryPickMany`, `rebasePreview`, `stashFileDiff`/`stashFileAt`, blobs (base64), `worktreeAdd`, `inspectWorkspace` (ซ่อน credential ใน URL), `agentCheckpoints`
+- [x] Golden write scenarios รวม 88 (เพิ่ม 40) — TS และ Rust ตรงกันบน Linux และ Windows
+- [x] พบและแก้ bug ใน TS `clone`: path แบบ Windows drive (`C:\repo`) ผ่านการตรวจ URL เพราะดูเหมือน SSH `host:path`
+- [x] Git method ทุกตัวใน `GIT_METHODS` ย้ายมา Rust แล้ว
+- [ ] HTTPS token ที่บันทึกไว้ (`push:setToken`/`tokenStatus`) — รอ Phase 5 (keychain)
+- [ ] `inspectWorkspace` ต้องใช้ git ≥ 2.36 (`worktree list -z`) — เหมือนฝั่ง TS เดิม

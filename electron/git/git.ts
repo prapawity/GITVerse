@@ -11,6 +11,8 @@ const run = promisify(execFile);
 export async function clone(url: string, destination: string, progress: (message: string) => void): Promise<void> {
   if (typeof url !== 'string' || /[\s\0]/.test(url) || !url || url.startsWith('-'))
     throw new Error('Enter a valid HTTPS or SSH repository URL.');
+  // A Windows drive path (C:\repo, C:/repo) also looks like `host:path`; it is a local path, not SSH.
+  if (/^[a-zA-Z]:[\\/]/.test(url)) throw new Error('Enter a valid HTTPS or SSH repository URL.');
   const scp = !url.includes('://') && /^(?:[a-zA-Z0-9._-]+@)?[a-zA-Z0-9.-]+:.+/.test(url);
   if (!scp) {
     let parsed: URL;

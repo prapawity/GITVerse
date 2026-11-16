@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import * as git from './git';
+import { inspectWorkspace } from './workspaceInspection';
 import { OPERATION_ENV, buildRepo, golden, isolatedEnv, rawGit } from './contractRepo';
 
 type Raw = ReturnType<typeof rawGit>;
@@ -46,6 +47,25 @@ const withoutGitVersion = (patch: string) => {
   const i = patch.lastIndexOf('\n-- \n');
   return i < 0 ? patch : patch.slice(0, i + 1);
 };
+
+/** A bare `origin` next to the repo, with main and feature/login pushed and tracked. */
+const withOrigin = async (raw: Raw, cwd: string) => {
+  await clean(raw);
+  await raw('init', '--quiet', '--bare', `${cwd}-origin.git`);
+  await raw('remote', 'add', 'origin', `${cwd}-origin.git`);
+  await raw('push', '--quiet', '-u', 'origin', 'main', 'feature/login');
+};
+/** Two linear commits on main after the merge, for squash / rebase preview. */
+const twoCommits = async (raw: Raw, cwd: string) => {
+  await put(cwd, 'one.txt', 'one\n');
+  await raw('add', 'one.txt');
+  await raw('commit', '--quiet', '-m', 'One');
+  await put(cwd, 'two.txt', 'two\n');
+  await raw('add', 'two.txt');
+  await raw('commit', '--quiet', '-m', 'Two');
+};
+const revParse = async (cwd: string, ...refs: string[]) =>
+  Promise.all(refs.map(async (ref) => (await rawGit(cwd)('rev-parse', ref)).trim()));
 
 export const SCENARIOS: Record<string, Scenario> = {
   stage: { run: (cwd) => git.stage(cwd, ['app.txt', 'notes.md', 'README.md']) },
@@ -186,6 +206,172 @@ export const SCENARIOS: Record<string, Scenario> = {
       return git.remoteUrl(cwd);
     },
   },
+
+  // ---- phase 3 batch B ----
+  stagedForCommitMessage: { run: (cwd) => git.stagedForCommitMessage(cwd) },
+  stagedForCommitMessageEmpty: { setup: clean, run: (cwd) => git.stagedForCommitMessage(cwd) },
+  checkoutRemoteCreatesTrackingBranch: {
+    setup: async (raw, cwd) => {
+      await withOrigin(raw, cwd);
+      await raw('branch', '-D', 'feature/login');
+    },
+    run: (cwd) => git.checkoutRemote(cwd, 'origin/feature/login'),
+  },
+  checkoutRemoteFastForwards: {
+    setup: async (raw, cwd) => {
+      await withOrigin(raw, cwd);
+      await raw('reset', '--quiet', '--hard', 'HEAD~1');
+    },
+    run: (cwd) => git.checkoutRemote(cwd, 'origin/main'),
+  },
+  checkoutRemoteRejectsDiverged: {
+    setup: async (raw, cwd) => {
+      await withOrigin(raw, cwd);
+      await raw('reset', '--quiet', '--hard', 'HEAD~1');
+      await put(cwd, 'local.txt', 'local\n');
+      await raw('add', 'local.txt');
+      await raw('commit', '--quiet', '-m', 'Local only');
+    },
+    run: (cwd) => git.checkoutRemote(cwd, 'origin/main'),
+  },
+  checkoutRemoteRejectsInvalid: { run: (cwd) => git.checkoutRemote(cwd, 'nope') },
+  trackedStageUndoRedo: {
+    run: async (cwd) => {
+      const staged = await git.trackedStage(cwd, 'stage', ['app.txt']);
+      const undone = await git.moveIndexHistory(cwd, 'undo');
+      const redone = await git.moveIndexHistory(cwd, 'redo');
+      return { staged, undone, redone, now: await git.indexUndoState(cwd) };
+    },
+  },
+  moveIndexHistoryWithoutHistory: { run: (cwd) => git.moveIndexHistory(cwd, 'undo') },
+  stageWorkingHunk: {
+    run: async (cwd) => {
+      const diff = await git.workingFileDiff(cwd, 'app.txt', 'unstaged');
+      await git.stageWorkingHunk(cwd, 'app.txt', 'unstaged', diff, 0);
+      return git.indexUndoState(cwd);
+    },
+  },
+  unstageWorkingHunk: {
+    run: async (cwd) => {
+      const diff = await git.workingFileDiff(cwd, 'login.txt', 'staged');
+      return git.stageWorkingHunk(cwd, 'login.txt', 'staged', diff, 0);
+    },
+  },
+  stageWorkingHunkRejectsStaleDiff: { run: (cwd) => git.stageWorkingHunk(cwd, 'app.txt', 'unstaged', 'old', 0) },
+  stageWorkingHunkRejectsNewFile: {
+    run: async (cwd) => {
+      await git.stage(cwd, ['notes.md']);
+      const diff = await git.workingFileDiff(cwd, 'notes.md', 'staged');
+      return git.stageWorkingHunk(cwd, 'notes.md', 'staged', diff, 0);
+    },
+  },
+  discardWorkingHunk: {
+    run: async (cwd) =>
+      git.discardWorkingHunk(cwd, 'app.txt', await git.workingFileDiff(cwd, 'app.txt', 'unstaged'), 0),
+  },
+  discardWorkingFiles: {
+    run: async (cwd) =>
+      git.discardWorkingFiles(cwd, [
+        { path: 'app.txt', area: 'unstaged', diff: await git.workingFileDiff(cwd, 'app.txt', 'unstaged') },
+        { path: 'notes.md', area: 'untracked', diff: await git.workingFileDiff(cwd, 'notes.md', 'untracked') },
+      ]),
+  },
+  discardWorkingFilesRejectsStaleDiff: {
+    run: (cwd) => git.discardWorkingFiles(cwd, [{ path: 'app.txt', area: 'unstaged', diff: 'old' }]),
+  },
+  squashCommits: {
+    setup: async (raw, cwd) => {
+      await clean(raw);
+      await twoCommits(raw, cwd);
+    },
+    run: async (cwd) => git.squashCommits(cwd, await revParse(cwd, 'HEAD', 'HEAD~1'), 'One and two'),
+  },
+  squashRejectsDirtyTree: {
+    run: async (cwd) => git.squashCommits(cwd, await revParse(cwd, 'HEAD^2', 'HEAD^1'), 'Nope'),
+  },
+  squashRejectsMergeCommit: {
+    setup: clean,
+    run: async (cwd) => git.squashCommits(cwd, await revParse(cwd, 'HEAD', 'HEAD~1'), 'Nope'),
+  },
+  cherryPickMany: {
+    setup: async (raw) => {
+      await clean(raw);
+      await raw('checkout', '--quiet', '-b', 'pick', 'v1.0.0');
+    },
+    run: async (cwd) => git.cherryPickMany(cwd, await revParse(cwd, 'feature/login', 'main~1')),
+  },
+  cherryPickManyRejectsMerge: {
+    setup: clean,
+    run: async (cwd) => git.cherryPickMany(cwd, await revParse(cwd, 'main', 'main~1')),
+  },
+  stashFileDiff: { run: (cwd) => git.stashFileDiff(cwd, 'stash@{0}', 'app.txt') },
+  stashFileAt: { run: (cwd) => git.stashFileAt(cwd, 'stash@{0}', 'app.txt') },
+  stashUntrackedFileDiff: {
+    setup: (raw) => raw('stash', 'push', '--quiet', '--include-untracked', '-m', 'with untracked'),
+    run: async (cwd) => ({
+      diff: await git.stashFileDiff(cwd, 'stash@{0}', 'notes.md'),
+      content: await git.stashFileAt(cwd, 'stash@{0}', 'notes.md'),
+    }),
+  },
+  rebasePreview: {
+    setup: async (raw, cwd) => {
+      await withOrigin(raw, cwd);
+      await twoCommits(raw, cwd);
+    },
+    run: async (cwd) => git.rebasePreview(cwd, (await revParse(cwd, 'origin/main'))[0]),
+  },
+  rebasePreviewRequiresUpstream: {
+    setup: clean,
+    run: async (cwd) => git.rebasePreview(cwd, (await revParse(cwd, 'HEAD~1'))[0]),
+  },
+  fileBlobAt: { run: (cwd) => git.fileBlobAt(cwd, 'v1.0.0', 'app.txt') },
+  workingFileBlob: { run: (cwd) => git.workingFileBlob(cwd, 'app.txt') },
+  workingFileBlobRejectsEscape: { run: (cwd) => git.workingFileBlob(cwd, '../outside.txt') },
+  worktreeAdd: {
+    setup: clean,
+    run: async (cwd) => {
+      await git.worktreeAdd(cwd, `${cwd}-wt`, 'v1.0.0');
+      return inspectWorkspace(cwd);
+    },
+  },
+  inspectWorkspaceRedactsCredentials: {
+    setup: async (raw) => {
+      await raw('remote', 'add', 'origin', 'https://user:secret@example.com/team/repo.git?token=abc#frag');
+      await raw('remote', 'set-url', '--push', 'origin', 'git@example.com:team/repo.git');
+    },
+    run: (cwd) => inspectWorkspace(cwd),
+  },
+  agentCheckpoints: {
+    setup: async (raw) => {
+      await raw('update-ref', 'refs/agents/session-1/checkpoint', 'v1.0.0');
+      await raw('update-ref', 'refs/agents/session-2/checkpoint', 'HEAD');
+    },
+    run: (cwd) => git.agentCheckpoints(cwd),
+  },
+  pushInfo: { setup: withOrigin, run: (cwd) => git.pushInfo(cwd) },
+  pushInfoWithoutRemote: { run: (cwd) => git.pushInfo(cwd) },
+  pushBranchToNewTarget: {
+    setup: withOrigin,
+    run: async (cwd) => {
+      await git.pushBranch(cwd, 'origin', 'main', 'release', { kind: 'system' });
+      return git.pushInfo(cwd);
+    },
+  },
+  pushBranchRejectsWrongBranch: { setup: withOrigin, run: (cwd) => git.pushBranch(cwd, 'origin', 'other', 'other') },
+  pushBranchForceNeedsHash: {
+    setup: withOrigin,
+    run: (cwd) => git.pushBranch(cwd, 'origin', 'main', 'main', undefined, { forceWithLease: true }),
+  },
+  cloneRejectsLocalPath: { run: (cwd) => git.clone(`${cwd}-origin.git`, `${cwd}-clone`, () => {}) },
+  cloneRejectsEmbeddedCredentials: {
+    run: (cwd) => git.clone('https://user:pw@example.com/repo.git', `${cwd}-clone`, () => {}),
+  },
+  cloneRejectsWindowsDrivePath: {
+    run: (cwd) => git.clone('C:\\repos\\project.git', `${cwd}-clone`, () => {}),
+  },
+  cloneRejectsRelativeDestination: {
+    run: () => git.clone('https://example.com/repo.git', 'relative/dir', () => {}),
+  },
 };
 
 const snapshot = async (cwd: string) => ({
@@ -201,6 +387,8 @@ for (const [name, scenario] of Object.entries(SCENARIOS)) {
     t.after(async () => {
       await rm(cwd, { recursive: true, force: true });
       await rm(`${cwd}-origin.git`, { recursive: true, force: true });
+      await rm(`${cwd}-wt`, { recursive: true, force: true });
+      await rm(`${cwd}-clone`, { recursive: true, force: true });
     });
     const prevEnv = { ...process.env };
     Object.assign(process.env, isolatedEnv(cwd));

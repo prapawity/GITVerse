@@ -419,3 +419,355 @@ async fn pushPullFetchWithLocalRemote() {
     check("pushPullFetchWithLocalRemote", &r, outcome).await;
     let _ = std::fs::remove_dir_all(origin);
 }
+
+// ---- phase 3 batch B ----
+
+/// A bare `origin` next to the repo, with main and feature/login pushed and tracked.
+fn with_origin(r: &Repo) -> String {
+    clean(r);
+    let origin = format!("{}-origin.git", r.root_str());
+    r.git(&["init", "--quiet", "--bare", &origin]);
+    r.git(&["remote", "add", "origin", &origin]);
+    r.git(&["push", "--quiet", "-u", "origin", "main", "feature/login"]);
+    origin
+}
+
+fn two_commits(r: &Repo) {
+    r.put("one.txt", "one\n");
+    r.git(&["add", "one.txt"]);
+    r.git(&["commit", "--quiet", "-m", "One"]);
+    r.put("two.txt", "two\n");
+    r.git(&["add", "two.txt"]);
+    r.git(&["commit", "--quiet", "-m", "Two"]);
+}
+
+fn rev(p: &std::path::Path, refs: &[&str]) -> Vec<String> {
+    refs.iter()
+        .map(|r| {
+            let out = std::process::Command::new("git")
+                .args(["rev-parse", r])
+                .current_dir(p)
+                .output()
+                .unwrap();
+            String::from_utf8(out.stdout).unwrap().trim().to_owned()
+        })
+        .collect()
+}
+
+/// Remove sibling folders a scenario may create next to the temp repo.
+fn cleanup(r: &Repo) {
+    for suffix in ["-origin.git", "-wt", "-clone"] {
+        let _ = std::fs::remove_dir_all(format!("{}{suffix}", r.root_str()));
+    }
+}
+
+macro_rules! scenario_b {
+    ($name:ident, |$r:ident| $setup:block, |$g:ident, $p:ident, $h:ident| $run:expr) => {
+        #[tokio::test]
+        async fn $name() {
+            let $r = build_repo();
+            $setup;
+            let $g = $r.runner(true);
+            let $p = $r.path();
+            let $h = git::IndexHistory::default();
+            let _ = &$h;
+            let outcome = $run;
+            check(stringify!($name).trim_start_matches("b_"), &$r, outcome).await;
+            cleanup(&$r);
+        }
+    };
+    ($name:ident, |$g:ident, $p:ident, $h:ident| $run:expr) => {
+        scenario_b!($name, |_r| {}, |$g, $p, $h| $run);
+    };
+}
+
+use git::Area;
+
+scenario_b!(b_stagedForCommitMessage, |g, p, _h| {
+    git::staged_for_commit_message(&g, p).await
+});
+scenario_b!(
+    b_stagedForCommitMessageEmpty,
+    |r| { clean(&r) },
+    |g, p, _h| git::staged_for_commit_message(&g, p).await
+);
+scenario_b!(
+    b_checkoutRemoteCreatesTrackingBranch,
+    |r| {
+        with_origin(&r);
+        r.git(&["branch", "-D", "feature/login"]);
+    },
+    |g, p, _h| git::checkout_remote(&g, p, "origin/feature/login", false, None).await
+);
+scenario_b!(
+    b_checkoutRemoteFastForwards,
+    |r| {
+        with_origin(&r);
+        r.git(&["reset", "--quiet", "--hard", "HEAD~1"]);
+    },
+    |g, p, _h| git::checkout_remote(&g, p, "origin/main", false, None).await
+);
+scenario_b!(
+    b_checkoutRemoteRejectsDiverged,
+    |r| {
+        with_origin(&r);
+        r.git(&["reset", "--quiet", "--hard", "HEAD~1"]);
+        r.put("local.txt", "local\n");
+        r.git(&["add", "local.txt"]);
+        r.git(&["commit", "--quiet", "-m", "Local only"]);
+    },
+    |g, p, _h| git::checkout_remote(&g, p, "origin/main", false, None).await
+);
+scenario_b!(b_checkoutRemoteRejectsInvalid, |g, p, _h| {
+    git::checkout_remote(&g, p, "nope", false, None).await
+});
+scenario_b!(b_trackedStageUndoRedo, |g, p, h| async {
+    let staged = h.tracked_stage(&g, p, true, &strings(&["app.txt"])).await?;
+    let undone = h.move_history(&g, p, true).await?;
+    let redone = h.move_history(&g, p, false).await?;
+    let now = h.state(&g, p).await?;
+    Ok::<_, AppError>(json!({ "staged": staged, "undone": undone, "redone": redone, "now": now }))
+}
+.await);
+scenario_b!(b_moveIndexHistoryWithoutHistory, |g, p, h| h
+    .move_history(&g, p, true)
+    .await);
+scenario_b!(b_stageWorkingHunk, |g, p, h| async {
+    let diff = git::working_file_diff(&g, p, "app.txt", Area::Unstaged).await?;
+    git::stage_working_hunk(&g, &h, p, "app.txt", Area::Unstaged, &diff, 0).await?;
+    h.state(&g, p).await
+}
+.await);
+scenario_b!(b_unstageWorkingHunk, |g, p, h| async {
+    let diff = git::working_file_diff(&g, p, "login.txt", Area::Staged).await?;
+    git::stage_working_hunk(&g, &h, p, "login.txt", Area::Staged, &diff, 0).await
+}
+.await);
+scenario_b!(b_stageWorkingHunkRejectsStaleDiff, |g, p, h| {
+    git::stage_working_hunk(&g, &h, p, "app.txt", Area::Unstaged, "old", 0).await
+});
+scenario_b!(b_stageWorkingHunkRejectsNewFile, |g, p, h| async {
+    git::stage(&g, p, &strings(&["notes.md"])).await?;
+    let diff = git::working_file_diff(&g, p, "notes.md", Area::Staged).await?;
+    git::stage_working_hunk(&g, &h, p, "notes.md", Area::Staged, &diff, 0).await
+}
+.await);
+scenario_b!(b_discardWorkingHunk, |g, p, _h| async {
+    let diff = git::working_file_diff(&g, p, "app.txt", Area::Unstaged).await?;
+    git::discard_working_hunk(&g, p, "app.txt", &diff, 0).await
+}
+.await);
+scenario_b!(b_discardWorkingFiles, |g, p, _h| async {
+    let files = vec![
+        git::DiscardFile {
+            path: "app.txt".into(),
+            area: Area::Unstaged,
+            diff: git::working_file_diff(&g, p, "app.txt", Area::Unstaged).await?,
+        },
+        git::DiscardFile {
+            path: "notes.md".into(),
+            area: Area::Untracked,
+            diff: git::working_file_diff(&g, p, "notes.md", Area::Untracked).await?,
+        },
+    ];
+    git::discard_working_files(&g, p, &files).await
+}
+.await);
+scenario_b!(b_discardWorkingFilesRejectsStaleDiff, |g, p, _h| {
+    git::discard_working_files(
+        &g,
+        p,
+        &[git::DiscardFile {
+            path: "app.txt".into(),
+            area: Area::Unstaged,
+            diff: "old".into(),
+        }],
+    )
+    .await
+});
+scenario_b!(
+    b_squashCommits,
+    |r| {
+        clean(&r);
+        two_commits(&r);
+    },
+    |g, p, _h| git::squash_commits(&g, p, &rev(p, &["HEAD", "HEAD~1"]), "One and two").await
+);
+scenario_b!(b_squashRejectsDirtyTree, |g, p, _h| git::squash_commits(
+    &g,
+    p,
+    &rev(p, &["HEAD^2", "HEAD^1"]),
+    "Nope"
+)
+.await);
+scenario_b!(b_squashRejectsMergeCommit, |r| { clean(&r) }, |g, p, _h| {
+    git::squash_commits(&g, p, &rev(p, &["HEAD", "HEAD~1"]), "Nope").await
+});
+scenario_b!(
+    b_cherryPickMany,
+    |r| {
+        clean(&r);
+        r.git(&["checkout", "--quiet", "-b", "pick", "v1.0.0"]);
+    },
+    |g, p, _h| git::cherry_pick_many(&g, p, &rev(p, &["feature/login", "main~1"])).await
+);
+scenario_b!(
+    b_cherryPickManyRejectsMerge,
+    |r| { clean(&r) },
+    |g, p, _h| git::cherry_pick_many(&g, p, &rev(p, &["main", "main~1"])).await
+);
+scenario_b!(b_stashFileDiff, |g, p, _h| git::stash_file_diff(
+    &g,
+    p,
+    "stash@{0}",
+    "app.txt"
+)
+.await);
+scenario_b!(b_stashFileAt, |g, p, _h| git::stash_file_at(
+    &g,
+    p,
+    "stash@{0}",
+    "app.txt"
+)
+.await);
+scenario_b!(
+    b_stashUntrackedFileDiff,
+    |r| {
+        r.git(&[
+            "stash",
+            "push",
+            "--quiet",
+            "--include-untracked",
+            "-m",
+            "with untracked",
+        ]);
+    },
+    |g, p, _h| async {
+        Ok::<_, AppError>(json!({
+            "diff": git::stash_file_diff(&g, p, "stash@{0}", "notes.md").await?,
+            "content": git::stash_file_at(&g, p, "stash@{0}", "notes.md").await?,
+        }))
+    }
+    .await
+);
+scenario_b!(
+    b_rebasePreview,
+    |r| {
+        with_origin(&r);
+        two_commits(&r);
+    },
+    |g, p, _h| git::rebase_preview(&g, p, &rev(p, &["origin/main"])[0]).await
+);
+scenario_b!(
+    b_rebasePreviewRequiresUpstream,
+    |r| { clean(&r) },
+    |g, p, _h| git::rebase_preview(&g, p, &rev(p, &["HEAD~1"])[0]).await
+);
+scenario_b!(b_fileBlobAt, |g, p, _h| git::file_blob_at(
+    &g, p, "v1.0.0", "app.txt"
+)
+.await);
+scenario_b!(b_workingFileBlob, |_g, p, _h| git::working_file_blob(
+    p, "app.txt"
+));
+scenario_b!(b_workingFileBlobRejectsEscape, |_g, p, _h| {
+    git::working_file_blob(p, "../outside.txt")
+});
+scenario_b!(b_worktreeAdd, |r| { clean(&r) }, |g, p, _h| async {
+    let wt = format!("{}-wt", p.display());
+    git::worktree_add(&g, p, &wt, "v1.0.0").await?;
+    git::inspect_workspace(&g, p).await
+}
+.await);
+scenario_b!(
+    b_inspectWorkspaceRedactsCredentials,
+    |r| {
+        r.git(&[
+            "remote",
+            "add",
+            "origin",
+            "https://user:secret@example.com/team/repo.git?token=abc#frag",
+        ]);
+        r.git(&[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            "git@example.com:team/repo.git",
+        ]);
+    },
+    |g, p, _h| git::inspect_workspace(&g, p).await
+);
+scenario_b!(
+    b_agentCheckpoints,
+    |r| {
+        r.git(&["update-ref", "refs/agents/session-1/checkpoint", "v1.0.0"]);
+        r.git(&["update-ref", "refs/agents/session-2/checkpoint", "HEAD"]);
+    },
+    |g, p, _h| git::agent_checkpoints(&g, p).await
+);
+scenario_b!(
+    b_pushInfo,
+    |r| {
+        with_origin(&r);
+    },
+    |g, p, _h| git::push_info(&g, p).await
+);
+scenario_b!(b_pushInfoWithoutRemote, |g, p, _h| git::push_info(&g, p)
+    .await);
+scenario_b!(
+    b_pushBranchToNewTarget,
+    |r| {
+        with_origin(&r);
+    },
+    |g, p, _h| async {
+        let auth = git::PushAuth::default();
+        git::push_branch(&g, p, "origin", "main", "release", Some(&auth), None).await?;
+        git::push_info(&g, p).await
+    }
+    .await
+);
+scenario_b!(
+    b_pushBranchRejectsWrongBranch,
+    |r| {
+        with_origin(&r);
+    },
+    |g, p, _h| git::push_branch(&g, p, "origin", "other", "other", None, None).await
+);
+scenario_b!(
+    b_pushBranchForceNeedsHash,
+    |r| {
+        with_origin(&r);
+    },
+    |g, p, _h| {
+        let opts = git::PushOptions {
+            force_with_lease: true,
+            expected_remote_hash: None,
+        };
+        git::push_branch(&g, p, "origin", "main", "main", None, Some(&opts)).await
+    }
+);
+scenario_b!(b_cloneRejectsLocalPath, |_g, p, _h| git::clone(
+    &format!("{}-origin.git", p.display()),
+    &format!("{}-clone", p.display()),
+    |_| {}
+)
+.await);
+scenario_b!(b_cloneRejectsEmbeddedCredentials, |_g, p, _h| git::clone(
+    "https://user:pw@example.com/repo.git",
+    &format!("{}-clone", p.display()),
+    |_| {}
+)
+.await);
+scenario_b!(b_cloneRejectsWindowsDrivePath, |_g, p, _h| git::clone(
+    "C:\\repos\\project.git",
+    &format!("{}-clone", p.display()),
+    |_| {}
+)
+.await);
+scenario_b!(b_cloneRejectsRelativeDestination, |_g, _p, _h| git::clone(
+    "https://example.com/repo.git",
+    "relative/dir",
+    |_| {}
+)
+.await);

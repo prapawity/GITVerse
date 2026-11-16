@@ -79,6 +79,13 @@ impl GitRunner {
 
     /// Run git in `cwd` and return stdout as UTF-8 (lossy, like Node's default decoding).
     pub async fn run(&self, cwd: &Path, args: &[&str], opts: RunOpts) -> Result<String> {
+        let out = self.run_bytes(cwd, args, opts).await?;
+        Ok(String::from_utf8(out)
+            .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()))
+    }
+
+    /// Run git and return stdout as raw bytes (for binary blobs).
+    pub async fn run_bytes(&self, cwd: &Path, args: &[&str], opts: RunOpts) -> Result<Vec<u8>> {
         let mut cmd = Command::new(&self.bin);
         let identity = self
             .identity
@@ -129,15 +136,15 @@ impl GitRunner {
             _ = cancel.cancelled() => return Err(AppError::Cancelled),
         };
 
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
         let ok = output.status.success()
             || output
                 .status
                 .code()
                 .is_some_and(|c| opts.ok_codes.contains(&c));
         if ok {
-            return Ok(stdout);
+            return Ok(output.stdout);
         }
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
         // git reports some failures (e.g. rebase --continue) on stdout: same fallback as git.ts
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         let message = if !stderr.is_empty() {

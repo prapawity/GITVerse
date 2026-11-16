@@ -96,6 +96,26 @@ pub const PORTED: &[&str] = &[
     "readWorkFile",
     "writeWorkFile",
     "windowsUnsupportedPathsForRef",
+    // phase 3, batch B
+    "stagedForCommitMessage",
+    "checkoutRemote",
+    "trackedStage",
+    "indexUndoState",
+    "moveIndexHistory",
+    "stageWorkingHunk",
+    "discardWorkingHunk",
+    "discardWorkingFiles",
+    "squashCommits",
+    "cherryPickMany",
+    "stashFileDiff",
+    "stashFileAt",
+    "rebasePreview",
+    "fileBlobAt",
+    "workingFileBlob",
+    "worktreeAdd",
+    "inspectWorkspace",
+    "agentCheckpoints",
+    "pushInfo",
 ];
 
 #[tauri::command]
@@ -127,6 +147,11 @@ impl Args {
                 .as_u64()
                 .ok_or_else(|| AppError::Invalid(format!("Argument {i} must be a whole number."))),
         }
+    }
+    fn i64(&self, i: usize) -> CmdResult<i64> {
+        self.0.get(i).and_then(Value::as_i64).ok_or_else(|| {
+            AppError::Invalid("This hunk is no longer available. Refresh the diff.".into())
+        })
     }
     fn bool_or(&self, i: usize, default: bool) -> bool {
         self.0.get(i).and_then(Value::as_bool).unwrap_or(default)
@@ -160,6 +185,7 @@ pub async fn git_call(
     args: Vec<Value>,
 ) -> CmdResult<Value> {
     let git = app.git.clone();
+    let history = &app.index_history;
     let a = Args(args);
     match method.as_str() {
         "status" => json(git::status(&git, &a.repo()?).await?),
@@ -259,6 +285,87 @@ pub async fn git_call(
             a.str(1)?,
             a.opt_str(2).unwrap_or(""),
         )?),
+        "stagedForCommitMessage" => json(git::staged_for_commit_message(&git, &a.repo()?).await?),
+        "checkoutRemote" => {
+            let expected: Option<Vec<String>> = a.parse_or_default(3)?;
+            json(
+                git::checkout_remote(
+                    &git,
+                    &a.repo()?,
+                    a.str(1)?,
+                    a.bool_or(2, false),
+                    expected.as_deref(),
+                )
+                .await?,
+            )
+        }
+        "trackedStage" => {
+            let stage = match a.str(1)? {
+                "stage" => true,
+                "unstage" => false,
+                _ => return Err(AppError::Invalid("Invalid stage action.".into())),
+            };
+            json(
+                history
+                    .tracked_stage(&git, &a.repo()?, stage, &a.strings(2)?)
+                    .await?,
+            )
+        }
+        "indexUndoState" => json(history.state(&git, &a.repo()?).await?),
+        "moveIndexHistory" => {
+            let undo = match a.str(1)? {
+                "undo" => true,
+                "redo" => false,
+                _ => return Err(AppError::Invalid("Invalid history action.".into())),
+            };
+            json(history.move_history(&git, &a.repo()?, undo).await?)
+        }
+        "stageWorkingHunk" => json(
+            git::stage_working_hunk(
+                &git,
+                history,
+                &a.repo()?,
+                a.str(1)?,
+                a.parse(2)?,
+                a.opt_str(3).unwrap_or(""),
+                a.i64(4)?,
+            )
+            .await?,
+        ),
+        "discardWorkingHunk" => json(
+            git::discard_working_hunk(
+                &git,
+                &a.repo()?,
+                a.str(1)?,
+                a.opt_str(2).unwrap_or(""),
+                a.i64(3)?,
+            )
+            .await?,
+        ),
+        "discardWorkingFiles" => {
+            let files: Vec<git::DiscardFile> = a
+                .parse(1)
+                .map_err(|_| AppError::Invalid("Invalid discard selection.".into()))?;
+            json(git::discard_working_files(&git, &a.repo()?, &files).await?)
+        }
+        "squashCommits" => json(
+            git::squash_commits(&git, &a.repo()?, &a.strings(1)?, a.opt_str(2).unwrap_or(""))
+                .await?,
+        ),
+        "cherryPickMany" => json(git::cherry_pick_many(&git, &a.repo()?, &a.strings(1)?).await?),
+        "stashFileDiff" => {
+            json(git::stash_file_diff(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?)
+        }
+        "stashFileAt" => json(git::stash_file_at(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "rebasePreview" => {
+            json(git::rebase_preview(&git, &a.repo()?, a.opt_str(1).unwrap_or("")).await?)
+        }
+        "fileBlobAt" => json(git::file_blob_at(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "workingFileBlob" => json(git::working_file_blob(&a.repo()?, a.str(1)?)?),
+        "worktreeAdd" => json(git::worktree_add(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "inspectWorkspace" => json(git::inspect_workspace(&git, &a.repo()?).await?),
+        "agentCheckpoints" => json(git::agent_checkpoints(&git, &a.repo()?).await?),
+        "pushInfo" => json(git::push_info(&git, &a.repo()?).await?),
         "windowsUnsupportedPathsForRef" => {
             json(git::windows_unsupported_paths_for_ref(&git, &a.repo()?, a.str(1)?).await?)
         }
@@ -268,20 +375,116 @@ pub async fn git_call(
     }
 }
 
+/// `repo:clone`: progress lines are emitted as `repo:cloneProgress` events while git runs.
+#[tauri::command]
+pub async fn repo_clone(
+    handle: tauri::AppHandle,
+    url: String,
+    destination: String,
+) -> CmdResult<()> {
+    use tauri::Emitter;
+    git::clone(&url, &destination, |line| {
+        let _ = handle.emit("repo:cloneProgress", line);
+    })
+    .await
+}
+
+#[derive(serde::Deserialize)]
+pub struct PushProfile {
+    pub kind: git::AuthKind,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default, rename = "sshKey")]
+    pub ssh_key: String,
+}
+
+#[derive(serde::Deserialize)]
+pub struct PushCredentials {
+    pub username: String,
+    pub password: String,
+}
+
+/// `push:branch`. Explicit credentials win; otherwise the profile's kind decides. Saved HTTPS
+/// tokens move to the OS keychain in the secrets phase, so a saved-token profile is reported clearly.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn push_branch(
+    app: tauri::State<'_, AppState>,
+    repo: String,
+    remote: String,
+    branch: String,
+    target: String,
+    profile: Option<PushProfile>,
+    credentials: Option<PushCredentials>,
+    options: Option<git::PushOptions>,
+) -> CmdResult<String> {
+    let auth = match (credentials, profile) {
+        (Some(c), _) => Some(git::PushAuth {
+            kind: git::AuthKind::Https,
+            username: Some(c.username),
+            token: Some(c.password),
+            ssh_key: None,
+        }),
+        (None, Some(p)) => Some(git::PushAuth {
+            kind: p.kind,
+            username: Some(p.username).filter(|u| !u.is_empty()),
+            ssh_key: Some(p.ssh_key).filter(|k| !k.is_empty()),
+            token: None,
+        }),
+        (None, None) => None,
+    };
+    git::push_branch(
+        &app.git,
+        PathBuf::from(repo).as_path(),
+        &remote,
+        &branch,
+        &target,
+        auth.as_ref(),
+        options.as_ref(),
+    )
+    .await
+}
+
+/// `push:chooseKey`: pick an SSH private key file.
+#[tauri::command]
+pub async fn push_choose_key(handle: tauri::AppHandle) -> Option<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    handle
+        .dialog()
+        .file()
+        .set_title("Choose SSH private key")
+        .pick_file(move |file| {
+            let _ = tx.send(file.and_then(|f| f.into_path().ok()));
+        });
+    tauri::async_runtime::spawn_blocking(move || rx.recv().ok().flatten())
+        .await
+        .ok()
+        .flatten()
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::PORTED;
 
-    /// Every Rust-ported method must be one the renderer can call (src/shared/gitMethods.ts).
+    /// The Rust backend implements exactly the methods the renderer can call (src/shared/gitMethods.ts).
     #[test]
-    fn ported_methods_exist_in_the_ts_contract() {
+    fn ported_methods_match_the_ts_contract() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/shared/gitMethods.ts");
         let ts = std::fs::read_to_string(path).expect("read gitMethods.ts");
-        for method in PORTED {
-            assert!(
-                ts.contains(&format!("'{method}',")),
-                "{method} is not in GIT_METHODS"
-            );
-        }
+        let list = ts
+            .split("GIT_METHODS = [")
+            .nth(1)
+            .and_then(|r| r.split(']').next())
+            .expect("GIT_METHODS list");
+        let mut expected: Vec<&str> = list
+            .split(',')
+            .map(|s| s.trim().trim_matches('\''))
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut ported = PORTED.to_vec();
+        expected.sort_unstable();
+        ported.sort_unstable();
+        assert_eq!(ported, expected, "Rust PORTED and TS GIT_METHODS differ");
     }
 }

@@ -4,11 +4,13 @@ mod commands;
 
 use std::path::PathBuf;
 
-use gitverse_core::git::{GitRunner, Identity};
+use gitverse_core::git::{GitRunner, Identity, IndexHistory};
 use tauri::Manager;
 
 pub struct AppState {
     pub git: GitRunner,
+    /// Undo/redo of stage actions, per repository, for this app session.
+    pub index_history: IndexHistory,
     /// Same folder Electron uses (`<appData>/GITVerse`), so both builds share repos and settings.
     pub data_dir: PathBuf,
 }
@@ -39,7 +41,11 @@ pub fn run() {
             let data_dir = app.path().config_dir()?.join("GITVerse");
             let git = GitRunner::default();
             git.set_identity(saved_identity(&data_dir));
-            app.manage(AppState { git, data_dir });
+            app.manage(AppState {
+                git,
+                index_history: IndexHistory::default(),
+                data_dir,
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -49,6 +55,9 @@ pub fn run() {
             commands::set_identity,
             commands::git_call,
             commands::ported_git_methods,
+            commands::repo_clone,
+            commands::push_branch,
+            commands::push_choose_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GITVerse");

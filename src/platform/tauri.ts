@@ -7,6 +7,7 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
+import { listen } from '@tauri-apps/api/event';
 import { GIT_METHODS } from '../shared/gitMethods';
 import type { AnyAsync, PlatformApi } from './api';
 
@@ -33,6 +34,20 @@ const notPorted =
 
 const noopSubscription = () => () => {};
 
+/** Subscribe to a backend event; returns an unsubscribe function like the Electron bridge. */
+function subscribe<T>(event: string, cb: (payload: T) => void) {
+  let stop: (() => void) | undefined;
+  let stopped = false;
+  void listen<T>(event, (e) => cb(e.payload)).then((unlisten) => {
+    if (stopped) unlisten();
+    else stop = unlisten;
+  });
+  return () => {
+    stopped = true;
+    stop?.();
+  };
+}
+
 function group<K extends string>(prefix: string, names: readonly K[]): Record<K, AnyAsync> {
   return Object.fromEntries(names.map((n) => [n, notPorted(`${prefix}.${n}`)])) as Record<K, AnyAsync>;
 }
@@ -58,9 +73,9 @@ export async function createTauriApi(): Promise<PlatformApi> {
     openRepoDialog: () => call<string | null>('repo_open'),
     openThirdPartyNotices: notPorted('openThirdPartyNotices'),
     openRuntimeNotice: notPorted('openRuntimeNotice'),
-    cloneRepo: notPorted('cloneRepo'),
+    cloneRepo: (url: string, destination: string) => call('repo_clone', { url, destination }),
     openFile: notPorted('openFile'),
-    onCloneProgress: noopSubscription,
+    onCloneProgress: (cb) => subscribe<string>('repo:cloneProgress', cb),
     // Tauri exposes dropped files' paths through its own drag-drop event, not on File objects.
     pathForFile: () => '',
     findRepositories: notPorted('findRepositories'),
@@ -75,7 +90,14 @@ export async function createTauriApi(): Promise<PlatformApi> {
       check: development,
       onStatus: noopSubscription,
     },
-    pushProfiles: group('pushProfiles', ['tokenStatus', 'setToken', 'chooseKey', 'push'] as const),
+    pushProfiles: {
+      // saved HTTPS tokens move to the OS keychain in the secrets phase
+      tokenStatus: () => Promise.resolve(false),
+      setToken: notPorted('pushProfiles.setToken'),
+      chooseKey: () => call<string | null>('push_choose_key'),
+      push: (repo, remote, branch, target, profile, credentials, options) =>
+        call('push_branch', { repo, remote, branch, target, profile, credentials, options }),
+    },
     term: {
       spawn: notPorted('term.spawn') as PlatformApi['term']['spawn'],
       write: notPorted('term.write') as PlatformApi['term']['write'],
