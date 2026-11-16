@@ -113,6 +113,7 @@ pub fn run() {
             commands::term_kill,
             update_commands::updates_environment,
             update_commands::updates_check,
+            update_commands::updates_startup,
             update_commands::updates_download,
             update_commands::updates_install,
             update_commands::updates_list,

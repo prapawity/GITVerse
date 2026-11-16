@@ -30,6 +30,12 @@ import { ProfileSettings } from './ProfileSettings';
 import { ApplicationAbout } from './ApplicationAbout';
 import { desktopApi, platformApi } from '../platform/api';
 
+const defaultShellHint = /Win/.test(navigator.platform)
+  ? 'cmd.exe'
+  : /Mac/.test(navigator.platform)
+    ? '/bin/zsh'
+    : '/bin/bash';
+
 export type Section = 'general' | 'appearance' | 'terminal' | 'conflicts' | 'ai' | 'gitflow' | 'profiles' | 'about';
 
 const input =
@@ -931,7 +937,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                     id="sh"
                     value={st.termShell}
                     onChange={(e) => st.set('termShell', e.target.value)}
-                    placeholder="/bin/zsh"
+                    placeholder={defaultShellHint}
                     className={input}
                   />
                 </Row>

@@ -78,6 +78,26 @@ pub async fn updates_check(
     })
 }
 
+/// The check behind the launch screen: a feed that cannot be read (no release has published
+/// `latest.json` yet, offline, GitHub down) must not stop the app from opening, so it counts as
+/// "no update" here. A manual check still reports the error.
+#[tauri::command]
+pub async fn updates_startup(
+    handle: tauri::AppHandle,
+    app: tauri::State<'_, AppState>,
+) -> Result<Value, ()> {
+    let result = updates_check(handle, app).await?;
+    Ok(startup_view(result))
+}
+
+fn startup_view(result: Value) -> Value {
+    if result["kind"] == "error" {
+        json!({ "kind": "current", "currentVersion": result["currentVersion"] })
+    } else {
+        result
+    }
+}
+
 #[tauri::command]
 pub async fn updates_download(
     handle: tauri::AppHandle,
@@ -177,4 +197,21 @@ pub fn updates_open_downloads(handle: tauri::AppHandle, url: String) -> Result<(
         .opener()
         .open_url(url, None::<&str>)
         .map_err(|e| AppError::Invalid(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::startup_view;
+    use serde_json::json;
+
+    #[test]
+    fn startup_never_reports_a_feed_error() {
+        let failed = json!({ "kind": "error", "currentVersion": "1.0.0", "message": "Could not fetch a valid release JSON from the remote" });
+        assert_eq!(
+            startup_view(failed),
+            json!({ "kind": "current", "currentVersion": "1.0.0" })
+        );
+        let found = json!({ "kind": "optional", "currentVersion": "1.0.0", "version": "1.1.0", "url": "u" });
+        assert_eq!(startup_view(found.clone()), found);
+    }
 }

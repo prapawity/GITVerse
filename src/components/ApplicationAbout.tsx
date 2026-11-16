@@ -6,6 +6,8 @@ import { UpdateNotice } from './UpdateNotice';
 import { ReleasePicker } from './ReleasePicker';
 import { platformApi, desktopApi } from '../platform/api';
 
+const tauriBuild = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 export function ApplicationAbout() {
   const [environment, setEnvironment] = useState<{ enabled: boolean; currentVersion: string } | null>(null);
   const [checking, setChecking] = useState(false);
@@ -125,8 +127,9 @@ export function ApplicationAbout() {
       <div className="border-t border-surface py-6">
         <h2 className="text-lg font-semibold">Open source licenses</h2>
         <p className="mb-4 mt-1 text-sm text-sub">
-          GITVerse is licensed under MIT. Third-party, Electron, and Chromium notices are included with this
-          application.
+          {tauriBuild
+            ? 'GITVerse is licensed under MIT. Notices for the npm packages and Rust crates it uses are included with this application.'
+            : 'GITVerse is licensed under MIT. Third-party, Electron, and Chromium notices are included with this application.'}
         </p>
         <div className="flex flex-wrap gap-2">
           {(
@@ -135,18 +138,21 @@ export function ApplicationAbout() {
               ['electron', 'View Electron license'],
               ['chromium', 'View Chromium notices'],
             ] as const
-          ).map(([kind, label]) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => void openNotice(kind)}
-              disabled={openingNotice !== null}
-              className="flex min-h-[40px] items-center gap-2 rounded-md border border-surface px-4 py-2 text-sm hover:bg-surface/60 disabled:opacity-50"
-            >
-              <FileText size={16} aria-hidden />
-              {openingNotice === kind ? 'Opening…' : label}
-            </button>
-          ))}
+          )
+            // the Tauri build ships no Electron or Chromium: it uses the system web view
+            .filter(([kind]) => !tauriBuild || kind === 'third-party')
+            .map(([kind, label]) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => void openNotice(kind)}
+                disabled={openingNotice !== null}
+                className="flex min-h-[40px] items-center gap-2 rounded-md border border-surface px-4 py-2 text-sm hover:bg-surface/60 disabled:opacity-50"
+              >
+                <FileText size={16} aria-hidden />
+                {openingNotice === kind ? 'Opening…' : label}
+              </button>
+            ))}
         </div>
         {noticesError && (
           <p role="alert" className="mt-3 break-words text-sm text-[#f38ba8]">

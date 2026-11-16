@@ -892,7 +892,7 @@ export default function App() {
             <ToolBtn
               icon={<History size={21} />}
               label="Rebase plan"
-              disabled={dis || !selectedHash}
+              disabled={dis || !selectedHash || !!operation}
               onClick={() => setRebasePreviewOpen(true)}
             />
             <button

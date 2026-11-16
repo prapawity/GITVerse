@@ -88,7 +88,7 @@ export async function createTauriApi(): Promise<PlatformApi> {
     setActiveIdentity: (identity) => call('set_identity', { identity }),
     updates: {
       environment: () => call('updates_environment'),
-      startup: () => call('updates_check'),
+      startup: () => call('updates_startup'),
       check: () => call('updates_check'),
       list: () => call('updates_list'),
       openReleaseList: () => call('updates_open_release_list'),

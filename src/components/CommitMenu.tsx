@@ -23,7 +23,11 @@ const commitLink = (base: string, hash: string) =>
       ? `${base}/commits/${hash}`
       : `${base}/commit/${hash}`;
 
-type Item = { label: string; run?: () => void; danger?: boolean; sub?: Item[] } | '-';
+type Item = { label: string; run?: () => void; danger?: boolean; sub?: Item[]; blocked?: boolean } | '-';
+
+/** Commands that move HEAD or rewrite history cannot run while a merge, rebase, cherry-pick or revert is in progress. */
+const BUSY = /^(Checkout|Cherry pick|Rebase|Reset|Revert|Squash|Merge|Fast-forward|Pull)\b/;
+const BUSY_HINT = 'Finish or abort the current Git operation first';
 
 export function CommitMenu({
   x,
@@ -44,7 +48,7 @@ export function CommitMenu({
   onPush: () => void;
   onClose: () => void;
 }) {
-  const { repoPath, exec, deleteBothBranches, checkout, toast, track, refs, graph, action } = useRepo();
+  const { repoPath, exec, deleteBothBranches, checkout, toast, track, refs, graph, action, operation } = useRepo();
   const [open, setOpen] = useState<number | null>(null);
   const short = hash.slice(0, 7);
 
@@ -387,6 +391,9 @@ export function CommitMenu({
 
   const W = Math.min(390, window.innerWidth - 16);
   const left = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+  const shown: Item[] = operation
+    ? items.map((it) => (it !== '-' && BUSY.test(it.label) ? { ...it, blocked: true } : it))
+    : items;
   const top = Math.max(8, Math.min(y, window.innerHeight - Math.min(640, window.innerHeight - 16)));
   const row =
     'flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-[13px] leading-snug hover:bg-[#4cc2ff]/15 focus-visible:bg-[#4cc2ff]/20';
@@ -463,7 +470,7 @@ export function CommitMenu({
           {stash?.message ?? refName ?? short}
         </div>
       </div>
-      {items.map((it, i) =>
+      {shown.map((it, i) =>
         it === '-' ? (
           <div key={i} role="separator" className="my-1.5 border-t border-surface/70" />
         ) : (
@@ -473,8 +480,9 @@ export function CommitMenu({
               data-menu-index={i}
               aria-haspopup={!!it.sub}
               aria-expanded={it.sub ? open === i : undefined}
-              className={`${row} ${it.danger ? 'text-[#f38ba8]' : ''}`}
-              title={it.label}
+              className={`${row} ${it.danger ? 'text-[#f38ba8]' : ''} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
+              disabled={it.blocked}
+              title={it.blocked ? BUSY_HINT : it.label}
               onClick={() => {
                 if (it.sub) {
                   const nextOpen = open === i ? null : i;
