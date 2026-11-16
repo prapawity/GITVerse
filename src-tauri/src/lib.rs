@@ -50,7 +50,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(match update_commands::PUBKEY {
-            Some(key) => tauri_plugin_updater::Builder::new().pubkey(key.trim()).build(),
+            Some(key) => tauri_plugin_updater::Builder::new()
+                .pubkey(key.trim())
+                .build(),
             None => tauri_plugin_updater::Builder::new().build(),
         })
         .setup(|app| {
