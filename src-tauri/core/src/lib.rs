@@ -3,6 +3,7 @@
 pub mod ai;
 pub mod error;
 pub mod git;
+pub mod scan;
 pub mod secrets;
 pub mod state;
 pub mod terminal;

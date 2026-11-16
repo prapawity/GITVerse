@@ -8,6 +8,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { GIT_METHODS } from '../shared/gitMethods';
 import type { AnyAsync, PlatformApi } from './api';
 
@@ -71,16 +72,34 @@ export async function createTauriApi(): Promise<PlatformApi> {
   return {
     ...git,
     openRepoDialog: () => call<string | null>('repo_open'),
-    openThirdPartyNotices: notPorted('openThirdPartyNotices'),
-    openRuntimeNotice: notPorted('openRuntimeNotice'),
+    openThirdPartyNotices: () => call('app_open_third_party_notices'),
+    openRuntimeNotice: (kind: string) => call('app_open_runtime_notice', { kind }),
     cloneRepo: (url: string, destination: string) => call('repo_clone', { url, destination }),
-    openFile: notPorted('openFile'),
+    openFile: (cwd: string, rel: string) => call('repo_open_file', { cwd, rel }),
     onCloneProgress: (cb) => subscribe<string>('repo:cloneProgress', cb),
     // Tauri exposes dropped files' paths through its own drag-drop event, not on File objects.
     pathForFile: () => '',
-    findRepositories: notPorted('findRepositories'),
-    cancelScan: () => {},
-    onScanProgress: noopSubscription,
+    findRepositories: (folder: string, id: string) => call('repo_find_repositories', { folder, id }),
+    cancelScan: (id: string) => {
+      void call('repo_cancel_scan', { id });
+    },
+    onScanProgress: (cb) =>
+      subscribe<{ id: string; progress: Parameters<typeof cb>[1] }>('repo:scanProgress', (p) => cb(p.id, p.progress)),
+    onFileDrop: (cb) => {
+      let stop: (() => void) | null = null;
+      let gone = false;
+      void getCurrentWebview()
+        .onDragDropEvent(({ payload }) => {
+          if (payload.type === 'enter') cb({ type: 'enter', paths: payload.paths });
+          else if (payload.type === 'drop') cb({ type: 'drop', paths: payload.paths });
+          else if (payload.type === 'leave') cb({ type: 'leave', paths: [] });
+        })
+        .then((un) => (gone ? un() : (stop = un)));
+      return () => {
+        gone = true;
+        stop?.();
+      };
+    },
     setActiveIdentity: (identity) => call('set_identity', { identity }),
     updates: {
       ...group('updates', ['list', 'openReleaseList', 'openDownloads', 'download', 'install'] as const),

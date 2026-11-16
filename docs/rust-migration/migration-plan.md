@@ -131,3 +131,11 @@
 - Commands: `ai_copilot_status`, `ai_copilot_begin_login` / `advance` / `cancel` (only `https://github.com` sign-in URLs are opened), `ai_tool_result`, `ai_reset`; all AI commands now handle all three providers.
 - Tests: a fake sidecar exercises the protocol (token handover, tool round trip, abort, errors); skipped where Node is absent.
 - Open for Phase 6: shipping Node and `node_modules/@github/copilot*` with release builds (today the sidecar uses Node on PATH and the repo's node_modules).
+
+### Phase 6A — folder scan, drag-and-drop, files and notices (done)
+
+- `core/src/scan.rs` ports `repositoryScan.ts` (skips hidden/dependency folders, does not follow symlinks, worktrees count, invalid `.git` is skipped) with the same tests. Commands `repo_find_repositories` / `repo_cancel_scan` and the `repo:scanProgress` event.
+- Drag-and-drop: Tauri's web view does not expose file paths on DOM drops, so `PlatformApi.onFileDrop` (Tauri only) feeds `App.tsx` from the native drag-drop event.
+- `repo_open_file` (refuses paths outside the repository), `app_open_third_party_notices`; `app_open_runtime_notice` explains that the Tauri build uses the system web view.
+- The generated `sidecar/` bundle is excluded from ESLint and Prettier.
+- Still open: the updater (needs a signing key pair and an update feed), bundling Node + Copilot runtime, release/signing CI.

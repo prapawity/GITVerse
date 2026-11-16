@@ -471,6 +471,21 @@ export default function App() {
     setCancellingScan(true);
     desktopApi().cancelScan(request.id);
   };
+  // Tauri reports dropped files natively (with paths); the DOM drop events below cover Electron
+  const importRef = useRef(importFolders);
+  importRef.current = importFolders;
+  useEffect(
+    () =>
+      platformApi()?.onFileDrop?.((event) => {
+        if (event.type === 'enter') setDraggingFolders(true);
+        else {
+          dragDepth.current = 0;
+          setDraggingFolders(false);
+          if (event.type === 'drop' && event.paths.length) void importRef.current(event.paths);
+        }
+      }),
+    [],
+  );
   const dropFolders = (event: React.DragEvent) => {
     event.preventDefault();
     dragDepth.current = 0;

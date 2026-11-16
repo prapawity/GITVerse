@@ -37,6 +37,8 @@ export interface PlatformApi extends Record<GitMethodName, AnyAsync> {
   findRepositories: AnyAsync;
   cancelScan(id: string): void;
   onScanProgress(cb: (id: string, progress: ScanProgress) => void): Unsubscribe;
+  /** Native file drag-and-drop (Tauri): the web view's own drop events carry no file paths there. */
+  onFileDrop?(cb: (event: { type: 'enter' | 'leave' | 'drop'; paths: string[] }) => void): Unsubscribe;
   setActiveIdentity(identity: { name: string; email: string } | null): Promise<unknown>;
   updates: Record<
     'environment' | 'startup' | 'check' | 'list' | 'openReleaseList' | 'openDownloads' | 'download' | 'install',

@@ -10,6 +10,7 @@ export default tseslint.config(
       'node_modules/**',
       'dist/**',
       'dist-electron/**',
+      'sidecar/**',
       'release/**',
       'coverage/**',
       '.claude/**',

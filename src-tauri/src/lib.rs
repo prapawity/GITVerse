@@ -1,6 +1,7 @@
 //! Tauri shell for GITVerse. Commands here are thin: argument decoding + calls into gitverse-core.
 //! The TS side is src/platform/tauri.ts; method names match the Electron `git:<name>` channels.
 mod ai_commands;
+mod app_commands;
 mod commands;
 
 use std::path::PathBuf;
@@ -19,6 +20,7 @@ pub struct AppState {
     pub ai_requests: ai_commands::AiRequests,
     pub openai: std::sync::Arc<gitverse_core::ai::openai::Shared>,
     pub copilot: std::sync::Arc<gitverse_core::ai::copilot::Copilot>,
+    pub scans: app_commands::Scans,
     /// Same folder Electron uses (`<appData>/GITVerse`), so both builds share repos and settings.
     pub data_dir: PathBuf,
 }
@@ -62,6 +64,7 @@ pub fn run() {
                 ai_requests: Default::default(),
                 openai: Default::default(),
                 copilot: std::sync::Arc::new(copilot),
+                scans: Default::default(),
                 data_dir,
             });
             Ok(())
@@ -80,6 +83,11 @@ pub fn run() {
             commands::term_write,
             commands::term_resize,
             commands::term_kill,
+            app_commands::repo_find_repositories,
+            app_commands::repo_cancel_scan,
+            app_commands::repo_open_file,
+            app_commands::app_open_third_party_notices,
+            app_commands::app_open_runtime_notice,
             ai_commands::ai_status,
             ai_commands::ai_copilot_status,
             ai_commands::ai_set_key,
