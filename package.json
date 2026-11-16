@@ -36,7 +36,7 @@
     "build:tauri": "tauri build",
     "stage:copilot": "node scripts/stage-copilot.mjs",
     "notices": "node -e \"require('./scripts/third-party-notices.cjs')()\"",
-    "release:tauri": "npm run notices && npm run stage:copilot && tauri build --config src-tauri/tauri.release.conf.json",
+    "release:tauri": "npm run notices && node scripts/rust-notices.mjs && npm run stage:copilot && tauri build --config src-tauri/tauri.release.conf.json",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --workspace"
   },
   "dependencies": {

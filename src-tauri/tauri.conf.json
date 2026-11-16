@@ -26,7 +26,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["../resources/icon.png", "../resources/icon.icns", "../resources/icon.ico"]
+    "icon": ["../resources/icon.png", "../resources/icon.icns", "../resources/icon.ico"],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   },
   "plugins": {
     "updater": {

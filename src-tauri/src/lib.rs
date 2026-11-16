@@ -64,6 +64,25 @@ pub fn run() {
                     "io.github.prapawity.gitverse",
                 ));
             let copilot = ai_commands::copilot_client(app.handle(), secrets.clone());
+            // one-time import of the secrets the Electron build saved (background: macOS may ask
+            // for Keychain access)
+            {
+                let (dir, store) = (data_dir.clone(), secrets.clone());
+                std::thread::spawn(move || {
+                    use gitverse_core::migrate::*;
+                    let report = migrate_electron_secrets(
+                        &dir,
+                        store.as_ref(),
+                        &ElectronSafeStorage::for_data_dir(&dir),
+                    );
+                    if !report.imported.is_empty() || !report.failed.is_empty() {
+                        eprintln!(
+                            "[migrate] imported {:?}, could not import {:?}",
+                            report.imported, report.failed
+                        );
+                    }
+                });
+            }
             app.manage(AppState {
                 git,
                 index_history: IndexHistory::default(),
