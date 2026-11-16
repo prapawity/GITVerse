@@ -45,19 +45,59 @@ pub fn set_identity(app: tauri::State<'_, AppState>, identity: Option<Identity>)
 
 /// Git methods implemented in Rust so far. The TS adapter uses this to report "not ported yet"
 /// clearly; tests compare it against src/shared/gitMethods.ts as the port progresses.
-pub const PORTED: &[&str] = &["status"];
+pub const PORTED: &[&str] = &[
+    "status",
+    "log",
+    "refs",
+    "reflog",
+    "historyPosition",
+    "commitDetail",
+    "commitFileDiff",
+    "workingFileDiff",
+    "fileChangeCounts",
+    "fileBlame",
+    "fileHistory",
+    "opState",
+];
 
 #[tauri::command]
 pub fn ported_git_methods() -> Vec<&'static str> {
     PORTED.to_vec()
 }
 
-fn arg_path(args: &[Value], i: usize) -> CmdResult<PathBuf> {
-    args.get(i)
-        .and_then(Value::as_str)
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| AppError::Invalid(format!("Argument {i} must be a repository path.")))
+/// Positional arguments exactly as the renderer passes them to `git:<name>`.
+struct Args(Vec<Value>);
+
+impl Args {
+    fn repo(&self) -> CmdResult<PathBuf> {
+        self.str(0).map(PathBuf::from)
+    }
+    fn str(&self, i: usize) -> CmdResult<&str> {
+        self.opt_str(i)
+            .ok_or_else(|| AppError::Invalid(format!("Argument {i} must be a non-empty string.")))
+    }
+    fn opt_str(&self, i: usize) -> Option<&str> {
+        self.0
+            .get(i)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+    }
+    fn u64_or(&self, i: usize, default: u64) -> CmdResult<u64> {
+        match self.0.get(i) {
+            None | Some(Value::Null) => Ok(default),
+            Some(v) => v
+                .as_u64()
+                .ok_or_else(|| AppError::Invalid(format!("Argument {i} must be a whole number."))),
+        }
+    }
+    fn parse<T: serde::de::DeserializeOwned>(&self, i: usize) -> CmdResult<T> {
+        serde_json::from_value(self.0.get(i).cloned().unwrap_or(Value::Null))
+            .map_err(|e| AppError::Invalid(format!("Argument {i}: {e}")))
+    }
+}
+
+fn json<T: serde::Serialize>(value: T) -> CmdResult<Value> {
+    Ok(serde_json::to_value(value)?)
 }
 
 /// One entry point for every `git:<name>` call, mirroring Electron's handler table, so the renderer
@@ -69,10 +109,24 @@ pub async fn git_call(
     args: Vec<Value>,
 ) -> CmdResult<Value> {
     let git = app.git.clone();
+    let a = Args(args);
     match method.as_str() {
-        "status" => Ok(serde_json::to_value(
-            git::status(&git, &arg_path(&args, 0)?).await?,
-        )?),
+        "status" => json(git::status(&git, &a.repo()?).await?),
+        "log" => json(git::log(&git, &a.repo()?, a.u64_or(1, 400)?, a.u64_or(2, 0)?).await?),
+        "refs" => json(git::refs(&git, &a.repo()?).await?),
+        "reflog" => json(git::reflog(&git, &a.repo()?).await?),
+        "historyPosition" => json(git::history_position(&git, &a.repo()?, a.str(1)?).await?),
+        "commitDetail" => json(git::commit_detail(&git, &a.repo()?, a.str(1)?).await?),
+        "commitFileDiff" => {
+            json(git::commit_file_diff(&git, &a.repo()?, a.str(1)?, a.str(2)?, a.opt_str(3)).await?)
+        }
+        "workingFileDiff" => {
+            json(git::working_file_diff(&git, &a.repo()?, a.str(1)?, a.parse(2)?).await?)
+        }
+        "fileChangeCounts" => json(git::file_change_counts(&git, &a.repo()?).await?),
+        "fileBlame" => json(git::file_blame(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "fileHistory" => json(git::file_history(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "opState" => json(git::op_state(&git, &a.repo()?).await?),
         other => Err(AppError::NotPorted(format!(
             "'{other}' is not available in the Tauri build yet (Rust migration in progress)."
         ))),

@@ -111,13 +111,143 @@ fn fixture(name: &str) -> serde_json::Value {
     serde_json::from_str(&text).unwrap()
 }
 
+/// Same isolation as the TS test: no system/user config, C locale, UTC.
+fn runner(repo: &Repo) -> GitRunner {
+    GitRunner::default().with_base_env(vec![
+        ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
+        ("HOME".into(), repo.path().to_string_lossy().into_owned()),
+        ("LC_ALL".into(), "C".into()),
+        ("TZ".into(), "UTC".into()),
+    ])
+}
+
+fn head(repo: &Repo) -> String {
+    let out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
+
+fn same<T: serde::Serialize>(name: &str, actual: T) {
+    assert_eq!(
+        serde_json::to_value(actual).unwrap(),
+        fixture(name),
+        "{name} differs from fixtures/git-contract/{name}.json"
+    );
+}
+
 #[tokio::test]
 async fn status_matches_golden_fixture() {
     let repo = build_repo();
-    let files = git::status(&GitRunner::default(), repo.path())
-        .await
-        .unwrap();
-    assert_eq!(serde_json::to_value(files).unwrap(), fixture("status"));
+    same(
+        "status",
+        git::status(&runner(&repo), repo.path()).await.unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn log_matches_golden_fixture() {
+    let repo = build_repo();
+    same(
+        "log",
+        git::log(&runner(&repo), repo.path(), 400, 0).await.unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn refs_matches_golden_fixture() {
+    let repo = build_repo();
+    same(
+        "refs",
+        git::refs(&runner(&repo), repo.path()).await.unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn reflog_matches_golden_fixture() {
+    let repo = build_repo();
+    same(
+        "reflog",
+        git::reflog(&runner(&repo), repo.path()).await.unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn commit_detail_matches_golden_fixture() {
+    let repo = build_repo();
+    same(
+        "commitDetail",
+        git::commit_detail(&runner(&repo), repo.path(), &head(&repo))
+            .await
+            .unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn file_change_counts_match_golden_fixture() {
+    let repo = build_repo();
+    same(
+        "fileChangeCounts",
+        git::file_change_counts(&runner(&repo), repo.path())
+            .await
+            .unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn blame_and_history_match_golden_fixtures() {
+    let repo = build_repo();
+    let (git, h) = (runner(&repo), head(&repo));
+    same(
+        "fileBlame",
+        git::file_blame(&git, repo.path(), &h, "app.txt")
+            .await
+            .unwrap(),
+    );
+    same(
+        "fileHistory",
+        git::file_history(&git, repo.path(), &h, "app.txt")
+            .await
+            .unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn op_state_and_history_position_match_golden_fixtures() {
+    let repo = build_repo();
+    let (git, h) = (runner(&repo), head(&repo));
+    same("opState", git::op_state(&git, repo.path()).await.unwrap());
+    same(
+        "historyPosition",
+        git::history_position(&git, repo.path(), &h).await.unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn diffs_match_golden_fixtures() {
+    let repo = build_repo();
+    let (git, h, p) = (runner(&repo), head(&repo), repo.path());
+    same(
+        "commitFileDiff",
+        git::commit_file_diff(&git, p, &h, "login.txt", None)
+            .await
+            .unwrap(),
+    );
+    let diff = |file: &'static str, area| {
+        let git = git.clone();
+        async move { git::working_file_diff(&git, p, file, area).await.unwrap() }
+    };
+    same(
+        "workingFileDiff",
+        serde_json::json!({
+            "staged": diff("login.txt", git::Area::Staged).await,
+            "unstaged": diff("app.txt", git::Area::Unstaged).await,
+            "deleted": diff("README.md", git::Area::Unstaged).await,
+            "untracked": diff("notes.md", git::Area::Untracked).await,
+        }),
+    );
 }
 
 #[tokio::test]

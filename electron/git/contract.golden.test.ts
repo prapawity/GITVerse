@@ -16,7 +16,19 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { commitDetail, fileBlame, fileChangeCounts, fileHistory, log, opState, refs, status } from './git';
+import {
+  commitDetail,
+  commitFileDiff,
+  fileBlame,
+  fileChangeCounts,
+  fileHistory,
+  historyPosition,
+  log,
+  opState,
+  refs,
+  status,
+  workingFileDiff,
+} from './git';
 import { reflog } from './reflog';
 
 const run = promisify(execFile);
@@ -119,4 +131,16 @@ test('read-side Git API matches the golden contract fixtures', async (t) => {
   await golden('fileBlame', await fileBlame(cwd, head, 'app.txt'), cwd);
   await golden('fileHistory', await fileHistory(cwd, head, 'app.txt'), cwd);
   await golden('opState', await opState(cwd), cwd);
+  await golden('historyPosition', await historyPosition(cwd, head), cwd);
+  await golden('commitFileDiff', await commitFileDiff(cwd, head, 'login.txt'), cwd);
+  await golden(
+    'workingFileDiff',
+    {
+      staged: await workingFileDiff(cwd, 'login.txt', 'staged'),
+      unstaged: await workingFileDiff(cwd, 'app.txt', 'unstaged'),
+      deleted: await workingFileDiff(cwd, 'README.md', 'unstaged'),
+      untracked: await workingFileDiff(cwd, 'notes.md', 'untracked'),
+    },
+    cwd,
+  );
 });

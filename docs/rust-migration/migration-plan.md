@@ -71,3 +71,11 @@
 - [x] `vite.config.ts` ข้าม electron plugin เมื่อรันจาก Tauri CLI; scripts `dev:tauri`, `build:tauri`, `test:rust`
 - [ ] ทดสอบ `npm run dev:tauri` บน Windows/macOS
 - [ ] Drag-and-drop โฟลเดอร์ (Tauri ใช้ drag-drop event แทน `File.path`)
+
+## Phase 2 — สถานะ (2026-11-16)
+
+- [x] Read-side ทั้งหมดใน Rust: `log`, `refs` (+stashes), `reflog`, `historyPosition`, `commitDetail`, `commitFileDiff`, `workingFileDiff`, `fileChangeCounts`, `fileBlame`, `fileHistory`, `opState` (+ `status` จาก Phase 1)
+- [x] Golden fixtures เพิ่ม `historyPosition`, `commitFileDiff`, `workingFileDiff` (staged / unstaged / deleted / untracked) — Rust ตรงกับ TS ทั้ง 12 fixtures บน Linux และ Windows
+- [x] `GitRunner`: `ok_codes` (เช่น `diff --no-index` exit 1), `base_env` (แยก test จาก config ผู้ใช้), `no_identity`
+- [x] แอป Tauri แสดง graph, branches, remotes, tags, working changes และ diff ได้แล้ว (ทดสอบบน Windows)
+- [ ] Read-side ที่ยังเหลือ: `stashDetail`, `stashFileDiff`, `stashFileAt`, `fileAt`, `fileBlobAt`, `workingFileBlob`, `readWorkFile`, `pushInfo`, `commitIdentity`, `remoteUrl`, `inspectWorkspace`, `indexUndoState`, `agentCheckpoints`, `rebasePreview`, `windowsUnsupportedPathsForRef`
