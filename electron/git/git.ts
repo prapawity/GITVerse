@@ -1027,6 +1027,19 @@ export async function stashRename(cwd: string, id: string, message: string) {
   const index = entries.findIndex((entry) => entry.id === id || entry.hash === id);
   const hash = entries[index]?.hash;
   if (!hash) throw new Error('This stash is no longer available. Refresh the repository.');
+  if (index === 0) {
+    // `stash store` of the commit that is already the newest stash adds no reflog entry, so the
+    // store-then-drop below would delete this stash (or the one under it). Replace it in place.
+    const original = (await git(cwd, ['log', '-1', '--walk-reflogs', '--format=%gs', 'stash@{0}'])).trim();
+    await git(cwd, ['stash', 'drop', 'stash@{0}']);
+    try {
+      await git(cwd, ['stash', 'store', '--message', message.trim(), hash]);
+    } catch (error) {
+      await git(cwd, ['stash', 'store', '--message', original, hash]);
+      throw error;
+    }
+    return;
+  }
   await git(cwd, ['stash', 'store', '--message', message.trim(), hash]);
   try {
     await git(cwd, ['stash', 'drop', `stash@{${index + 1}}`]);

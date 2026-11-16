@@ -1,12 +1,12 @@
 //! `opState`: an in-progress rebase / merge / cherry-pick / revert and its conflicts.
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{GitRunner, RunOpts};
 use crate::error::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OpKind {
     Rebase,
@@ -42,6 +42,17 @@ fn read_trimmed(path: PathBuf) -> String {
     std::fs::read_to_string(path)
         .map(|t| t.trim().to_owned())
         .unwrap_or_default()
+}
+
+impl OpKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OpKind::Rebase => "rebase",
+            OpKind::Merge => "merge",
+            OpKind::CherryPick => "cherry-pick",
+            OpKind::Revert => "revert",
+        }
+    }
 }
 
 pub async fn op_state(git: &GitRunner, cwd: &Path) -> Result<Option<OpState>> {

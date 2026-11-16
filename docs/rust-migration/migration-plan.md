@@ -81,3 +81,11 @@
 - [x] `GitRunner`: `ok_codes` (เช่น `diff --no-index` exit 1), `base_env` (แยก test จาก config ผู้ใช้), `no_identity`
 - [x] แอป Tauri แสดง graph, branches, remotes, tags, working changes และ diff ได้แล้ว (ทดสอบบน Windows)
 - [ ] Read-side ที่ยังเหลือ: `stashDetail`, `stashFileDiff`, `stashFileAt`, `fileAt`, `fileBlobAt`, `workingFileBlob`, `readWorkFile`, `pushInfo`, `commitIdentity`, `remoteUrl`, `inspectWorkspace`, `indexUndoState`, `agentCheckpoints`, `rebasePreview`, `windowsUnsupportedPathsForRef`
+
+## Phase 3 batch A — สถานะ (2026-11-16)
+
+- [x] Write-side ใน Rust (`core/src/git/write.rs`, `stash.rs`, `windows.rs`): stage/unstage, commit (amend/signoff/gpg), checkout, createBranch, branchAt, deleteBranch (+remote), stash/stashPop/stashAction/stashRename/stashDetail/stashDiff, reset, cherryPick, revert, rebaseOnto, merge, opContinue/opAbort/opSkip, resolveFile, tags, fileAt, formatPatch, remoteUrl, commit identity, fetch/pull/push, readWorkFile/writeWorkFile, windowsUnsupportedPathsForRef
+- [x] Windows path preflight (`ensureTargetTreeSupported`, sparse rules) ported พร้อม unit test
+- [x] Golden **write scenarios**: 48 สถานการณ์ (`electron/git/contract.write.test.ts` ↔ `core/tests/golden_write.rs`) บันทึกผลลัพธ์/error + สถานะ repo หลังทำ — TS และ Rust ตรงกันทั้ง Linux และ Windows
+- [x] พบและแก้ bug ใน TS `stashRename`: rename stash ล่าสุดทำให้ stash หาย (หรือลบ stash อื่น) เพราะ `git stash store` ของ hash เดิมไม่เพิ่ม reflog
+- [ ] Batch B: `checkoutRemote`, `pushBranch`/`pushInfo`, `clone`, `discardWorkingFiles`, `discardWorkingHunk`, `stageWorkingHunk`, `trackedStage`, `indexUndoState`/`moveIndexHistory`, `squashCommits`, `cherryPickMany`, `stagedForCommitMessage`, `rebasePreview`, `worktreeAdd`, blobs, `inspectWorkspace`, `agentCheckpoints`

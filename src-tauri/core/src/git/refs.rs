@@ -164,19 +164,16 @@ pub async fn refs(git: &GitRunner, cwd: &Path) -> Result<RefList> {
         .unwrap_or_default();
     let head = head.trim();
     let mut res = parse_for_each_ref(&out, (!head.is_empty()).then(|| head.to_owned()));
-    let stashes = git
-        .run(
-            cwd,
-            &[
-                "stash",
-                "list",
-                "--format=%gd%x1f%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%gs%x1f%B%x1e",
-            ],
-            RunOpts::default(),
-        )
-        .await?;
-    res.stashes = parse_stashes(&stashes);
+    res.stashes = stash_entries(git, cwd).await?;
     Ok(res)
+}
+
+pub async fn stash_entries(git: &GitRunner, cwd: &Path) -> Result<Vec<StashRef>> {
+    let format = "--format=%gd%x1f%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%gs%x1f%B%x1e";
+    let out = git
+        .run(cwd, &["stash", "list", format], RunOpts::default())
+        .await?;
+    Ok(parse_stashes(&out))
 }
 
 #[cfg(test)]

@@ -58,6 +58,44 @@ pub const PORTED: &[&str] = &[
     "fileBlame",
     "fileHistory",
     "opState",
+    // phase 3, batch A (write side)
+    "stage",
+    "unstage",
+    "commit",
+    "checkout",
+    "createBranch",
+    "branchAt",
+    "deleteBranch",
+    "deleteRemoteBranch",
+    "stash",
+    "stashPop",
+    "stashAction",
+    "stashRename",
+    "stashDetail",
+    "stashDiff",
+    "reset",
+    "cherryPick",
+    "revert",
+    "rebaseOnto",
+    "merge",
+    "opContinue",
+    "opAbort",
+    "opSkip",
+    "resolveFile",
+    "createTag",
+    "createAnnotatedTag",
+    "tagCommit",
+    "fileAt",
+    "formatPatch",
+    "remoteUrl",
+    "commitIdentity",
+    "setCommitIdentity",
+    "fetch",
+    "pull",
+    "push",
+    "readWorkFile",
+    "writeWorkFile",
+    "windowsUnsupportedPathsForRef",
 ];
 
 #[tauri::command]
@@ -88,6 +126,19 @@ impl Args {
             Some(v) => v
                 .as_u64()
                 .ok_or_else(|| AppError::Invalid(format!("Argument {i} must be a whole number."))),
+        }
+    }
+    fn bool_or(&self, i: usize, default: bool) -> bool {
+        self.0.get(i).and_then(Value::as_bool).unwrap_or(default)
+    }
+    fn strings(&self, i: usize) -> CmdResult<Vec<String>> {
+        self.parse(i)
+    }
+    /// Optional enum/struct argument: missing or null means the TS default.
+    fn parse_or_default<T: serde::de::DeserializeOwned + Default>(&self, i: usize) -> CmdResult<T> {
+        match self.0.get(i) {
+            None | Some(Value::Null) => Ok(T::default()),
+            Some(_) => self.parse(i),
         }
     }
     fn parse<T: serde::de::DeserializeOwned>(&self, i: usize) -> CmdResult<T> {
@@ -127,6 +178,90 @@ pub async fn git_call(
         "fileBlame" => json(git::file_blame(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
         "fileHistory" => json(git::file_history(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
         "opState" => json(git::op_state(&git, &a.repo()?).await?),
+        "stage" => json(git::stage(&git, &a.repo()?, &a.strings(1)?).await?),
+        "unstage" => json(git::unstage(&git, &a.repo()?, &a.strings(1)?).await?),
+        "commit" => json(
+            git::commit(
+                &git,
+                &a.repo()?,
+                a.opt_str(1).unwrap_or(""),
+                a.opt_str(2).unwrap_or(""),
+                a.parse_or_default(3)?,
+            )
+            .await?,
+        ),
+        "checkout" => json(git::checkout(&git, &a.repo()?, a.str(1)?).await?),
+        "createBranch" => {
+            json(git::create_branch(&git, &a.repo()?, a.str(1)?, a.opt_str(2)).await?)
+        }
+        "branchAt" => json(git::branch_at(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "deleteBranch" => {
+            json(git::delete_branch(&git, &a.repo()?, a.str(1)?, a.bool_or(2, false)).await?)
+        }
+        "deleteRemoteBranch" => json(git::delete_remote_branch(&git, &a.repo()?, a.str(1)?).await?),
+        "stash" => json(git::stash(&git, &a.repo()?, a.opt_str(1)).await?),
+        "stashPop" => json(git::stash_pop(&git, &a.repo()?).await?),
+        "stashAction" => json(git::stash_action(&git, &a.repo()?, a.str(1)?, a.parse(2)?).await?),
+        "stashRename" => {
+            json(git::stash_rename(&git, &a.repo()?, a.str(1)?, a.opt_str(2).unwrap_or("")).await?)
+        }
+        "stashDetail" => json(git::stash_detail(&git, &a.repo()?, a.str(1)?).await?),
+        "stashDiff" => json(git::stash_diff(&git, &a.repo()?, a.str(1)?).await?),
+        "reset" => json(git::reset(&git, &a.repo()?, a.str(1)?, a.parse(2)?).await?),
+        "cherryPick" => json(git::cherry_pick(&git, &a.repo()?, a.str(1)?).await?),
+        "revert" => json(git::revert(&git, &a.repo()?, a.str(1)?).await?),
+        "rebaseOnto" => json(git::rebase_onto(&git, &a.repo()?, a.str(1)?).await?),
+        "merge" => json(
+            git::merge(
+                &git,
+                &a.repo()?,
+                a.str(1)?,
+                a.bool_or(2, true),
+                a.bool_or(3, false),
+            )
+            .await?,
+        ),
+        "opContinue" => json(git::op_continue(&git, &a.repo()?, a.parse(1)?, a.opt_str(2)).await?),
+        "opAbort" => json(git::op_abort(&git, &a.repo()?, a.parse(1)?).await?),
+        "opSkip" => json(git::op_skip(&git, &a.repo()?, a.parse(1)?).await?),
+        "resolveFile" => json(git::resolve_file(&git, &a.repo()?, a.str(1)?, a.parse(2)?).await?),
+        "createTag" => json(git::create_tag(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "createAnnotatedTag" => json(
+            git::create_annotated_tag(
+                &git,
+                &a.repo()?,
+                a.str(1)?,
+                a.str(2)?,
+                a.opt_str(3).unwrap_or(""),
+            )
+            .await?,
+        ),
+        "tagCommit" => json(git::tag_commit(&git, &a.repo()?, a.opt_str(1).unwrap_or("")).await?),
+        "fileAt" => json(git::file_at(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "formatPatch" => json(git::format_patch(&git, &a.repo()?, a.str(1)?).await?),
+        "remoteUrl" => json(git::remote_url(&git, &a.repo()?).await?),
+        "commitIdentity" => json(git::commit_identity(&git, &a.repo()?).await?),
+        "setCommitIdentity" => json(
+            git::set_commit_identity(
+                &git,
+                &a.repo()?,
+                a.opt_str(1).unwrap_or(""),
+                a.opt_str(2).unwrap_or(""),
+            )
+            .await?,
+        ),
+        "fetch" => json(git::fetch(&git, &a.repo()?, a.bool_or(1, true)).await?),
+        "pull" => json(git::pull(&git, &a.repo()?, a.parse_or_default(1)?).await?),
+        "push" => json(git::push(&git, &a.repo()?).await?),
+        "readWorkFile" => json(git::read_work_file(&a.repo()?, a.str(1)?)?),
+        "writeWorkFile" => json(git::write_work_file(
+            &a.repo()?,
+            a.str(1)?,
+            a.opt_str(2).unwrap_or(""),
+        )?),
+        "windowsUnsupportedPathsForRef" => {
+            json(git::windows_unsupported_paths_for_ref(&git, &a.repo()?, a.str(1)?).await?)
+        }
         other => Err(AppError::NotPorted(format!(
             "'{other}' is not available in the Tauri build yet (Rust migration in progress)."
         ))),
