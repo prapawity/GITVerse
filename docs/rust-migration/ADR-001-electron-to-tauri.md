@@ -8,14 +8,14 @@
 
 GITVerse เป็น Electron 45 + React 19 + TypeScript + Zustand ปัจจุบัน:
 
-| ส่วน | ไฟล์ | ขนาด |
-|---|---|---|
-| Git operations (48 exported functions, ผ่าน `git` CLI, register อัตโนมัติเป็น `git:<name>`) | `electron/git/*.ts` | ~1,600 LOC |
-| Main / IPC / dialogs / updater | `electron/main.ts`, `preload.ts` | ~590 LOC, 45 bridge methods |
-| AI providers (Claude, OpenAI + sign-in, Copilot SDK) | `electron/ai/*` | ~1,350 LOC |
-| Terminal (`node-pty`) | `electron/terminal.ts` | ~200 LOC |
-| Repo scan, state, updates | `electron/*.ts` | ~275 LOC |
-| Renderer UI | `src/` | ~12,000 LOC (ไม่ต้องเขียนใหม่) |
+| ส่วน                                                                                        | ไฟล์                             | ขนาด                           |
+| ------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------ |
+| Git operations (48 exported functions, ผ่าน `git` CLI, register อัตโนมัติเป็น `git:<name>`) | `electron/git/*.ts`              | ~1,600 LOC                     |
+| Main / IPC / dialogs / updater                                                              | `electron/main.ts`, `preload.ts` | ~590 LOC, 45 bridge methods    |
+| AI providers (Claude, OpenAI + sign-in, Copilot SDK)                                        | `electron/ai/*`                  | ~1,350 LOC                     |
+| Terminal (`node-pty`)                                                                       | `electron/terminal.ts`           | ~200 LOC                       |
+| Repo scan, state, updates                                                                   | `electron/*.ts`                  | ~275 LOC                       |
+| Renderer UI                                                                                 | `src/`                           | ~12,000 LOC (ไม่ต้องเขียนใหม่) |
 
 แรงจูงใจ: installer ขนาดใหญ่ (Chromium + Node), RAM สูง, native module (`node-pty`) ต้อง rebuild ทุกครั้งที่อัปเกรด Electron
 
@@ -26,21 +26,24 @@ GITVerse เป็น Electron 45 + React 19 + TypeScript + Zustand ปัจจ
 ## Options Considered
 
 ### A: Tauri 2 + React เดิม (เลือก)
-| Dimension | Assessment |
-|---|---|
-| Complexity | Medium–High (backend ~4k LOC ใหม่) |
-| Cost | ~8–12 สัปดาห์ สำหรับ 1–2 คน |
-| Footprint | installer ~10–15MB, RAM ลดลงชัดเจน |
-| Team familiarity | ต้องเรียน Rust |
+
+| Dimension        | Assessment                         |
+| ---------------- | ---------------------------------- |
+| Complexity       | Medium–High (backend ~4k LOC ใหม่) |
+| Cost             | ~8–12 สัปดาห์ สำหรับ 1–2 คน        |
+| Footprint        | installer ~10–15MB, RAM ลดลงชัดเจน |
+| Team familiarity | ต้องเรียน Rust                     |
 
 **Pros:** เก็บ UI ทั้งหมด, security model (capabilities) เข้มกว่า, ไม่มี native-module rebuild
 **Cons:** WebView ต่างกันในแต่ละ OS (WebView2 / WKWebView / WebKitGTK), Copilot SDK ไม่มีใน Rust
 
 ### B: Electron + Rust native module (napi-rs)
+
 | Complexity | Low–Medium | Cost | 2–4 สัปดาห์ต่อ module | Footprint | ไม่เปลี่ยน |
 **Pros:** เสี่ยงต่ำ ค่อยๆ ทำได้ **Cons:** ไม่แก้ปัญหาขนาด/RAM
 
 ### C: Rust native UI (egui/Iced/Slint)
+
 **Cons:** ทิ้ง UI 12k LOC, diff/merge/graph ต้องเขียนใหม่หมด — ตัดทิ้ง
 
 ## Trade-off Analysis
@@ -56,6 +59,7 @@ GITVerse เป็น Electron 45 + React 19 + TypeScript + Zustand ปัจจ
 - ต้อง revisit: เอา Node sidecar ของ Copilot ออก, พิจารณา `gix` แทน CLI สำหรับ read-path ที่ช้า (log/graph)
 
 ## Action Items
+
 1. [ ] ทำ Phase 0 ใน `migration-plan.md` (hardening ฝั่ง TS ก่อนย้าย)
 2. [ ] Spike 3 วัน: Tauri shell + `repo:open` + `git:status` ทำงานจริงบน Windows/macOS
 3. [ ] ตัดสินใจ Accept/Reject ADR หลัง spike

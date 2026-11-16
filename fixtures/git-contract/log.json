@@ -1,10 +1,7 @@
 [
   {
     "hash": "bbb599bb87f351c65576034282edf1172e1b1e43",
-    "parents": [
-      "91c715e205d487e2b1de6f2a295ab25fe528f877",
-      "a09ece8d194bc68dc38cbc13e94f265015b85b1c"
-    ],
+    "parents": ["91c715e205d487e2b1de6f2a295ab25fe528f877", "a09ece8d194bc68dc38cbc13e94f265015b85b1c"],
     "refs": [
       {
         "name": "main",
@@ -19,9 +16,7 @@
   },
   {
     "hash": "a09ece8d194bc68dc38cbc13e94f265015b85b1c",
-    "parents": [
-      "4930805154d05c106bbfe081cefa3f1f0f453cff"
-    ],
+    "parents": ["4930805154d05c106bbfe081cefa3f1f0f453cff"],
     "refs": [
       {
         "name": "feature/login",
@@ -35,9 +30,7 @@
   },
   {
     "hash": "91c715e205d487e2b1de6f2a295ab25fe528f877",
-    "parents": [
-      "4930805154d05c106bbfe081cefa3f1f0f453cff"
-    ],
+    "parents": ["4930805154d05c106bbfe081cefa3f1f0f453cff"],
     "refs": [],
     "author": "Ada Lovelace",
     "email": "ada@example.com",
@@ -46,9 +39,7 @@
   },
   {
     "hash": "4930805154d05c106bbfe081cefa3f1f0f453cff",
-    "parents": [
-      "5e4de02f7e55973569a28e63579575b5f5d31b3a"
-    ],
+    "parents": ["5e4de02f7e55973569a28e63579575b5f5d31b3a"],
     "refs": [
       {
         "name": "v1.0.1",
