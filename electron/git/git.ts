@@ -279,7 +279,8 @@ async function sparseCheckoutPatterns(cwd: string) {
 async function sparseExcludedUnsupportedPaths(cwd: string, paths: string[]) {
   if (!paths.length || process.platform !== 'win32') return [];
   const { enabled, patterns } = await sparseCheckoutPatterns(cwd);
-  if (!enabled) return [];
+  // without sparse checkout nothing is excluded, so every unsupported path still blocks
+  if (!enabled) return paths;
   const rules = new Set(patterns);
   return paths.filter((filePath) => !rules.has(sparseExcludePattern(filePath)));
 }
