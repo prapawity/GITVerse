@@ -1,6 +1,5 @@
 import { app, safeStorage } from 'electron';
 import { loadState, saveKey } from '../state';
-import type { AiErr } from '../../src/shared/aiTypes';
 
 /** Secrets are encrypted with the OS keychain (safeStorage) before they touch disk, and never leave the main process. */
 const dir = () => app.getPath('userData');
@@ -29,13 +28,4 @@ export function writeSecret(key: string, value: string | null) {
 export const readPlain = (key: string) => loadState(dir())[key] ?? null;
 export const writePlain = (key: string, value: string | null) => saveKey(dir(), key, value);
 
-export const err = (kind: AiErr['kind'], message: string): AiErr => ({ kind, message });
-export const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-/** Callbacks a provider uses while a turn runs. */
-export interface Hooks {
-  signal: AbortSignal;
-  onText: (delta: string) => void;
-  /** Stateful providers (Copilot) run tools themselves; this hands a call to the app and waits for its result. */
-  callTool: (name: string, input: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
-}
+export { err, errText, type Hooks } from './parse';

@@ -16,3 +16,4 @@ coverage/
 .claude/
 src-tauri/target/
 src-tauri/gen/
+sidecar/

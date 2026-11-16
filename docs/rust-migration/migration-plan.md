@@ -118,7 +118,16 @@
 - [ ] Phase 5C: Copilot (Node sidecar)
 
 ### Phase 5B — ChatGPT in Rust (done)
+
 - `core/src/ai/openai.rs`: API key or "Sign in with ChatGPT" (OAuth PKCE, loopback on 1455–1457, nonce/aud checks), rotating refresh (`invalid_grant` drops the sign-in), plan-first credential choice, 10-minute model cache, Responses API streaming with function tools (`store:false`), commit message and strict JSON-schema conflict resolution. Error texts match `mapHttp()` in openai.ts.
 - New commands: `ai_openai_sign_in` / `ai_openai_cancel` / `ai_openai_sign_out`; `ai_status`, `ai_set_key`, `ai_models`, `ai_turn`, `ai_commit_message`, `ai_resolve_conflict` handle `openai`.
 - Tests: mock servers for streaming turns, refresh, `invalid_grant`, model filters, resolve, a truncated stream, and a full loopback sign-in.
 - Next: 5C Copilot (Node sidecar).
+
+### Phase 5C — Copilot through a Node sidecar (done)
+
+- The Copilot SDK only runs on Node, so `electron/ai/copilotSidecar.ts` (built by `npm run build:sidecar` to `sidecar/copilot-sidecar.mjs`) wraps the same `copilot.ts` and speaks JSON lines on stdio. `copilot.ts` no longer imports Electron: token storage is injected (`configureCopilot`), and the shared helpers moved to `electron/ai/parse.ts`.
+- `core/src/ai/copilot.rs` starts `node` on first use (GITVERSE_NODE / GITVERSE_COPILOT_SIDECAR override), hands over the keychain token with `setToken`, routes `ai:delta` / `ai:toolcall` events, sends `abort` on cancel and kills the sidecar on exit.
+- Commands: `ai_copilot_status`, `ai_copilot_begin_login` / `advance` / `cancel` (only `https://github.com` sign-in URLs are opened), `ai_tool_result`, `ai_reset`; all AI commands now handle all three providers.
+- Tests: a fake sidecar exercises the protocol (token handover, tool round trip, abort, errors); skipped where Node is absent.
+- Open for Phase 6: shipping Node and `node_modules/@github/copilot*` with release builds (today the sidecar uses Node on PATH and the repo's node_modules).

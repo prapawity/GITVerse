@@ -7,8 +7,7 @@ import {
 } from '@github/copilot-sdk';
 import { AI_SYSTEM, AI_TOOLS, CONFLICT_SYSTEM } from '../../src/shared/aiTools';
 import type { AiErr, NMsg, ResolveResult, TurnResult } from '../../src/shared/aiTypes';
-import { canEncrypt, err, errText, Hooks, readSecret, writeSecret } from './common';
-import { parseResolution } from './openai';
+import { err, errText, type Hooks, parseResolution } from './parse';
 
 /**
  * GitHub Copilot through the official Copilot SDK (technical preview), which drives the Copilot runtime bundled with
@@ -17,14 +16,23 @@ import { parseResolution } from './openai';
  * Safety: the runtime is a coding agent with shell and file tools. Here it is locked to the app's own git tools —
  * every built-in/MCP tool is excluded, and the permission handler rejects anything that is not one of ours.
  */
-const TOKEN = 'ai.copilot.token';
+/** Where the saved GitHub token lives: the Electron keychain store, or the Tauri backend (sidecar). */
+export interface CopilotStore {
+  readToken(): string | null;
+  writeToken(token: string | null): void;
+  canEncrypt(): boolean;
+}
+let store: CopilotStore = { readToken: () => null, writeToken: () => {}, canEncrypt: () => false };
+export function configureCopilot(s: CopilotStore) {
+  store = s;
+}
 let cached: { token: string | null; client: CopilotClient } | null = null;
 let starting: { token: string | null; promise: Promise<CopilotClient> } | null = null;
 let login: { session: CopilotSession; flowId: string } | null = null;
 const sessions = new Map<number, { session: CopilotSession; hooks: Hooks | null; model?: string }>();
 
 async function getClient(): Promise<CopilotClient> {
-  const token = readSecret(TOKEN);
+  const token = store.readToken();
   if (cached && cached.token !== token) {
     await stopAll();
   }
@@ -69,7 +77,7 @@ export async function copilotShutdown() {
 
 export async function copilotBeginLogin() {
   if (login) throw new Error('A GitHub sign-in is already in progress.');
-  if (readSecret(TOKEN)) throw new Error('Remove the saved GitHub token before signing in with an account.');
+  if (store.readToken()) throw new Error('Remove the saved GitHub token before signing in with an account.');
   const client = await getClient();
   const session = await client.createSession({ onPermissionRequest: () => ({ kind: 'reject' }) });
   try {
@@ -99,12 +107,12 @@ export async function copilotCancelLogin() {
 }
 
 export function copilotSetToken(token: string | null) {
-  writeSecret(TOKEN, token?.trim() || null);
+  store.writeToken(token?.trim() || null);
   return stopAll(); // the client is rebuilt with the new credentials on next use
 }
 
 export async function copilotStatus() {
-  const base = { hasToken: !!readSecret(TOKEN), canEncrypt: canEncrypt() };
+  const base = { hasToken: !!store.readToken(), canEncrypt: store.canEncrypt() };
   try {
     const s = await (await getClient()).getAuthStatus();
     return {

@@ -1,11 +1,11 @@
-//! `ai:*` commands (port of electron/ai/index.ts). Claude and ChatGPT run in Rust; Copilot follows
-//! in a later migration step and reports that clearly until then.
+//! `ai:*` commands (port of electron/ai/index.ts). Claude and ChatGPT run in Rust; Copilot runs in a
+//! Node sidecar (core/src/ai/copilot.rs) because its SDK is Node-only.
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use gitverse_core::ai::{
-    claude, err, openai, ErrKind, MessageResult, NMsg, Provider, ResolveResult, TurnResult,
+    claude, copilot, err, openai, ErrKind, MessageResult, NMsg, Provider, ResolveResult, TurnResult,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -18,19 +18,47 @@ use crate::AppState;
 #[derive(Default)]
 pub struct AiRequests(Mutex<HashMap<u64, CancellationToken>>);
 
-const LATER: &str = "is not available in the Tauri build yet (Rust migration in progress).";
+/// The Copilot sidecar client. Script: GITVERSE_COPILOT_SIDECAR, the bundled resource, or the
+/// dev build in `<repo>/sidecar/`. Node: GITVERSE_NODE or `node` on PATH.
+pub fn copilot_client(
+    handle: &tauri::AppHandle,
+    secrets: std::sync::Arc<dyn gitverse_core::secrets::SecretStore>,
+) -> copilot::Copilot {
+    use tauri::Manager;
+    const NAME: &str = "copilot-sidecar.mjs";
+    let script = std::env::var_os("GITVERSE_COPILOT_SIDECAR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            let p = handle
+                .path()
+                .resource_dir()
+                .ok()?
+                .join("sidecar")
+                .join(NAME);
+            p.is_file().then_some(p)
+        })
+        .or_else(|| {
+            Some(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("..")
+                    .join("sidecar")
+                    .join(NAME),
+            )
+        });
+    let node = std::env::var("GITVERSE_NODE").unwrap_or_else(|_| "node".into());
+    let events = handle.clone();
+    copilot::Copilot::new(node, script, secrets, move |event| match event {
+        copilot::Event::Delta { req_id, text } => {
+            let _ = events.emit("ai:delta", Delta { req_id, text });
+        }
+        copilot::Event::ToolCall(call) => {
+            let _ = events.emit("ai:toolcall", call);
+        }
+    })
+}
 
 fn chatgpt(app: &AppState) -> openai::OpenAi {
     openai::OpenAi::new(app.secrets.clone(), app.openai.clone())
-}
-
-fn not_yet(provider: Provider) -> String {
-    let name = match provider {
-        Provider::Claude => "Claude",
-        Provider::Openai => "ChatGPT",
-        Provider::Copilot => "GitHub Copilot",
-    };
-    format!("{name} {LATER}")
 }
 
 /// `{ ok: true, value } | { ok: false, message }`, like `wrap()` in index.ts.
@@ -51,28 +79,25 @@ pub fn ai_status(app: tauri::State<'_, AppState>) -> Value {
 }
 
 #[tauri::command]
-pub fn ai_copilot_status(app: tauri::State<'_, AppState>) -> Value {
-    json!({
-        "hasToken": false, "canEncrypt": app.secrets.available(), "available": false,
-        "authenticated": false, "login": null, "authType": null, "message": not_yet(Provider::Copilot),
-    })
+pub async fn ai_copilot_status(app: tauri::State<'_, AppState>) -> Result<Value, ()> {
+    Ok(app.copilot.status().await)
 }
 
 #[tauri::command]
-pub fn ai_set_key(
+pub async fn ai_set_key(
     app: tauri::State<'_, AppState>,
     provider: Provider,
     key: Option<String>,
-) -> Value {
-    wrap(match provider {
+) -> Result<Value, ()> {
+    Ok(wrap(match provider {
         Provider::Claude => {
             claude::set_key(app.secrets.as_ref(), key.as_deref()).map_err(|e| e.to_string())
         }
         Provider::Openai => chatgpt(&app)
             .set_key(key.as_deref())
             .map_err(|e| e.to_string()),
-        other => Err(not_yet(other)),
-    })
+        Provider::Copilot => app.copilot.set_token(key.as_deref()).await,
+    }))
 }
 
 #[tauri::command]
@@ -80,7 +105,7 @@ pub async fn ai_models(app: tauri::State<'_, AppState>, provider: Provider) -> R
     Ok(wrap(match provider {
         Provider::Claude => Ok(Vec::<String>::new()),
         Provider::Openai => chatgpt(&app).models().await,
-        other => Err(not_yet(other)),
+        Provider::Copilot => app.copilot.models().await,
     }))
 }
 
@@ -109,10 +134,52 @@ pub fn ai_openai_sign_out(app: tauri::State<'_, AppState>) -> Result<(), gitvers
     chatgpt(&app).sign_out()
 }
 
-/// The Copilot sign-in flow arrives with that provider.
+/// Open a Copilot sign-in step's URL, but only a github.com one (like openCopilotStep in index.ts).
+fn open_step(handle: &tauri::AppHandle, step: Value) -> Result<Value, String> {
+    use tauri_plugin_opener::OpenerExt;
+    if step["kind"] == "open-url" {
+        let url = url::Url::parse(step["url"].as_str().unwrap_or_default())
+            .ok()
+            .filter(|u| u.scheme() == "https" && u.host_str() == Some("github.com"))
+            .ok_or("GitHub returned an unexpected sign-in address.")?;
+        handle
+            .opener()
+            .open_url(url.as_str(), None::<&str>)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(step)
+}
+
 #[tauri::command]
-pub fn ai_sign_in_unavailable(provider: Provider) -> Value {
-    wrap::<()>(Err(not_yet(provider)))
+pub async fn ai_copilot_begin_login(
+    handle: tauri::AppHandle,
+    app: tauri::State<'_, AppState>,
+) -> Result<Value, ()> {
+    Ok(wrap(
+        app.copilot
+            .begin_login()
+            .await
+            .and_then(|s| open_step(&handle, s)),
+    ))
+}
+
+#[tauri::command]
+pub async fn ai_copilot_advance_login(
+    handle: tauri::AppHandle,
+    app: tauri::State<'_, AppState>,
+) -> Result<Value, ()> {
+    Ok(wrap(
+        app.copilot
+            .advance_login()
+            .await
+            .and_then(|s| open_step(&handle, s)),
+    ))
+}
+
+#[tauri::command]
+pub async fn ai_copilot_cancel_login(app: tauri::State<'_, AppState>) -> Result<(), ()> {
+    app.copilot.cancel_login().await;
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -120,7 +187,6 @@ pub fn ai_sign_in_unavailable(provider: Provider) -> Value {
 pub struct TurnRequest {
     req_id: u64,
     provider: Provider,
-    #[allow(dead_code)]
     conv_id: Option<u64>,
     model: Option<String>,
     messages: Vec<NMsg>,
@@ -139,12 +205,6 @@ pub async fn ai_turn(
     app: tauri::State<'_, AppState>,
     req: TurnRequest,
 ) -> Result<TurnResult, ()> {
-    if req.provider == Provider::Copilot {
-        return Ok(TurnResult::failed(err(
-            ErrKind::Other,
-            not_yet(req.provider),
-        )));
-    }
     let cancel = CancellationToken::new();
     app.ai_requests
         .0
@@ -161,14 +221,28 @@ pub async fn ai_turn(
             },
         );
     };
-    let result = if req.provider == Provider::Openai {
-        chatgpt(&app)
-            .turn(&req.messages, req.model.clone(), &emit, &cancel)
-            .await
-    } else {
-        claude::Claude::new(app.secrets.as_ref())
-            .turn(&req.messages, emit, &cancel)
-            .await
+    let result = match req.provider {
+        Provider::Openai => {
+            chatgpt(&app)
+                .turn(&req.messages, req.model.clone(), &emit, &cancel)
+                .await
+        }
+        Provider::Copilot => {
+            app.copilot
+                .turn(
+                    req_id,
+                    req.conv_id,
+                    &req.messages,
+                    req.model.clone(),
+                    &cancel,
+                )
+                .await
+        }
+        Provider::Claude => {
+            claude::Claude::new(app.secrets.as_ref())
+                .turn(&req.messages, emit, &cancel)
+                .await
+        }
     };
     app.ai_requests
         .0
@@ -191,12 +265,31 @@ pub fn ai_abort(app: tauri::State<'_, AppState>, req_id: u64) {
     }
 }
 
-/// Stateful providers (Copilot) hand tool calls back through these; Claude does not use them.
-#[tauri::command]
-pub fn ai_tool_result() {}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgedResult {
+    text: String,
+    is_error: bool,
+}
 
+/// Copilot runs its own tool loop and hands each call to the renderer (`ai:toolcall`); the
+/// renderer answers here.
 #[tauri::command]
-pub fn ai_reset() {}
+pub async fn ai_tool_result(
+    app: tauri::State<'_, AppState>,
+    call_id: String,
+    r: BridgedResult,
+) -> Result<(), ()> {
+    app.copilot.tool_result(&call_id, &r.text, r.is_error).await;
+    Ok(())
+}
+
+/// Drop Copilot's session for a conversation.
+#[tauri::command]
+pub async fn ai_reset(app: tauri::State<'_, AppState>, conv_id: u64) -> Result<(), ()> {
+    app.copilot.reset(conv_id).await;
+    Ok(())
+}
 
 /// Cancel `cancel` after `limit`, like the timers in index.ts.
 fn deadline(limit: Duration) -> CancellationToken {
@@ -230,7 +323,7 @@ pub async fn ai_commit_message(
                 .await
         }
         Provider::Openai => chatgpt(&app).commit_message(&diff, model, &cancel).await,
-        other => MessageResult::failed(err(ErrKind::Other, not_yet(other))),
+        Provider::Copilot => app.copilot.commit_message(&diff, model).await,
     })
 }
 
@@ -250,7 +343,7 @@ pub async fn ai_resolve_conflict(
                 .await
         }
         Provider::Openai => chatgpt(&app).resolve(&prompt, model, &cancel).await,
-        other => ResolveResult::failed(err(ErrKind::Other, not_yet(other))),
+        Provider::Copilot => app.copilot.resolve(&prompt, model).await,
     };
     Ok(result.sanitized(count))
 }

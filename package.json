@@ -29,9 +29,10 @@
     "test:terminal": "node scripts/terminal-pty-smoke.cjs",
     "dist": "npm run build && electron-builder --publish never",
     "dev:web": "vite",
-    "build:web": "tsc && vite build",
+    "build:web": "tsc && vite build && npm run build:sidecar",
+    "build:sidecar": "esbuild electron/ai/copilotSidecar.ts --bundle --platform=node --format=esm --target=node20 --packages=external --outfile=sidecar/copilot-sidecar.mjs",
     "tauri": "tauri",
-    "dev:tauri": "tauri dev",
+    "dev:tauri": "npm run build:sidecar && tauri dev",
     "build:tauri": "tauri build",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --workspace"
   },

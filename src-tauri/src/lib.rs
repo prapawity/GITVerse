@@ -18,6 +18,7 @@ pub struct AppState {
     pub secrets: std::sync::Arc<dyn gitverse_core::secrets::SecretStore>,
     pub ai_requests: ai_commands::AiRequests,
     pub openai: std::sync::Arc<gitverse_core::ai::openai::Shared>,
+    pub copilot: std::sync::Arc<gitverse_core::ai::copilot::Copilot>,
     /// Same folder Electron uses (`<appData>/GITVerse`), so both builds share repos and settings.
     pub data_dir: PathBuf,
 }
@@ -48,15 +49,19 @@ pub fn run() {
             let data_dir = app.path().config_dir()?.join("GITVerse");
             let git = GitRunner::default();
             git.set_identity(saved_identity(&data_dir));
+            let secrets: std::sync::Arc<dyn gitverse_core::secrets::SecretStore> =
+                std::sync::Arc::new(gitverse_core::secrets::Keychain::new(
+                    "io.github.prapawity.gitverse",
+                ));
+            let copilot = ai_commands::copilot_client(app.handle(), secrets.clone());
             app.manage(AppState {
                 git,
                 index_history: IndexHistory::default(),
                 terminals: Default::default(),
-                secrets: std::sync::Arc::new(gitverse_core::secrets::Keychain::new(
-                    "io.github.prapawity.gitverse",
-                )),
+                secrets,
                 ai_requests: Default::default(),
                 openai: Default::default(),
+                copilot: std::sync::Arc::new(copilot),
                 data_dir,
             });
             Ok(())
@@ -79,7 +84,9 @@ pub fn run() {
             ai_commands::ai_copilot_status,
             ai_commands::ai_set_key,
             ai_commands::ai_models,
-            ai_commands::ai_sign_in_unavailable,
+            ai_commands::ai_copilot_begin_login,
+            ai_commands::ai_copilot_advance_login,
+            ai_commands::ai_copilot_cancel_login,
             ai_commands::ai_openai_sign_in,
             ai_commands::ai_openai_cancel,
             ai_commands::ai_openai_sign_out,
@@ -98,6 +105,7 @@ pub fn run() {
             // No orphaned shells: end every terminal when the app exits.
             if let tauri::RunEvent::Exit = event {
                 handle.state::<AppState>().terminals.kill_all();
+                handle.state::<AppState>().copilot.shutdown();
             }
         });
 }

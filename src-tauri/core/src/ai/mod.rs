@@ -1,6 +1,7 @@
 //! AI providers for the in-app assistant (port of electron/ai). The renderer owns the conversation
 //! and runs tools; the backend holds credentials and talks to the provider APIs.
 pub mod claude;
+pub mod copilot;
 pub mod openai;
 mod sse;
 
@@ -97,7 +98,7 @@ pub fn err(kind: ErrKind, message: impl Into<String>) -> AiErr {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Stop {
     End,
@@ -107,7 +108,7 @@ pub enum Stop {
 }
 
 /// `TurnResult` in aiTypes.ts.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TurnResult {
     Done {
@@ -143,7 +144,7 @@ impl TurnResult {
 }
 
 /// `MessageResult` in aiTypes.ts.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MessageResult {
     Ok { ok: bool, text: String },
@@ -167,7 +168,7 @@ pub struct Resolution {
 }
 
 /// `ResolveResult` in aiTypes.ts.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ResolveResult {
     Ok {

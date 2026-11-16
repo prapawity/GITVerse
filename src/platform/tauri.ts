@@ -108,9 +108,9 @@ export async function createTauriApi(): Promise<PlatformApi> {
     ai: {
       status: () => call('ai_status'),
       copilotStatus: () => call('ai_copilot_status'),
-      copilotBeginLogin: () => call('ai_sign_in_unavailable', { provider: 'copilot' }),
-      copilotAdvanceLogin: () => call('ai_sign_in_unavailable', { provider: 'copilot' }),
-      copilotCancelLogin: () => Promise.resolve(),
+      copilotBeginLogin: () => call('ai_copilot_begin_login'),
+      copilotAdvanceLogin: () => call('ai_copilot_advance_login'),
+      copilotCancelLogin: () => call('ai_copilot_cancel_login'),
       setKey: (provider: string, key: string | null) => call('ai_set_key', { provider, key }),
       openaiSignIn: () => call('ai_openai_sign_in'),
       openaiCancel: () => call('ai_openai_cancel'),
@@ -118,15 +118,15 @@ export async function createTauriApi(): Promise<PlatformApi> {
       models: (provider: string) => call('ai_models', { provider }),
       turn: (req: unknown) => call('ai_turn', { req }),
       abort: (reqId: number) => call('ai_abort', { reqId }),
-      reset: () => call('ai_reset'),
-      toolResult: () => call('ai_tool_result'),
+      reset: (convId: number) => call('ai_reset', { convId }),
+      toolResult: (callId: string, r: unknown) => call('ai_tool_result', { callId, r }),
       resolveConflict: (provider: string, model: string | undefined, prompt: string, count: number) =>
         call('ai_resolve_conflict', { provider, model: model ?? null, prompt, count }),
       commitMessage: (provider: string, model: string | undefined, diff: string) =>
         call('ai_commit_message', { provider, model: model ?? null, diff }),
       onDelta: (cb) => subscribe<{ reqId: number; text: string }>('ai:delta', (p) => cb(p.reqId, p.text)),
-      // only stateful providers (Copilot, a later migration step) hand tool calls back
-      onToolCall: noopSubscription,
+      // Copilot runs its own tool loop and hands each call back to the app
+      onToolCall: (cb) => subscribe('ai:toolcall', cb),
     },
     stateStorage: {
       getItem: (k) => state[k] ?? null,
