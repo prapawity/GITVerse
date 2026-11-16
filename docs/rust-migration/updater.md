@@ -28,6 +28,7 @@ updates like a development build and the Settings page offers the release list i
      - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: the password from step 1
    - **Variables** → New repository variable:
      - `GITVERSE_UPDATER_PUBKEY`: the full contents of `gitverse-updater.key.pub`
+       (a repository secret with this name works too)
 
 That is all: the next run of **Release (Tauri preview)** builds signed bundles.
 
