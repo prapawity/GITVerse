@@ -7,6 +7,8 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    # branch pushes run only when the packaging changes (paths are ignored for tag pushes)
+    branches: ['**']
     # also when the packaging itself changes, so it is tested before a release
     paths:
       - .github/workflows/release-tauri.yml
