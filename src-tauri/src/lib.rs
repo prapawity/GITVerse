@@ -11,6 +11,8 @@ pub struct AppState {
     pub git: GitRunner,
     /// Undo/redo of stage actions, per repository, for this app session.
     pub index_history: IndexHistory,
+    /// Open integrated terminals; all are killed when the app exits.
+    pub terminals: gitverse_core::terminal::Terminals,
     /// Same folder Electron uses (`<appData>/GITVerse`), so both builds share repos and settings.
     pub data_dir: PathBuf,
 }
@@ -44,6 +46,7 @@ pub fn run() {
             app.manage(AppState {
                 git,
                 index_history: IndexHistory::default(),
+                terminals: Default::default(),
                 data_dir,
             });
             Ok(())
@@ -58,7 +61,17 @@ pub fn run() {
             commands::repo_clone,
             commands::push_branch,
             commands::push_choose_key,
+            commands::term_spawn,
+            commands::term_write,
+            commands::term_resize,
+            commands::term_kill,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running GITVerse");
+        .build(tauri::generate_context!())
+        .expect("error while building GITVerse")
+        .run(|handle, event| {
+            // No orphaned shells: end every terminal when the app exits.
+            if let tauri::RunEvent::Exit = event {
+                handle.state::<AppState>().terminals.kill_all();
+            }
+        });
 }

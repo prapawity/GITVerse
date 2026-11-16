@@ -6,6 +6,7 @@ description = "GITVerse backend logic without any UI runtime: Git runner, parser
 license = "MIT"
 
 [dependencies]
+portable-pty = "0.9"
 tempfile = "3"
 base64 = "0.22"
 url = "2"

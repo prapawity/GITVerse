@@ -98,3 +98,11 @@
 - [x] Git method ทุกตัวใน `GIT_METHODS` ย้ายมา Rust แล้ว
 - [ ] HTTPS token ที่บันทึกไว้ (`push:setToken`/`tokenStatus`) — รอ Phase 5 (keychain)
 - [ ] `inspectWorkspace` ต้องใช้ git ≥ 2.36 (`worktree list -z`) — เหมือนฝั่ง TS เดิม
+
+## Phase 4 — สถานะ (2026-11-16)
+
+- [x] `core/src/terminal.rs` ใช้ `portable-pty`: PTY จริงทุก OS (ConPTY บน Windows) แทน node-pty + Python bridge + pipe fallback เดิม
+- [x] UTF-8 ที่ถูกตัดกลาง chunk ต่อกันถูกต้อง (ทดสอบด้วยภาษาไทย); shell ปิดเอง → ส่ง `term:exit` ครั้งเดียว; ปิดแอป → kill ทุก shell
+- [x] ConPTY: ปิด PTY เมื่อ process จบ (ไม่งั้น reader ไม่จบ) และตอบ DSR `ESC[6n` ใน test เหมือน xterm.js
+- [x] Commands `term_spawn/write/resize/kill` + events `term:data`/`term:exit`; adapter ใน `src/platform/tauri.ts`
+- [x] `TerminalPanel`: Ctrl+V / Ctrl+Shift+V / Ctrl+C (เมื่อมี selection) ทำงานเองไม่พึ่งเมนูแอป และใช้ `event.code` จึงใช้ได้กับคีย์บอร์ดภาษาไทย

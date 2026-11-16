@@ -3,5 +3,6 @@
 pub mod error;
 pub mod git;
 pub mod state;
+pub mod terminal;
 
 pub use error::AppError;

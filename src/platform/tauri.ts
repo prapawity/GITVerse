@@ -99,12 +99,12 @@ export async function createTauriApi(): Promise<PlatformApi> {
         call('push_branch', { repo, remote, branch, target, profile, credentials, options }),
     },
     term: {
-      spawn: notPorted('term.spawn') as PlatformApi['term']['spawn'],
-      write: notPorted('term.write') as PlatformApi['term']['write'],
-      resize: notPorted('term.resize') as PlatformApi['term']['resize'],
-      kill: notPorted('term.kill') as PlatformApi['term']['kill'],
-      onData: noopSubscription,
-      onExit: noopSubscription,
+      spawn: (cwd, cols, rows, shell) => call<number>('term_spawn', { cwd, cols, rows, shell: shell ?? null }),
+      write: (id, data) => call<void>('term_write', { id, data }),
+      resize: (id, cols, rows) => call<void>('term_resize', { id, cols, rows }),
+      kill: (id) => call<void>('term_kill', { id }),
+      onData: (cb) => subscribe<{ id: number; data: string }>('term:data', (p) => cb(p.id, p.data)),
+      onExit: (cb) => subscribe<{ id: number; code: number }>('term:exit', (p) => cb(p.id, p.code)),
     },
     ai: {
       ...group('ai', [

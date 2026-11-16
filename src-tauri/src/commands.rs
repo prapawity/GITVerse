@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gitverse_core::git::{self, Identity};
 use gitverse_core::state::{self, State};
@@ -373,6 +373,72 @@ pub async fn git_call(
             "'{other}' is not available in the Tauri build yet (Rust migration in progress)."
         ))),
     }
+}
+
+// ---- integrated terminal (term:*) ----
+
+#[derive(Clone, serde::Serialize)]
+struct TermData {
+    id: u32,
+    data: String,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct TermExit {
+    id: u32,
+    code: i32,
+}
+
+/// `term:spawn`: output and exit arrive as `term:data` / `term:exit` events.
+#[tauri::command]
+pub fn term_spawn(
+    handle: tauri::AppHandle,
+    app: tauri::State<'_, AppState>,
+    cwd: String,
+    cols: u16,
+    rows: u16,
+    shell: Option<String>,
+) -> CmdResult<u32> {
+    use tauri::Emitter;
+    let (data, exit) = (handle.clone(), handle);
+    app.terminals.spawn(
+        Path::new(&cwd),
+        cols,
+        rows,
+        shell.as_deref(),
+        move |id, data_text| {
+            let _ = data.emit(
+                "term:data",
+                TermData {
+                    id,
+                    data: data_text,
+                },
+            );
+        },
+        move |id, code| {
+            let _ = exit.emit("term:exit", TermExit { id, code });
+        },
+    )
+}
+
+#[tauri::command]
+pub fn term_write(app: tauri::State<'_, AppState>, id: u32, data: String) -> CmdResult<()> {
+    app.terminals.write(id, &data)
+}
+
+#[tauri::command]
+pub fn term_resize(
+    app: tauri::State<'_, AppState>,
+    id: u32,
+    cols: u16,
+    rows: u16,
+) -> CmdResult<()> {
+    app.terminals.resize(id, cols, rows)
+}
+
+#[tauri::command]
+pub fn term_kill(app: tauri::State<'_, AppState>, id: u32) {
+    app.terminals.kill(id);
 }
 
 /// `repo:clone`: progress lines are emitted as `repo:cloneProgress` events while git runs.

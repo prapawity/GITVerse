@@ -87,6 +87,18 @@ async function create(cwd: string | null): Promise<Session> {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(el);
+  // Clipboard shortcuts on Windows/Linux, independent of any app menu and keyboard layout: Ctrl+V and Ctrl+Shift+V let
+  // the browser paste into xterm; Ctrl+C copies when text is selected (otherwise it stays SIGINT).
+  term.attachCustomKeyEventHandler((event) => {
+    if (event.type !== 'keydown' || navigator.platform.startsWith('Mac') || !event.ctrlKey || event.altKey) return true;
+    // event.code is the physical key, so this also works with non-Latin layouts (e.g. Thai).
+    if (event.code === 'KeyV') return false;
+    if (event.code === 'KeyC' && (event.shiftKey || term.hasSelection())) {
+      void navigator.clipboard?.writeText(term.getSelection()).catch(() => {});
+      return false;
+    }
+    return true;
+  });
   const title = cwd?.split(/[\\/]/).filter(Boolean).pop() || 'Terminal';
   const s: Session = { key: ++keySeq, id: null, title, term, fit, el, ended: false };
   sessions.push(s);
