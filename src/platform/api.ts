@@ -90,3 +90,13 @@ export function desktopApi(): PlatformApi {
   if (!bridge) throw new Error('The GITVerse desktop bridge is not available.');
   return bridge;
 }
+
+/**
+ * Install the desktop bridge before the app renders. Electron's preload has already set
+ * `window.gitApi`; under Tauri it is built here (async, because state is loaded over IPC).
+ */
+export async function initPlatform(): Promise<void> {
+  if (platformApi()) return;
+  const { isTauri, createTauriApi } = await import('./tauri');
+  if (isTauri()) (window as Window & { gitApi?: PlatformApi }).gitApi = await createTauriApi();
+}

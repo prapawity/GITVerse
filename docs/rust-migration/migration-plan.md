@@ -59,3 +59,15 @@
 - [x] `electron/git/contract.golden.test.ts` + `fixtures/git-contract/*.json` — golden output ของ log/status/refs/reflog/commitDetail/fileChangeCounts/fileBlame/fileHistory/opState จาก repo ที่ deterministic (Rust ต้องได้ JSON เดียวกัน). อัปเดต: `UPDATE_FIXTURES=1 npm test`
 - [ ] ระบุ type ของ git method ทีละตัว (ตอนนี้ยังเป็น `AnyAsync`) — จะได้จาก `tauri-specta` ใน Phase 1
 - [ ] เพิ่ม golden ของ diff (`commitFileDiff`, `workingFileDiff`) และ stash list
+
+## Phase 1 — สถานะ (2026-11-16)
+
+- [x] `src-tauri/` Cargo workspace: แอป Tauri 2 (`gitverse`) + `core/` (`gitverse-core`, ไม่พึ่ง Tauri → `cargo test` ได้ทุกที่)
+- [x] `core`: `GitRunner` (tokio, timeout, cancel, `GIT_TERMINAL_PROMPT=0`, `CREATE_NO_WINDOW` บน Windows, identity แบบเดียวกับ git.ts), `AppError` → `{kind,message}`, `state` (ไฟล์ `gitverse-state.json` เดียวกับ Electron)
+- [x] `git:status` ใน Rust ผ่าน golden fixture เดียวกับ TS (`core/tests/golden_contract.rs`)
+- [x] Commands: `state_load/state_save`, `repo_open` (dialog), `set_identity`, `git_call(method,args)` (dispatcher แทน `git:<name>`), `ported_git_methods`
+- [x] Data dir = `<appData>/GITVerse` เหมือน Electron → repo/ settings ใช้ร่วมกัน
+- [x] TS: `src/platform/tauri.ts` + `initPlatform()`; `main.tsx` init bridge ก่อน import stores; method ที่ยังไม่ port reject พร้อมข้อความชัดเจน; updates ทำตัวเป็น development build
+- [x] `vite.config.ts` ข้าม electron plugin เมื่อรันจาก Tauri CLI; scripts `dev:tauri`, `build:tauri`, `test:rust`
+- [ ] ทดสอบ `npm run dev:tauri` บน Windows/macOS
+- [ ] Drag-and-drop โฟลเดอร์ (Tauri ใช้ drag-drop event แทน `File.path`)

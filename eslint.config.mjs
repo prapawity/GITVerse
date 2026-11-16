@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['node_modules/**', 'dist/**', 'dist-electron/**', 'release/**', 'coverage/**', '.claude/**'],
+    ignores: ['node_modules/**', 'dist/**', 'dist-electron/**', 'release/**', 'coverage/**', '.claude/**', 'src-tauri/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
