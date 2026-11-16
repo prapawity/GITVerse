@@ -1,11 +1,11 @@
-//! `ai:*` commands (port of electron/ai/index.ts). Claude runs in Rust; OpenAI and Copilot follow
-//! in later migration steps and report that clearly until then.
+//! `ai:*` commands (port of electron/ai/index.ts). Claude and ChatGPT run in Rust; Copilot follows
+//! in a later migration step and reports that clearly until then.
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use gitverse_core::ai::{
-    claude, err, ErrKind, MessageResult, NMsg, Provider, ResolveResult, TurnResult,
+    claude, err, openai, ErrKind, MessageResult, NMsg, Provider, ResolveResult, TurnResult,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -19,6 +19,10 @@ use crate::AppState;
 pub struct AiRequests(Mutex<HashMap<u64, CancellationToken>>);
 
 const LATER: &str = "is not available in the Tauri build yet (Rust migration in progress).";
+
+fn chatgpt(app: &AppState) -> openai::OpenAi {
+    openai::OpenAi::new(app.secrets.clone(), app.openai.clone())
+}
 
 fn not_yet(provider: Provider) -> String {
     let name = match provider {
@@ -42,10 +46,7 @@ pub fn ai_status(app: tauri::State<'_, AppState>) -> Value {
     let secrets = app.secrets.as_ref();
     json!({
         "claude": claude::status(secrets),
-        "openai": {
-            "signedIn": false, "account": null, "planUsage": false,
-            "hasApiKey": false, "signingIn": false, "canEncrypt": secrets.available(),
-        },
+        "openai": chatgpt(&app).status(),
     })
 }
 
@@ -67,19 +68,48 @@ pub fn ai_set_key(
         Provider::Claude => {
             claude::set_key(app.secrets.as_ref(), key.as_deref()).map_err(|e| e.to_string())
         }
+        Provider::Openai => chatgpt(&app)
+            .set_key(key.as_deref())
+            .map_err(|e| e.to_string()),
         other => Err(not_yet(other)),
     })
 }
 
 #[tauri::command]
-pub fn ai_models(provider: Provider) -> Value {
-    wrap(match provider {
+pub async fn ai_models(app: tauri::State<'_, AppState>, provider: Provider) -> Result<Value, ()> {
+    Ok(wrap(match provider {
         Provider::Claude => Ok(Vec::<String>::new()),
+        Provider::Openai => chatgpt(&app).models().await,
         other => Err(not_yet(other)),
-    })
+    }))
 }
 
-/// Sign-in flows for ChatGPT and Copilot arrive with those providers.
+/// "Sign in with ChatGPT": opens the system browser and waits for the loopback redirect.
+#[tauri::command]
+pub async fn ai_openai_sign_in(
+    handle: tauri::AppHandle,
+    app: tauri::State<'_, AppState>,
+) -> Result<Value, ()> {
+    use tauri_plugin_opener::OpenerExt;
+    let r = chatgpt(&app)
+        .sign_in(|url| {
+            let _ = handle.opener().open_url(url, None::<&str>);
+        })
+        .await;
+    Ok(wrap(r))
+}
+
+#[tauri::command]
+pub fn ai_openai_cancel(app: tauri::State<'_, AppState>) {
+    chatgpt(&app).cancel_sign_in();
+}
+
+#[tauri::command]
+pub fn ai_openai_sign_out(app: tauri::State<'_, AppState>) -> Result<(), gitverse_core::AppError> {
+    chatgpt(&app).sign_out()
+}
+
+/// The Copilot sign-in flow arrives with that provider.
 #[tauri::command]
 pub fn ai_sign_in_unavailable(provider: Provider) -> Value {
     wrap::<()>(Err(not_yet(provider)))
@@ -92,7 +122,6 @@ pub struct TurnRequest {
     provider: Provider,
     #[allow(dead_code)]
     conv_id: Option<u64>,
-    #[allow(dead_code)]
     model: Option<String>,
     messages: Vec<NMsg>,
 }
@@ -110,7 +139,7 @@ pub async fn ai_turn(
     app: tauri::State<'_, AppState>,
     req: TurnRequest,
 ) -> Result<TurnResult, ()> {
-    if req.provider != Provider::Claude {
+    if req.provider == Provider::Copilot {
         return Ok(TurnResult::failed(err(
             ErrKind::Other,
             not_yet(req.provider),
@@ -122,23 +151,25 @@ pub async fn ai_turn(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .insert(req.req_id, cancel.clone());
-    let client = claude::Claude::new(app.secrets.as_ref());
     let req_id = req.req_id;
-    let result = client
-        .turn(
-            &req.messages,
-            |text| {
-                let _ = handle.emit(
-                    "ai:delta",
-                    Delta {
-                        req_id,
-                        text: text.to_owned(),
-                    },
-                );
+    let emit = move |text: &str| {
+        let _ = handle.emit(
+            "ai:delta",
+            Delta {
+                req_id,
+                text: text.to_owned(),
             },
-            &cancel,
-        )
-        .await;
+        );
+    };
+    let result = if req.provider == Provider::Openai {
+        chatgpt(&app)
+            .turn(&req.messages, req.model.clone(), &emit, &cancel)
+            .await
+    } else {
+        claude::Claude::new(app.secrets.as_ref())
+            .turn(&req.messages, emit, &cancel)
+            .await
+    };
     app.ai_requests
         .0
         .lock()
@@ -182,7 +213,7 @@ fn deadline(limit: Duration) -> CancellationToken {
 pub async fn ai_commit_message(
     app: tauri::State<'_, AppState>,
     provider: Provider,
-    #[allow(unused_variables)] model: Option<String>,
+    model: Option<String>,
     diff: String,
 ) -> Result<MessageResult, ()> {
     if diff.trim().is_empty() || diff.encode_utf16().count() > 150_000 {
@@ -191,37 +222,37 @@ pub async fn ai_commit_message(
             "Invalid staged diff or AI provider.",
         )));
     }
-    if provider != Provider::Claude {
-        return Ok(MessageResult::failed(err(
-            ErrKind::Other,
-            not_yet(provider),
-        )));
-    }
-    let client = claude::Claude::new(app.secrets.as_ref());
-    Ok(client
-        .commit_message(&diff, &deadline(Duration::from_secs(180)))
-        .await)
+    let cancel = deadline(Duration::from_secs(180));
+    Ok(match provider {
+        Provider::Claude => {
+            claude::Claude::new(app.secrets.as_ref())
+                .commit_message(&diff, &cancel)
+                .await
+        }
+        Provider::Openai => chatgpt(&app).commit_message(&diff, model, &cancel).await,
+        other => MessageResult::failed(err(ErrKind::Other, not_yet(other))),
+    })
 }
 
 #[tauri::command]
 pub async fn ai_resolve_conflict(
     app: tauri::State<'_, AppState>,
     provider: Provider,
-    #[allow(unused_variables)] model: Option<String>,
+    model: Option<String>,
     prompt: String,
     count: usize,
 ) -> Result<ResolveResult, ()> {
-    if provider != Provider::Claude {
-        return Ok(ResolveResult::failed(err(
-            ErrKind::Other,
-            not_yet(provider),
-        )));
-    }
-    let client = claude::Claude::new(app.secrets.as_ref());
-    Ok(client
-        .resolve(&prompt, &deadline(Duration::from_secs(4 * 60)))
-        .await
-        .sanitized(count))
+    let cancel = deadline(Duration::from_secs(4 * 60));
+    let result = match provider {
+        Provider::Claude => {
+            claude::Claude::new(app.secrets.as_ref())
+                .resolve(&prompt, &cancel)
+                .await
+        }
+        Provider::Openai => chatgpt(&app).resolve(&prompt, model, &cancel).await,
+        other => ResolveResult::failed(err(ErrKind::Other, not_yet(other))),
+    };
+    Ok(result.sanitized(count))
 }
 
 // ---- saved HTTPS push tokens (push:tokenStatus / push:setToken) ----

@@ -1,6 +1,7 @@
 //! AI providers for the in-app assistant (port of electron/ai). The renderer owns the conversation
 //! and runs tools; the backend holds credentials and talks to the provider APIs.
 pub mod claude;
+pub mod openai;
 mod sse;
 
 use serde::{Deserialize, Serialize};

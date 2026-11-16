@@ -116,3 +116,9 @@
 - [x] `profile.dev` ใช้ `debug = "line-tables-only"` — `target/` จาก 15 GB เหลือ ~2 GB
 - [ ] Phase 5B: OpenAI (API key + Sign in with ChatGPT)
 - [ ] Phase 5C: Copilot (Node sidecar)
+
+### Phase 5B — ChatGPT in Rust (done)
+- `core/src/ai/openai.rs`: API key or "Sign in with ChatGPT" (OAuth PKCE, loopback on 1455–1457, nonce/aud checks), rotating refresh (`invalid_grant` drops the sign-in), plan-first credential choice, 10-minute model cache, Responses API streaming with function tools (`store:false`), commit message and strict JSON-schema conflict resolution. Error texts match `mapHttp()` in openai.ts.
+- New commands: `ai_openai_sign_in` / `ai_openai_cancel` / `ai_openai_sign_out`; `ai_status`, `ai_set_key`, `ai_models`, `ai_turn`, `ai_commit_message`, `ai_resolve_conflict` handle `openai`.
+- Tests: mock servers for streaming turns, refresh, `invalid_grant`, model filters, resolve, a truncated stream, and a full loopback sign-in.
+- Next: 5C Copilot (Node sidecar).
