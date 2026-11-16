@@ -6,7 +6,6 @@
  * instead of crashing; see docs/rust-migration/migration-plan.md for what is still Electron-only.
  */
 import { invoke } from '@tauri-apps/api/core';
-import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { GIT_METHODS } from '../shared/gitMethods';
@@ -28,13 +27,6 @@ const call = <T>(cmd: string, args?: Record<string, unknown>) =>
     throw toError(raw);
   });
 
-const notPorted =
-  (name: string): AnyAsync =>
-  () =>
-    Promise.reject(new Error(`'${name}' is not available in the Tauri build yet (Rust migration in progress).`));
-
-const noopSubscription = () => () => {};
-
 /** Subscribe to a backend event; returns an unsubscribe function like the Electron bridge. */
 function subscribe<T>(event: string, cb: (payload: T) => void) {
   let stop: (() => void) | undefined;
@@ -49,16 +41,11 @@ function subscribe<T>(event: string, cb: (payload: T) => void) {
   };
 }
 
-function group<K extends string>(prefix: string, names: readonly K[]): Record<K, AnyAsync> {
-  return Object.fromEntries(names.map((n) => [n, notPorted(`${prefix}.${n}`)])) as Record<K, AnyAsync>;
-}
-
 export const isTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 /** Build the bridge. Async because Tauri has no synchronous IPC: state is loaded once up front. */
 export async function createTauriApi(): Promise<PlatformApi> {
   const state: Record<string, string> = await call<Record<string, string>>('state_load').catch(() => ({}));
-  const version = await getVersion().catch(() => '0.0.0');
   const save = (key: string, value: string | null) => {
     void call('state_save', { key, value }).catch((e) => console.error('[state] save failed', e));
   };
@@ -66,8 +53,6 @@ export async function createTauriApi(): Promise<PlatformApi> {
   const git = Object.fromEntries(
     GIT_METHODS.map((method) => [method, (...args: unknown[]) => call('git_call', { method, args })]),
   ) as Record<(typeof GIT_METHODS)[number], AnyAsync>;
-
-  const development = () => Promise.resolve({ kind: 'development', currentVersion: version });
 
   return {
     ...git,
@@ -102,12 +87,15 @@ export async function createTauriApi(): Promise<PlatformApi> {
     },
     setActiveIdentity: (identity) => call('set_identity', { identity }),
     updates: {
-      ...group('updates', ['list', 'openReleaseList', 'openDownloads', 'download', 'install'] as const),
-      // until the Tauri updater lands, behave like a development build: no update prompts
-      environment: () => Promise.resolve({ manualInstall: true }),
-      startup: development,
-      check: development,
-      onStatus: noopSubscription,
+      environment: () => call('updates_environment'),
+      startup: () => call('updates_check'),
+      check: () => call('updates_check'),
+      list: () => call('updates_list'),
+      openReleaseList: () => call('updates_open_release_list'),
+      openDownloads: (url: string) => call('updates_open_downloads', { url }),
+      download: (version: string) => call('updates_download', { version }),
+      install: () => call('updates_install'),
+      onStatus: (cb) => subscribe('updates:status', cb),
     },
     pushProfiles: {
       tokenStatus: (repo: string, id: string) => call<boolean>('push_token_status', { repo, id }),

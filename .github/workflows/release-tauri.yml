@@ -27,12 +27,16 @@ jobs:
         include:
           - os: windows-latest
             name: windows-x64
+            updater: windows-x86_64
           - os: macos-15
             name: macos-arm64
+            updater: darwin-aarch64
           - os: macos-15-intel
             name: macos-x64
+            updater: darwin-x86_64
           - os: ubuntu-22.04
             name: linux-x64
+            updater: linux-x86_64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -50,8 +54,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev
       - run: npm ci
-      # notices + Copilot sidecar (Node, SDK and this platform's runtime) + installer
-      - run: npm run release:tauri
+      # notices + Copilot sidecar (Node, SDK and this platform's runtime) + installer. With the
+      # updater key configured (docs/rust-migration/updater.md) the build is also signed for the
+      # in-app updater; without it the installers are built without updates.
+      - name: Build installers
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          UPDATER_PUBKEY: ${{ vars.GITVERSE_UPDATER_PUBKEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && [ -n "$UPDATER_PUBKEY" ]; then
+            echo "SIGNED_UPDATES=1" >> "$GITHUB_ENV"
+            GITVERSE_UPDATER_PUBKEY="$UPDATER_PUBKEY" npm run release:tauri -- --config src-tauri/tauri.updater.conf.json
+          else
+            echo "::notice::Updater key not configured: building installers without in-app updates."
+            npm run release:tauri
+          fi
       - name: Check that the bundle carries the Copilot sidecar and Node
         shell: bash
         run: |
@@ -67,6 +86,15 @@ jobs:
           fi
       - name: Smoke-test the staged sidecar with the bundled Node
         run: node scripts/sidecar-smoke.mjs
+      - name: Collect the signed updater bundle
+        if: env.SIGNED_UPDATES == '1'
+        run: node scripts/updater-collect.mjs ${{ matrix.updater }}
+      - uses: actions/upload-artifact@v7
+        if: env.SIGNED_UPDATES == '1'
+        with:
+          name: updater-${{ matrix.name }}
+          if-no-files-found: error
+          path: updater-out/*
       - uses: actions/upload-artifact@v7
         with:
           name: gitverse-tauri-${{ matrix.name }}
@@ -77,3 +105,34 @@ jobs:
             src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb
+
+  # On a release tag: publish the updater feed (latest.json) and the signed update bundles to the
+  # release that the main Release workflow drafts. Installed Tauri builds read
+  # releases/latest/download/latest.json, so updates reach users once that release is published.
+  updater-feed:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: updater-*
+          merge-multiple: true
+          path: updater-out
+      - name: Publish latest.json and the update bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! ls updater-out/*.json >/dev/null 2>&1; then
+            echo "::notice::No signed updater bundles (updater key not configured)."
+            exit 0
+          fi
+          node scripts/updater-manifest.mjs updater-out "$RELEASE_TAG"
+          # the main Release workflow creates the draft release; wait for it (up to 60 minutes)
+          for i in $(seq 1 60); do gh release view "$RELEASE_TAG" >/dev/null 2>&1 && break; sleep 60; done
+          gh release upload "$RELEASE_TAG" updater-out/latest.json updater-out/GITVerse_* --clobber

@@ -27,5 +27,12 @@
     "active": true,
     "targets": "all",
     "icon": ["../resources/icon.png", "../resources/icon.icns", "../resources/icon.ico"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": ["https://github.com/prapawity/GITVerse/releases/latest/download/latest.json"],
+      "requireSignedVersion": true
+    }
   }
 }

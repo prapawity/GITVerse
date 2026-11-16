@@ -146,3 +146,10 @@
 - `scripts/sidecar-smoke.mjs` copies the staged sidecar out of the repository and checks that the Copilot runtime starts with the staged Node.
 - `.github/workflows/release-tauri.yml` builds Windows (NSIS/MSI), macOS arm64/x64 (DMG) and Linux (AppImage/deb) installers as workflow artifacts, on release tags, by hand, and when the packaging files change. They are not attached to GitHub Releases until the Tauri build replaces Electron.
 - Still open: signing (Windows certificate, Apple notarization), the updater key pair and feed, Rust crate licenses in the notices.
+
+### Phase 6C — in-app updates (done, waiting for the signing key)
+
+- Tauri updater plugin behind the existing `updates:*` API (`update_commands.rs`): check, download with progress (`updates:status`), signature-verified install and restart; release list and release pages through `core/src/releases.rs`.
+- Active only in release builds that carry `GITVERSE_UPDATER_PUBKEY`; otherwise it behaves like a development build.
+- Release CI signs bundles and publishes `latest.json` to the tag's release when the key is configured. Setup steps: [updater.md](updater.md).
+- With this, every `PlatformApi` method in `src/platform/tauri.ts` is implemented.

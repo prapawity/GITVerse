@@ -3,6 +3,7 @@
 mod ai_commands;
 mod app_commands;
 mod commands;
+mod update_commands;
 
 use std::path::PathBuf;
 
@@ -21,6 +22,7 @@ pub struct AppState {
     pub openai: std::sync::Arc<gitverse_core::ai::openai::Shared>,
     pub copilot: std::sync::Arc<gitverse_core::ai::copilot::Copilot>,
     pub scans: app_commands::Scans,
+    pub updates: update_commands::Updates,
     /// Same folder Electron uses (`<appData>/GITVerse`), so both builds share repos and settings.
     pub data_dir: PathBuf,
 }
@@ -47,6 +49,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(match update_commands::PUBKEY {
+            Some(key) => tauri_plugin_updater::Builder::new().pubkey(key).build(),
+            None => tauri_plugin_updater::Builder::new().build(),
+        })
         .setup(|app| {
             let data_dir = app.path().config_dir()?.join("GITVerse");
             let git = GitRunner::default();
@@ -65,6 +71,7 @@ pub fn run() {
                 openai: Default::default(),
                 copilot: std::sync::Arc::new(copilot),
                 scans: Default::default(),
+                updates: Default::default(),
                 data_dir,
             });
             Ok(())
@@ -83,6 +90,13 @@ pub fn run() {
             commands::term_write,
             commands::term_resize,
             commands::term_kill,
+            update_commands::updates_environment,
+            update_commands::updates_check,
+            update_commands::updates_download,
+            update_commands::updates_install,
+            update_commands::updates_list,
+            update_commands::updates_open_release_list,
+            update_commands::updates_open_downloads,
             app_commands::repo_find_repositories,
             app_commands::repo_cancel_scan,
             app_commands::repo_open_file,

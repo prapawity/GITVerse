@@ -19,3 +19,4 @@ src-tauri/gen/
 sidecar/
 src-tauri/copilot/
 src-tauri/binaries/
+updater-out/
