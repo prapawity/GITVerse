@@ -1,8 +1,15 @@
 appId: io.github.prapawity.gitverse
 productName: GITVerse
+beforePack: scripts/third-party-notices.cjs
 directories:
   output: release
 extraResources:
+  - from: build-notices/THIRD_PARTY_NOTICES.txt
+    to: THIRD_PARTY_NOTICES.txt
+  - from: node_modules/electron/dist/LICENSE
+    to: LICENSE.electron.txt
+  - from: node_modules/electron/dist/LICENSES.chromium.html
+    to: LICENSES.chromium.html
   - from: resources/icon.png
     to: icon.png
 files:
@@ -12,6 +19,11 @@ files:
   - package.json
   - LICENSE
 asar: true
+# node-pty ships prebuilt N-API binaries for Windows and macOS. Rebuilding it
+# requires a platform compiler; unsupported platforms use the terminal fallback.
+npmRebuild: false
+asarUnpack:
+  - node_modules/node-pty/**/*
 artifactName: GITVerse-${version}-${os}-${arch}.${ext}
 publish:
   provider: github

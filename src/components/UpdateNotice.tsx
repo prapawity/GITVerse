@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import type { AppUpdateCheck } from '../shared/updates';
 import { ReleasePicker } from './ReleasePicker';
+import { desktopApi } from '../platform/api';
 
 export function UpdateNotice({
   update,
@@ -18,12 +19,14 @@ export function UpdateNotice({
   const [error, setError] = useState('');
   const [download, setDownload] = useState<{ state: string; percent?: number } | null>(null);
   const [manualInstall, setManualInstall] = useState(false);
-  useEffect(() => (window as any).gitApi.updates.onStatus(setDownload), []);
+  useEffect(() => desktopApi().updates.onStatus(setDownload), []);
   useEffect(() => {
     let active = true;
-    (window as any).gitApi.updates.environment().then((environment: { manualInstall?: boolean }) => {
-      if (active) setManualInstall(!!environment.manualInstall);
-    });
+    desktopApi()
+      .updates.environment()
+      .then((environment: { manualInstall?: boolean }) => {
+        if (active) setManualInstall(!!environment.manualInstall);
+      });
     return () => {
       active = false;
     };
@@ -67,7 +70,7 @@ export function UpdateNotice({
           </p>
         )}
         {error && (
-          <p role="alert" className="mt-3 break-words text-sm text-[#f38ba8]">
+          <p role="alert" className="mt-3 break-words text-sm text-danger">
             {error}
           </p>
         )}
@@ -75,7 +78,7 @@ export function UpdateNotice({
           <button
             disabled={opening || download?.state === 'downloading'}
             onClick={() => setShowVersions(true)}
-            className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
+            className="btn-secondary px-4 py-2"
           >
             Other versions
           </button>
@@ -83,7 +86,7 @@ export function UpdateNotice({
             data-later
             disabled={opening || download?.state === 'downloading'}
             onClick={onLater}
-            className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
+            className="btn-secondary px-4 py-2"
           >
             Later
           </button>
@@ -92,7 +95,7 @@ export function UpdateNotice({
             onClick={async () => {
               if (download?.state === 'downloaded') {
                 try {
-                  await (window as any).gitApi.updates.install();
+                  await desktopApi().updates.install();
                 } catch (reason) {
                   setError(String((reason as Error)?.message ?? reason));
                 }
@@ -101,7 +104,7 @@ export function UpdateNotice({
               setOpening(true);
               setError('');
               try {
-                await (window as any).gitApi.updates.download(update.version);
+                await desktopApi().updates.download(update.version);
               } catch (reason) {
                 setDownload(null);
                 setError(String((reason as Error)?.message ?? reason));
@@ -109,7 +112,7 @@ export function UpdateNotice({
                 setOpening(false);
               }
             }}
-            className="flex items-center gap-2 rounded-md bg-[#4cc2ff] px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
+            className="btn-primary px-4 py-2"
           >
             {opening ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}{' '}
             {download?.state === 'downloaded'

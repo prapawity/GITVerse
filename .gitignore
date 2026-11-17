@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-electron/
 release/
+build-notices/
 coverage/
 .DS_Store
 *.log
@@ -13,3 +14,10 @@ coverage/
 *.p12
 *.pfx
 .claude/
+src-tauri/target/
+src-tauri/gen/
+sidecar/
+src-tauri/copilot/
+src-tauri/binaries/
+updater-out/
+src-tauri/tauri.pubkey.conf.json

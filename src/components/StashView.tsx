@@ -1,6 +1,7 @@
 import { DiffView } from './DiffView';
 import type { ChangedFile } from './DetailsPanel';
 import type { StashRef } from '../shared/types';
+import { desktopApi } from '../platform/api';
 
 export function StashView({
   repo,
@@ -14,7 +15,6 @@ export function StashView({
   onClose: () => void;
 }) {
   const id = stash.hash ?? stash.id;
-  const api = (window as any).gitApi;
   return (
     <DiffView
       repoPath={repo}
@@ -22,8 +22,8 @@ export function StashView({
       file={file}
       onClose={onClose}
       readOnlySnapshot
-      loadDiff={() => api.stashFileDiff(repo, id, file.path)}
-      loadContent={() => api.stashFileAt(repo, id, file.path)}
+      loadDiff={() => desktopApi().stashFileDiff(repo, id, file.path)}
+      loadContent={() => desktopApi().stashFileAt(repo, id, file.path)}
     />
   );
 }

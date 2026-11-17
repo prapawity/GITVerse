@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2, Upload } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { useSettings } from '../store/settingsStore';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
-const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]';
+const api = () => desktopApi();
+const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent';
 type Info = { branch: string; remotes: string[]; remote: string; target: string; remoteHash: string | null };
 
 export function PushDialog({ repo, onClose }: { repo: string; onClose: () => void }) {
@@ -106,7 +107,7 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
           Push branch
         </h2>
         {error && (
-          <p role="alert" className="mt-3 whitespace-pre-wrap text-sm text-[#f38ba8]">
+          <p role="alert" className="mt-3 whitespace-pre-wrap text-sm text-danger">
             {error}
           </p>
         )}
@@ -114,38 +115,38 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
           <p className="mt-4 text-sub">{error ? 'Could not load repository details.' : 'Loading remotes…'}</p>
         ) : (
           <div className="mt-4 space-y-4">
-            {!info.branch && <p className="text-sm text-[#f9e2af]">Check out a branch before pushing.</p>}
+            {!info.branch && <p className="text-sm text-warning">Check out a branch before pushing.</p>}
             {canPush && (
               <p className="break-all text-sm leading-relaxed">
                 Push <span className="font-semibold text-text">{info.branch}</span> to{' '}
-                <span className="font-semibold text-[#4cc2ff]">
+                <span className="font-semibold text-accent">
                   {remote}/{target}
                 </span>
                 ?
               </p>
             )}
             {!info.remotes.length && (
-              <p className="text-sm text-[#f9e2af]">This repository has no remotes. Add one in Git first.</p>
+              <p className="text-sm text-warning">This repository has no remotes. Add one in Git first.</p>
             )}
             {info.remotes.length > 0 && remote && !info.remotes.includes(remote) && (
-              <p className="text-sm text-[#f9e2af]">
+              <p className="text-sm text-warning">
                 The configured upstream remote “{remote}” is unavailable. Update the branch's upstream in Git first.
               </p>
             )}
             {canPush && (
-              <div className={`space-y-2 border-t pt-3 ${forcePush ? 'border-[#f9e2af]/40' : 'border-surface'}`}>
+              <div className={`space-y-2 border-t pt-3 ${forcePush ? 'border-warning/40' : 'border-surface'}`}>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={forcePush}
                     disabled={pushing || !info.remoteHash}
                     onChange={(e) => setForcePush(e.target.checked)}
-                    className="accent-[#f38ba8]"
+                    className="accent-danger"
                   />
                   Force push (--force-with-lease)
                 </label>
                 {forcePush && (
-                  <p className="flex items-start gap-2 text-sm text-[#f9e2af]">
+                  <p className="flex items-start gap-2 text-sm text-warning">
                     <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
                     Replaces remote history and may remove remote-only commits. The push is blocked if the remote
                     changed since this dialog opened.
@@ -159,8 +160,8 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
               </div>
             )}
             {authNeeded && (
-              <div className="space-y-3 rounded-lg border border-[#f9e2af]/40 bg-[#f9e2af]/5 p-3">
-                <p className="text-sm text-[#f9e2af]">
+              <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
+                <p className="text-sm text-warning">
                   Authentication failed. Enter HTTPS credentials to retry. Your server may require an access token
                   instead of a password.
                 </p>
@@ -191,11 +192,7 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
           </div>
         )}
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={pushing}
-            className="rounded-md border border-surface px-3 py-2 hover:bg-surface/60 disabled:opacity-40"
-          >
+          <button onClick={onClose} disabled={pushing} className="btn-secondary px-3 py-2">
             Cancel
           </button>
           <button
@@ -203,7 +200,7 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
             disabled={
               !canPush || pushing || (forcePush && !info?.remoteHash) || (authNeeded && (!login.trim() || !password))
             }
-            className={`flex items-center gap-2 rounded-md px-4 py-2 font-medium text-crust disabled:opacity-40 ${forcePush ? 'bg-[#f38ba8]' : 'bg-[#4cc2ff]'}`}
+            className={`btn-primary px-4 py-2 ${forcePush ? '!bg-danger' : ''}`}
           >
             {pushing ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Upload size={16} aria-hidden />}
             {pushing ? 'Pushing…' : forcePush ? 'Confirm force push' : authNeeded ? 'Retry push' : 'Push'}

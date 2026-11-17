@@ -12,6 +12,7 @@ import {
 } from '../shared/aiTypes';
 import { useRepo } from './repoStore';
 import { flowFor, useSettings } from './settingsStore';
+import { platformApi, desktopApi } from '../platform/api';
 
 export type ToolStatus = 'awaiting' | 'running' | 'done' | 'error' | 'declined';
 export type Item =
@@ -34,7 +35,7 @@ interface AiState {
   answer: (ok: boolean) => void;
 }
 
-const ai = () => (window as any).gitApi?.ai;
+const ai = () => platformApi()?.ai;
 let reqSeq = 0;
 let bubbleSeq = 0;
 let wired = false;
@@ -140,7 +141,7 @@ async function execute(name: ToolName, input: any): Promise<{ ok: boolean; text:
 }
 
 // ---------- conflicts ----------
-const gitApi = () => (window as any).gitApi;
+const gitApi = () => desktopApi();
 const MAX_FILE = 200_000;
 const clip = (t: string, n = 8000) =>
   t.length > n ? t.slice(0, n) + `\n…[${t.length - n} more characters not shown]` : t;

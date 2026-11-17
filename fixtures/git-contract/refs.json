@@ -1,0 +1,42 @@
+{
+  "local": [
+    {
+      "name": "feature/login",
+      "current": false,
+      "hash": "a09ece8d194bc68dc38cbc13e94f265015b85b1c",
+      "ahead": 0,
+      "behind": 0,
+      "gone": false
+    },
+    {
+      "name": "main",
+      "current": true,
+      "hash": "bbb599bb87f351c65576034282edf1172e1b1e43",
+      "ahead": 0,
+      "behind": 0,
+      "gone": false
+    }
+  ],
+  "remote": [],
+  "tags": [
+    {
+      "name": "v1.0.0"
+    },
+    {
+      "name": "v1.0.1"
+    }
+  ],
+  "stashes": [
+    {
+      "id": "stash@{0}",
+      "hash": "992f484047e2d908a195593a89a84f25d766ffba",
+      "baseHash": "bbb599bb87f351c65576034282edf1172e1b1e43",
+      "author": "Ada Lovelace",
+      "email": "ada@example.com",
+      "date": "2023-11-15T05:26:20+07:00",
+      "body": "On main: wip on app",
+      "message": "wip on app"
+    }
+  ],
+  "headHash": "bbb599bb87f351c65576034282edf1172e1b1e43"
+}

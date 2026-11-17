@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { ChevronDown, Plus, SquareTerminal, Trash2, X } from 'lucide-react';
 import { termFont, useSettings } from '../store/settingsStore';
+import { desktopApi, platformApi } from '../platform/api';
 
 /**
  * Bottom terminal with tabs. Sessions live at module level so hiding the panel (or switching
@@ -26,18 +27,19 @@ const pending = new Map<number, string[]>(); // output that arrived before spawn
 const listeners = new Set<() => void>();
 let wired = false;
 let keySeq = 0;
-const api = () => (window as any).gitApi?.term;
+const api = () => platformApi()?.term;
 const notify = () => listeners.forEach((l) => l());
 
 function wire() {
-  if (wired || !api()) return;
+  const term = api();
+  if (wired || !term) return;
   wired = true;
-  api().onData((id: number, data: string) => {
+  term.onData((id: number, data: string) => {
     const s = byId.get(id);
     if (s) s.term.write(data);
     else pending.set(id, [...(pending.get(id) ?? []), data]);
   });
-  api().onExit((id: number) => {
+  term.onExit((id: number) => {
     const s = byId.get(id);
     if (!s) return;
     s.ended = true;
@@ -85,20 +87,38 @@ async function create(cwd: string | null): Promise<Session> {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(el);
-  const s: Session = { key: ++keySeq, id: null, title: 'zsh', term, fit, el, ended: false };
+  // Clipboard shortcuts on Windows/Linux, independent of any app menu and keyboard layout: Ctrl+V and Ctrl+Shift+V let
+  // the browser paste into xterm; Ctrl+C copies when text is selected (otherwise it stays SIGINT).
+  term.attachCustomKeyEventHandler((event) => {
+    if (event.type !== 'keydown' || navigator.platform.startsWith('Mac') || !event.ctrlKey || event.altKey) return true;
+    // event.code is the physical key, so this also works with non-Latin layouts (e.g. Thai).
+    if (event.code === 'KeyV') return false;
+    if (event.code === 'KeyC' && (event.shiftKey || term.hasSelection())) {
+      void navigator.clipboard?.writeText(term.getSelection()).catch(() => {});
+      return false;
+    }
+    return true;
+  });
+  const title = cwd?.split(/[\\/]/).filter(Boolean).pop() || 'Terminal';
+  const s: Session = { key: ++keySeq, id: null, title, term, fit, el, ended: false };
   sessions.push(s);
   notify();
   if (!api()) {
     term.write('Terminal is available in the desktop app.\r\n');
     return s;
   }
-  const id: number = await api().spawn(cwd ?? '', term.cols || 80, term.rows || 24, cfg.termShell || undefined);
+  const id: number = await desktopApi().term.spawn(
+    cwd ?? '',
+    term.cols || 80,
+    term.rows || 24,
+    cfg.termShell || undefined,
+  );
   s.id = id;
   byId.set(id, s);
   (pending.get(id) ?? []).forEach((d) => term.write(d));
   pending.delete(id);
-  term.onData((d) => !s.ended && api().write(id, d));
-  term.onResize(({ cols, rows }) => api().resize(id, cols, rows));
+  term.onData((d) => !s.ended && desktopApi().term.write(id, d));
+  term.onResize(({ cols, rows }) => desktopApi().term.resize(id, cols, rows));
   return s;
 }
 
@@ -181,11 +201,12 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
         {sessions.map((s, i) => (
           <div
             key={s.key}
-            className={`group flex h-[28px] items-center gap-1.5 rounded-md pl-2.5 pr-1 text-[13px] ${s === current ? 'bg-surface text-text' : 'text-sub hover:bg-surface/50'}`}
+            className={`group flex h-[28px] items-center gap-1.5 rounded-md pl-2.5 pr-1 text-sm ${s === current ? 'bg-surface text-text' : 'text-sub hover:bg-surface/50'}`}
           >
             <button
               role="tab"
               aria-selected={s === current}
+              title={`Terminal in ${s.title}${s.ended ? ' (process exited)' : ''}`}
               onClick={() => setActive(s.key)}
               className="flex items-center gap-1.5"
             >
@@ -203,12 +224,7 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
             </button>
           </div>
         ))}
-        <button
-          aria-label="New terminal"
-          title="New terminal"
-          onClick={add}
-          className="rounded-md p-1.5 text-sub hover:bg-surface hover:text-text"
-        >
+        <button aria-label="New terminal" title="New terminal" onClick={add} className="btn-ghost p-1.5">
           <Plus size={15} />
         </button>
         <div className="ml-auto flex items-center gap-1">
@@ -220,12 +236,7 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
           >
             <Trash2 size={15} />
           </button>
-          <button
-            aria-label="Hide terminal"
-            title="Hide (Ctrl+`)"
-            onClick={onHide}
-            className="rounded-md p-1.5 text-sub hover:bg-surface hover:text-text"
-          >
+          <button aria-label="Hide terminal" title="Hide (Ctrl+`)" onClick={onHide} className="btn-ghost p-1.5">
             <ChevronDown size={16} />
           </button>
         </div>

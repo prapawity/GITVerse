@@ -72,8 +72,12 @@ function useBlob(load: (() => Promise<string>) | null, type: string, deps: unkno
   return state;
 }
 
-function Media({ kind, src, name }: { kind: MediaKind; src: string; name: string }) {
+type Zoom = 'fit' | 1 | 2 | 4 | 8;
+const ZOOMS: Zoom[] = ['fit', 1, 2, 4, 8];
+
+function Media({ kind, src, name, zoom = 'fit' }: { kind: MediaKind; src: string; name: string; zoom?: Zoom }) {
   const [dims, setDims] = useState('');
+  const [natural, setNatural] = useState<[number, number] | null>(null);
   if (kind === 'video')
     return (
       <video
@@ -92,14 +96,24 @@ function Media({ kind, src, name }: { kind: MediaKind; src: string; name: string
       <img
         src={src}
         alt={name}
-        onLoad={(e) => setDims(`${e.currentTarget.naturalWidth}×${e.currentTarget.naturalHeight}`)}
-        className="max-h-[70vh] max-w-full rounded border border-surface object-contain"
+        onLoad={(e) => {
+          setDims(`${e.currentTarget.naturalWidth}×${e.currentTarget.naturalHeight}`);
+          setNatural([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight]);
+        }}
+        className={`rounded border border-surface object-contain ${zoom === 'fit' ? 'max-h-[70vh] max-w-full' : 'max-w-none'}`}
         style={{
+          // tiny icons are scaled up to at least 128 px in Fit; fixed zooms show crisp pixels
+          ...(natural &&
+            (zoom === 'fit'
+              ? Math.max(...natural) < 128
+                ? { width: (natural[0] * 128) / Math.max(...natural), imageRendering: 'pixelated' as const }
+                : {}
+              : { width: natural[0] * zoom, imageRendering: zoom > 1 ? ('pixelated' as const) : 'auto' })),
           backgroundImage: 'conic-gradient(#2a303c 25%, #20252e 0 50%, #2a303c 0 75%, #20252e 0)',
           backgroundSize: '16px 16px',
         }}
       />
-      <span className="font-sans text-[12px] text-sub">{dims}</span>
+      <span className="font-sans text-xs text-sub">{dims}</span>
     </div>
   );
 }
@@ -112,7 +126,9 @@ function Pane({
   name,
   deps,
   empty,
+  zoom,
 }: {
+  zoom?: Zoom;
   label?: string;
   kind: MediaKind;
   type: string;
@@ -124,7 +140,7 @@ function Pane({
   const blob = useBlob(load, type, deps);
   return (
     <figure className="flex min-w-0 flex-1 flex-col items-center gap-2 font-sans">
-      {label && <figcaption className="text-[12px] uppercase tracking-wide text-sub">{label}</figcaption>}
+      {label && <figcaption className="text-xs font-medium text-sub">{label}</figcaption>}
       {!load && <div className="text-sub">{empty ?? 'Not available'}</div>}
       {load && !blob && (
         <div role="status" className="flex items-center gap-2 text-sub">
@@ -132,14 +148,14 @@ function Pane({
         </div>
       )}
       {blob && 'error' in blob && (
-        <div role="alert" className="whitespace-pre-wrap text-[#f38ba8]">
+        <div role="alert" className="whitespace-pre-wrap text-danger">
           {blob.error}
         </div>
       )}
       {blob && 'url' in blob && (
         <>
-          <Media kind={kind} src={blob.url} name={name} />
-          <span className="text-[12px] text-sub">{size(blob.size)}</span>
+          <Media kind={kind} src={blob.url} name={name} zoom={zoom} />
+          <span className="text-xs text-sub">{size(blob.size)}</span>
         </>
       )}
     </figure>
@@ -160,27 +176,41 @@ export function MediaPreview({
 }) {
   const [kind, type] = mediaType(path)!;
   const name = path.split('/').pop() ?? path;
+  const [zoom, setZoom] = useState<Zoom>('fit');
   return (
-    <div className="flex flex-wrap items-start justify-center gap-8 p-6">
-      {loadBefore && (
+    <div className="flex flex-col">
+      {kind === 'image' && (
+        <div role="group" aria-label="Zoom" className="seg mt-4 self-center font-sans">
+          {ZOOMS.map((z) => (
+            <button key={z} type="button" aria-pressed={zoom === z} onClick={() => setZoom(z)} className="seg-item">
+              {z === 'fit' ? 'Fit' : `${z}×`}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap items-start justify-center gap-8 overflow-auto p-6">
+        {loadBefore && (
+          <Pane
+            label="Before"
+            kind={kind}
+            type={type}
+            load={loadBefore}
+            name={`${name} (before)`}
+            deps={[...deps, 'b']}
+            zoom={zoom}
+          />
+        )}
         <Pane
-          label="Before"
+          label={loadBefore ? 'After' : undefined}
           kind={kind}
           type={type}
-          load={loadBefore}
-          name={`${name} (before)`}
-          deps={[...deps, 'b']}
+          load={loadAfter}
+          name={name}
+          deps={[...deps, 'a']}
+          empty="This file no longer exists."
+          zoom={zoom}
         />
-      )}
-      <Pane
-        label={loadBefore ? 'After' : undefined}
-        kind={kind}
-        type={type}
-        load={loadAfter}
-        name={name}
-        deps={[...deps, 'a']}
-        empty="This file no longer exists."
-      />
+      </div>
     </div>
   );
 }
@@ -198,7 +228,7 @@ export function JsonPreview({ text }: { text: string }) {
   return (
     <div className="min-w-max py-2">
       {result.error && (
-        <div role="alert" className="px-4 pb-2 font-sans text-[#f9e2af]">
+        <div role="alert" className="px-4 pb-2 font-sans text-warning">
           Not valid JSON ({result.error}). Showing the raw file.
         </div>
       )}

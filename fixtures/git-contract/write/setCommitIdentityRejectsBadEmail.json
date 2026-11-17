@@ -1,0 +1,106 @@
+{
+  "error": "Enter a valid name and email.",
+  "after": {
+    "status": [
+      {
+        "index": " ",
+        "worktree": "D",
+        "path": "README.md"
+      },
+      {
+        "index": " ",
+        "worktree": "M",
+        "path": "app.txt"
+      },
+      {
+        "index": "M",
+        "worktree": " ",
+        "path": "login.txt"
+      },
+      {
+        "index": "?",
+        "worktree": "?",
+        "path": "notes.md"
+      }
+    ],
+    "refs": {
+      "local": [
+        {
+          "name": "feature/login",
+          "current": false,
+          "hash": "a09ece8d194bc68dc38cbc13e94f265015b85b1c",
+          "ahead": 0,
+          "behind": 0,
+          "gone": false
+        },
+        {
+          "name": "main",
+          "current": true,
+          "hash": "bbb599bb87f351c65576034282edf1172e1b1e43",
+          "ahead": 0,
+          "behind": 0,
+          "gone": false
+        }
+      ],
+      "remote": [],
+      "tags": [
+        {
+          "name": "v1.0.0"
+        },
+        {
+          "name": "v1.0.1"
+        }
+      ],
+      "stashes": [
+        {
+          "id": "stash@{0}",
+          "hash": "992f484047e2d908a195593a89a84f25d766ffba",
+          "baseHash": "bbb599bb87f351c65576034282edf1172e1b1e43",
+          "author": "Ada Lovelace",
+          "email": "ada@example.com",
+          "date": "2023-11-15T05:26:20+07:00",
+          "body": "On main: wip on app",
+          "message": "wip on app"
+        }
+      ],
+      "headHash": "bbb599bb87f351c65576034282edf1172e1b1e43"
+    },
+    "log": [
+      {
+        "hash": "bbb599bb87f351c65576034282edf1172e1b1e43",
+        "parents": [
+          "91c715e205d487e2b1de6f2a295ab25fe528f877",
+          "a09ece8d194bc68dc38cbc13e94f265015b85b1c"
+        ],
+        "subject": "Merge branch 'feature/login'"
+      },
+      {
+        "hash": "a09ece8d194bc68dc38cbc13e94f265015b85b1c",
+        "parents": [
+          "4930805154d05c106bbfe081cefa3f1f0f453cff"
+        ],
+        "subject": "Add login"
+      },
+      {
+        "hash": "91c715e205d487e2b1de6f2a295ab25fe528f877",
+        "parents": [
+          "4930805154d05c106bbfe081cefa3f1f0f453cff"
+        ],
+        "subject": "Update readme"
+      },
+      {
+        "hash": "4930805154d05c106bbfe081cefa3f1f0f453cff",
+        "parents": [
+          "5e4de02f7e55973569a28e63579575b5f5d31b3a"
+        ],
+        "subject": "Change app"
+      },
+      {
+        "hash": "5e4de02f7e55973569a28e63579575b5f5d31b3a",
+        "parents": [],
+        "subject": "Initial commit"
+      }
+    ],
+    "operation": null
+  }
+}

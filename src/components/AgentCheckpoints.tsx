@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bot, ShieldCheck } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
+import { platformApi } from '../platform/api';
 
 interface Checkpoint {
   ref: string;
@@ -11,7 +12,7 @@ interface Checkpoint {
 export function AgentCheckpoints({ repo }: { repo: string }) {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   useEffect(() => {
-    const api = (window as Window & { gitApi?: { agentCheckpoints?: (cwd: string) => Promise<Checkpoint[]> } }).gitApi;
+    const api = platformApi();
     if (!api?.agentCheckpoints) return;
     let active = true;
     let pending = false;

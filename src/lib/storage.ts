@@ -1,9 +1,10 @@
+import { platformApi } from '../platform/api';
 /**
  * Persistent key/value storage: the app-data file via Electron when available (survives port changes
  * and abrupt quits), otherwise localStorage (browser preview). Every call is safe to make when storage is blocked.
  */
 const native = () =>
-  (window as any).gitApi?.stateStorage as
+  platformApi()?.stateStorage as
     { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void } | undefined;
 
 export const storage = {

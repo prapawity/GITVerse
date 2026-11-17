@@ -43,7 +43,7 @@ export function ActivityBar() {
           aria-live="polite"
           className="fixed bottom-6 left-6 z-[110] flex items-center gap-2 rounded-full border border-surface bg-[#2a2f3a] px-4 py-2 shadow-xl"
         >
-          <Spinner size={15} className="text-[#4cc2ff]" />
+          <Spinner size={15} className="text-accent" />
           <span>{working ?? 'Loading repository…'}</span>
         </div>
       )}
@@ -59,7 +59,7 @@ export function GraphSkeleton() {
       aria-label="Loading commit history"
       className="flex h-full flex-col overflow-hidden bg-[#1b1f27]"
     >
-      <div className="flex h-[28px] shrink-0 items-center border-b border-surface px-3 text-[11px] uppercase tracking-wider text-[#8b96a8]">
+      <div className="flex h-[28px] shrink-0 items-center border-b border-surface px-3 text-2xs uppercase tracking-wider text-[#8b96a8]">
         <span className="w-[150px]">Branch / Tag</span>
         <span className="w-[240px]">Graph</span>
         <span>Commit message</span>

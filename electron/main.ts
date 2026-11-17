@@ -1,7 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import * as git from './git/git';
+import { reflog } from './git/reflog';
+import { inspectWorkspace } from './git/workspaceInspection';
 import { registerTerminal } from './terminal';
 import { loadState, saveKey } from './state';
 import { registerAi } from './ai';
@@ -35,12 +38,15 @@ const handlers = {
   stagedForCommitMessage: git.stagedForCommitMessage,
   checkout: git.checkout,
   checkoutRemote: git.checkoutRemote,
+  windowsUnsupportedPathsForRef: git.windowsUnsupportedPathsForRef,
   stage: git.stage,
   unstage: git.unstage,
   trackedStage: git.trackedStage,
   indexUndoState: git.indexUndoState,
   moveIndexHistory: git.moveIndexHistory,
   refs: git.refs,
+  reflog,
+  inspectWorkspace,
   historyPosition: git.historyPosition,
   agentCheckpoints: git.agentCheckpoints,
   commitDetail: git.commitDetail,
@@ -49,6 +55,7 @@ const handlers = {
   fileChangeCounts: git.fileChangeCounts,
   discardWorkingFiles: git.discardWorkingFiles,
   discardWorkingHunk: git.discardWorkingHunk,
+  stageWorkingHunk: git.stageWorkingHunk,
   fetch: git.fetch,
   pull: git.pull,
   push: git.push,
@@ -58,6 +65,7 @@ const handlers = {
   createBranch: git.createBranch,
   stash: git.stash,
   stashPop: git.stashPop,
+  stashAction: git.stashAction,
   stashRename: git.stashRename,
   reset: git.reset,
   squashCommits: git.squashCommits,
@@ -70,6 +78,7 @@ const handlers = {
   stashFileAt: git.stashFileAt,
   revert: git.revert,
   rebaseOnto: git.rebaseOnto,
+  rebasePreview: git.rebasePreview,
   createTag: git.createTag,
   branchAt: git.branchAt,
   fileAt: git.fileAt,
@@ -101,6 +110,24 @@ ipcMain.handle('repo:openFile', async (_e, cwd: string, rel: string) => {
   const full = path.resolve(cwd, rel);
   if (!full.startsWith(path.resolve(cwd) + path.sep)) throw new Error('Path is outside the repository');
   const err = await shell.openPath(full);
+  if (err) throw new Error(err);
+});
+ipcMain.handle('app:openThirdPartyNotices', async () => {
+  const noticesPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'THIRD_PARTY_NOTICES.txt')
+    : path.resolve(__dirname, '../../build-notices/THIRD_PARTY_NOTICES.txt');
+  if (!existsSync(noticesPath)) throw new Error('Third-party notices are unavailable in this build.');
+  const err = await shell.openPath(noticesPath);
+  if (err) throw new Error(err);
+});
+ipcMain.handle('app:openRuntimeNotice', async (_e, kind: 'electron' | 'chromium') => {
+  const filename = kind === 'electron' ? 'LICENSE.electron.txt' : kind === 'chromium' ? 'LICENSES.chromium.html' : null;
+  if (!filename) throw new Error('Unknown runtime notice.');
+  const noticesPath = app.isPackaged
+    ? path.join(process.resourcesPath, filename)
+    : path.resolve(__dirname, '../../node_modules/electron/dist', kind === 'electron' ? 'LICENSE' : filename);
+  if (!existsSync(noticesPath)) throw new Error('Runtime license notices are unavailable in this build.');
+  const err = await shell.openPath(noticesPath);
   if (err) throw new Error(err);
 });
 registerTerminal();

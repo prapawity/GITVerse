@@ -96,25 +96,25 @@ function ToolCard({
       : [];
   const write = TOOL_KIND[it.name] === 'write';
   const icon = {
-    awaiting: <ShieldQuestion size={15} className="text-[#f9e2af]" aria-hidden />,
-    running: <Loader2 size={15} className="animate-spin text-[#4cc2ff]" aria-hidden />,
-    done: <Check size={15} className="text-[#a6e3a1]" aria-hidden />,
-    error: <XCircle size={15} className="text-[#f38ba8]" aria-hidden />,
+    awaiting: <ShieldQuestion size={15} className="text-warning" aria-hidden />,
+    running: <Loader2 size={15} className="animate-spin text-accent" aria-hidden />,
+    done: <Check size={15} className="text-success" aria-hidden />,
+    error: <XCircle size={15} className="text-danger" aria-hidden />,
     declined: <Ban size={15} className="text-sub" aria-hidden />,
   }[it.status];
   return (
     <div
-      className={`rounded-md border px-3 py-2 text-[13px] ${it.status === 'awaiting' ? 'border-[#f9e2af]/60 bg-[#f9e2af]/10' : 'border-surface bg-crust/60'}`}
+      className={`rounded-md border px-3 py-2 text-sm ${it.status === 'awaiting' ? 'border-warning/60 bg-warning/10' : 'border-surface bg-crust/60'}`}
     >
       <div className="flex items-center gap-2">
         {icon}
         <span className="font-medium">{LABEL[it.name] ?? it.name}</span>
         {args && (
-          <span className="truncate font-mono text-[12px] text-sub" title={args}>
+          <span className="truncate font-mono text-xs text-sub" title={args}>
             {args}
           </span>
         )}
-        {it.status === 'declined' && <span className="ml-auto text-[12px] text-sub">declined</span>}
+        {it.status === 'declined' && <span className="ml-auto text-xs text-sub">declined</span>}
       </div>
       {it.status === 'awaiting' && (
         <div className="mt-2">
@@ -122,7 +122,7 @@ function ToolCard({
             {who} wants to: {describeCall(it.name, it.input)}
           </p>
           {regions.length > 0 && (
-            <ul className="mb-2 max-h-40 space-y-1 overflow-auto rounded bg-crust p-2 text-[12px]">
+            <ul className="mb-2 max-h-40 space-y-1 overflow-auto rounded bg-crust p-2 text-xs">
               {regions.map((g) => (
                 <li key={g.index}>
                   <span className="font-medium text-[#f472b6]">Region {g.index + 1}:</span> {g.explanation}
@@ -131,24 +131,17 @@ function ToolCard({
             </ul>
           )}
           <div className="flex gap-2">
-            <button
-              autoFocus
-              onClick={() => onAnswer(true)}
-              className="min-h-[32px] rounded-md bg-[#4cc2ff] px-3 font-medium text-crust"
-            >
+            <button autoFocus onClick={() => onAnswer(true)} className="btn-primary min-h-[32px] px-3">
               Allow
             </button>
-            <button
-              onClick={() => onAnswer(false)}
-              className="min-h-[32px] rounded-md border border-surface px-3 hover:bg-surface/60"
-            >
+            <button onClick={() => onAnswer(false)} className="btn-secondary min-h-[32px] px-3">
               Deny
             </button>
           </div>
         </div>
       )}
       {it.status === 'error' && it.result && (
-        <pre className="mt-1.5 max-h-28 overflow-auto whitespace-pre-wrap font-mono text-[12px] text-[#f38ba8]">
+        <pre className="mt-1.5 max-h-28 overflow-auto whitespace-pre-wrap font-mono text-xs text-danger">
           {it.result}
         </pre>
       )}
@@ -196,13 +189,13 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
   return (
     <section aria-label="AI assistant" className="flex h-full min-w-0 flex-col bg-mantle">
       <header className="flex items-center gap-2 border-b border-surface px-4 py-3">
-        <Sparkles size={17} className="shrink-0 text-[#cba6f7]" aria-hidden />
+        <Sparkles size={17} className="shrink-0 text-ai" aria-hidden />
         <select
           aria-label="AI provider"
           value={provider}
           disabled={busy}
           onChange={(e) => pick(e.target.value as Provider)}
-          className="rounded-md border border-surface bg-crust px-2 py-1 font-semibold outline-none focus:border-[#4cc2ff] disabled:opacity-60"
+          className="rounded-md border border-surface bg-crust px-2 py-1 font-semibold outline-none focus:border-accent disabled:opacity-60"
         >
           {PROVIDERS.map((p) => (
             <option key={p.id} value={p.id}>
@@ -210,7 +203,7 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
             </option>
           ))}
         </select>
-        <span className="min-w-0 truncate text-[12px] text-sub" title={model}>
+        <span className="min-w-0 truncate text-xs text-sub" title={model}>
           {model}
         </span>
         <button
@@ -222,37 +215,33 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
         >
           <RotateCcw size={15} />
         </button>
-        <button
-          onClick={onClose}
-          aria-label="Close assistant"
-          className="rounded p-1.5 text-sub hover:bg-surface hover:text-text"
-        >
+        <button onClick={onClose} aria-label="Close assistant" className="btn-ghost p-1.5">
           <X size={16} />
         </button>
       </header>
 
       <div ref={list} role="log" aria-live="polite" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {!items.length && (
-          <div className="space-y-3 text-[14px]">
+          <div className="space-y-3 text-sm">
             <p className="text-sub">
-              Ask in your own words — e.g. “pull แล้วบอกว่ามีอะไรเปลี่ยน”. {providerLabel(provider)} can fetch, pull,
+              Ask in your own words — e.g. “pull and tell me what changed”. {providerLabel(provider)} can fetch, pull,
               push, stash, check out and create branches. Anything that changes the repository asks for your approval
               first.
             </p>
-            {!repoPath && <p className="text-[#f9e2af]">Open a repository first.</p>}
+            {!repoPath && <p className="text-warning">Open a repository first.</p>}
             <div className="flex flex-wrap gap-2">
               {SUGGEST.map((s) => (
                 <button
                   key={s}
                   disabled={!repoPath}
                   onClick={() => send(s)}
-                  className="rounded-full border border-surface px-3 py-1.5 text-[13px] hover:bg-surface/60 disabled:opacity-40"
+                  className="rounded-full border border-surface px-3 py-1.5 text-sm hover:bg-surface/60 disabled:opacity-40"
                 >
                   {s}
                 </button>
               ))}
             </div>
-            <p className="text-[12px] text-sub">
+            <p className="text-xs text-sub">
               Your messages, branch names, commit subjects and file names are sent to{' '}
               {PROVIDERS.find((p) => p.id === provider)!.sub} to answer.
             </p>
@@ -261,13 +250,13 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
         {items.map((it, i) => {
           if (it.kind === 'user')
             return (
-              <div key={i} className="ml-8 rounded-lg bg-[#4cc2ff]/15 px-3 py-2 text-[14px]">
+              <div key={i} className="ml-8 rounded-lg bg-accent/15 px-3 py-2 text-sm">
                 <span className="whitespace-pre-wrap">{it.text}</span>
               </div>
             );
           if (it.kind === 'assistant')
             return !it.text ? null : (
-              <div key={i} className="text-[14px] [&>div]:p-0 [&>div]:text-[14px]">
+              <div key={i} className="text-sm [&>div]:p-0 [&>div]:text-sm">
                 <Markdown text={it.text} />
               </div>
             );
@@ -277,7 +266,7 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
             <div
               key={i}
               role={it.tone === 'error' ? 'alert' : undefined}
-              className={`rounded-md px-3 py-2 text-[13px] ${it.tone === 'error' ? 'bg-[#f38ba8]/15 text-[#f38ba8]' : 'text-sub'}`}
+              className={`rounded-md px-3 py-2 text-sm ${it.tone === 'error' ? 'bg-danger/15 text-danger' : 'text-sub'}`}
             >
               {it.text}
               {it.auth && (
@@ -289,14 +278,14 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
           );
         })}
         {waiting && (
-          <div className="flex items-center gap-2 text-[13px] text-sub">
+          <div className="flex items-center gap-2 text-sm text-sub">
             <Loader2 size={14} className="animate-spin" aria-hidden /> {providerLabel(provider)} is thinking…
           </div>
         )}
       </div>
 
       <div className="border-t border-surface p-3">
-        <div className="flex items-end gap-2 rounded-lg border border-surface bg-crust p-2 focus-within:border-[#4cc2ff]">
+        <div className="flex items-end gap-2 rounded-lg border border-surface bg-crust p-2 focus-within:border-accent">
           <textarea
             ref={input}
             value={text}
@@ -322,7 +311,7 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
               onClick={stop}
               aria-label="Stop"
               title="Stop"
-              className="flex h-9 w-9 items-center justify-center rounded-md bg-[#f38ba8]/20 text-[#f38ba8]"
+              className="flex h-9 w-9 items-center justify-center rounded-md bg-danger/20 text-danger"
             >
               <CircleStop size={18} />
             </button>
@@ -332,7 +321,7 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
               disabled={!text.trim() || !repoPath}
               aria-label="Send"
               title="Send (Enter)"
-              className="flex h-9 w-9 items-center justify-center rounded-md bg-[#4cc2ff] text-crust disabled:opacity-40"
+              className="btn-primary flex h-9 w-9 items-center justify-center"
             >
               <SendHorizontal size={17} />
             </button>

@@ -2,6 +2,7 @@ import { app, ipcMain, shell } from 'electron';
 import type { BridgedCall, Provider, ResolveResult, TurnRequest, TurnResult } from '../../src/shared/aiTypes';
 import { claudeCommitMessage, claudeResolve, claudeSetKey, claudeStatus, claudeTurn } from './claude';
 import {
+  configureCopilot,
   copilotAdvanceLogin,
   copilotBeginLogin,
   copilotCancelLogin,
@@ -14,7 +15,7 @@ import {
   copilotStatus,
   copilotTurn,
 } from './copilot';
-import { err, errText, Hooks } from './common';
+import { canEncrypt, err, errText, Hooks, readSecret, writeSecret } from './common';
 import {
   openaiCancelSignIn,
   openaiCommitMessage,
@@ -39,6 +40,11 @@ let callSeq = 0;
 const cancelled = { text: 'The request was cancelled.', isError: true };
 
 export function registerAi() {
+  configureCopilot({
+    readToken: () => readSecret('ai.copilot.token'),
+    writeToken: (t) => writeSecret('ai.copilot.token', t),
+    canEncrypt,
+  });
   app.on('before-quit', () => {
     void copilotShutdown();
   });

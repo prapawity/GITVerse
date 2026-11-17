@@ -5,10 +5,62 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { log, refs, stashDetail, stashFileAt, stashFileDiff, stashRename } from './git';
+import { log, refs, stashAction, stashDetail, stashFileAt, stashFileDiff, stashRename } from './git';
 import { layoutGraph, withStashes } from '../../src/lib/graphLayout';
 
 const run = promisify(execFile);
+test('stash actions target the selected saved entry after reflog renumbering', async (t) => {
+  const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-stash-action-'));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+  await command('init', '--quiet', '-b', 'main');
+  await command('config', 'user.name', 'Stash Test');
+  await command('config', 'user.email', 'stash@example.com');
+  await command('config', 'core.autocrlf', 'false');
+  await writeFile(path.join(cwd, 'file.txt'), 'base\n');
+  await command('add', '.');
+  await command('commit', '-m', 'Base');
+  await writeFile(path.join(cwd, 'file.txt'), 'older\n');
+  await command('stash', 'push', '-m', 'Older');
+  const older = (await refs(cwd)).stashes[0].hash!;
+  await writeFile(path.join(cwd, 'file.txt'), 'newer\n');
+  await command('stash', 'push', '-m', 'Newer');
+  const newer = (await refs(cwd)).stashes[0].hash!;
+  await stashAction(cwd, older, 'apply');
+  assert.equal((await refs(cwd)).stashes.length, 2);
+  assert.match(await command('diff'), /\+older/);
+  await command('restore', 'file.txt');
+  await stashAction(cwd, older, 'pop');
+  assert.deepEqual(
+    (await refs(cwd)).stashes.map((s) => s.hash),
+    [newer],
+  );
+  assert.match(await command('diff'), /\+older/);
+  await stashAction(cwd, newer, 'drop');
+  assert.equal((await refs(cwd)).stashes.length, 0);
+  await assert.rejects(stashAction(cwd, newer, 'drop'), /changed or is ambiguous/);
+  await assert.rejects(stashAction(cwd, 'HEAD', 'apply'), /Invalid stash identity/);
+});
+test('conflicting stash pop keeps the saved entry', async (t) => {
+  const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-stash-conflict-'));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+  await command('init', '--quiet', '-b', 'main');
+  await command('config', 'user.name', 'Stash Test');
+  await command('config', 'user.email', 'stash@example.com');
+  await command('config', 'core.autocrlf', 'false');
+  await writeFile(path.join(cwd, 'file.txt'), 'base\n');
+  await command('add', '.');
+  await command('commit', '-m', 'Base');
+  await writeFile(path.join(cwd, 'file.txt'), 'stash change\n');
+  await command('stash', 'push', '-m', 'Saved');
+  const saved = (await refs(cwd)).stashes[0].hash!;
+  await writeFile(path.join(cwd, 'file.txt'), 'committed change\n');
+  await command('commit', '-am', 'Other');
+  await assert.rejects(stashAction(cwd, saved, 'pop'));
+  assert.equal((await refs(cwd)).stashes[0].hash, saved);
+  assert.match(await command('status', '--porcelain'), /^UU file\.txt/m);
+});
 test('stash connection stays dashed through other commits until its base', () => {
   const commit = (hash: string, parents: string[], stashId?: string) => ({
     hash,

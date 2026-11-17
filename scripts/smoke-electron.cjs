@@ -95,7 +95,7 @@ if (!process.versions.electron) {
             if (
               await win.webContents.executeJavaScript(
                 `document.body.textContent.includes(${JSON.stringify(repo)}) &&
-                document.body.textContent.includes('mainHEAD') && !!document.querySelector('canvas') &&
+                document.body.textContent.includes('main') && !!document.querySelector('canvas') &&
                 !document.querySelector('[aria-label="GITVerse launch screen"]')`,
               )
             )

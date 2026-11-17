@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, FileMinus, FilePen, FilePlus } from 'lucide-react';
 import { askConfirm } from './Dialogs';
 import { useRepo } from '../store/repoStore';
+import { desktopApi } from '../platform/api';
 
 const NAME = { rebase: 'Rebase', merge: 'Merge', 'cherry-pick': 'Cherry-pick', revert: 'Revert' } as const;
 const Chip = ({ children, tone }: { children: React.ReactNode; tone: 'branch' | 'commit' }) => (
@@ -34,7 +35,7 @@ function Section({
         <button
           aria-expanded={open}
           onClick={() => setOpen(!open)}
-          className="flex min-h-[32px] flex-1 items-center gap-1.5 text-left text-[15px]"
+          className="flex min-h-[32px] flex-1 items-center gap-1.5 text-left text-base"
         >
           {open ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />} {title} ({count})
         </button>
@@ -76,7 +77,33 @@ export function ConflictPanel() {
       </>
     );
 
-  const markAll = () => op.files.forEach((f) => exec('resolveFile', f, 'mark'));
+  const markAll = async () => {
+    if (
+      !(await askConfirm(
+        'Mark all resolved?',
+        `Stage all ${left} conflicted files as they are now? Review each file first; unresolved conflict markers may remain.`,
+        { label: 'Mark all resolved', danger: true },
+      ))
+    )
+      return;
+    for (const f of op.files) {
+      const current = useRepo.getState();
+      if (
+        current.repoPath !== repoPath ||
+        current.operation?.kind !== op.kind ||
+        !current.operation.files.includes(f)
+      ) {
+        current.notify(
+          'warning',
+          'Mark all stopped',
+          'The repository or conflict list changed. Review the remaining files.',
+        );
+        break;
+      }
+      await exec('resolveFile', f, 'mark');
+      if (useRepo.getState().operation?.files.includes(f)) break;
+    }
+  };
   const abort = async () => {
     if (
       await askConfirm(
@@ -99,7 +126,7 @@ export function ConflictPanel() {
     exec('opContinue', op.kind, message.trim() && message.trim() !== original ? message.trim() : undefined);
   const openExternal = async (f: string) => {
     try {
-      await (window as any).gitApi.openFile(repoPath, f);
+      await desktopApi().openFile(repoPath, f);
     } catch (e: any) {
       toast(e.message);
     }
@@ -107,13 +134,23 @@ export function ConflictPanel() {
 
   return (
     <section aria-label={`${name} conflicts`} className="flex h-full flex-col overflow-hidden">
-      <header className="flex items-center justify-center gap-2 border-b border-surface px-4 py-3 text-[15px] font-semibold">
+      <header className="flex items-center justify-center gap-2 border-b border-surface px-4 py-3 text-base font-semibold">
         <AlertTriangle size={17} className="text-[#f5a623]" aria-hidden />
         {left ? `${name} conflicts detected` : `${name} ready to continue`}
       </header>
-      <div className="px-4 pt-3 text-center text-[14px] leading-7">
+      <div className="px-4 pt-3 text-center text-sm leading-7">
         {headline}
-        {op.step && <div className="text-[12px] text-sub">commit {op.step.replace('/', ' of ')}</div>}
+        {op.step && <div className="text-xs text-sub">commit {op.step.replace('/', ' of ')}</div>}
+      </div>
+      <div role="status" className="mx-4 mt-3 rounded-lg border border-surface bg-crust/50 px-3 py-2 text-sm">
+        <div className="font-medium">
+          {left ? `${left} file${left === 1 ? ' still needs' : 's still need'} resolution` : 'All conflicts resolved'}
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-sub">
+          {left
+            ? 'Open each conflicted file, resolve it, then mark it resolved.'
+            : `Review the staged files, then ${op.kind === 'merge' ? 'commit the merge' : `continue the ${name.toLowerCase()}`}.`}
+        </p>
       </div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-auto">
@@ -123,23 +160,23 @@ export function ConflictPanel() {
           action={
             left > 0 && (
               <button
-                onClick={markAll}
+                onClick={() => void markAll()}
                 disabled={busy}
                 title="Stage every conflicted file as it is now"
-                className="min-h-[30px] rounded border border-[#f5a623]/70 px-2.5 text-[13px] text-[#f5c26b] hover:bg-[#f5a623]/15 disabled:opacity-40"
+                className="min-h-[30px] rounded border border-[#f5a623]/70 px-2.5 text-sm text-[#f5c26b] hover:bg-[#f5a623]/15 disabled:opacity-40"
               >
                 Mark All Resolved
               </button>
             )
           }
         >
-          {!left && <div className="px-6 py-1 text-[13px] text-sub">No conflicts left.</div>}
+          {!left && <div className="px-6 py-1 text-sm text-sub">No conflicts left.</div>}
           {op.files.map((f) => {
             const [dir, base] = split(f);
             return (
               <div
                 key={f}
-                className={`group flex items-center ${conflictFile === f ? 'bg-[#4cc2ff]/20' : 'hover:bg-surface/40'}`}
+                className={`group flex items-center ${conflictFile === f ? 'bg-accent/20' : 'hover:bg-surface/40'}`}
               >
                 <button
                   onClick={() => openConflict(f)}
@@ -166,8 +203,9 @@ export function ConflictPanel() {
           })}
         </Section>
 
-        <Section title="Resolved Files" count={op.resolved.length}>
-          {!op.resolved.length && <div className="px-6 py-1 text-[13px] text-sub">Files you resolve appear here.</div>}
+        <Section title="Staged Files" count={op.resolved.length}>
+          <p className="px-6 pb-1 text-xs text-sub">Includes all staged files in this operation.</p>
+          {!op.resolved.length && <div className="px-6 py-1 text-sm text-sub">Files you stage appear here.</div>}
           {op.resolved.map((f) => {
             const [dir, base] = split(f.path);
             const I = f.status === 'A' ? FilePlus : f.status === 'D' ? FileMinus : FilePen;
@@ -176,7 +214,7 @@ export function ConflictPanel() {
                 <I
                   size={14}
                   aria-hidden
-                  className={`shrink-0 ${f.status === 'A' ? 'text-[#a6e3a1]' : f.status === 'D' ? 'text-[#f38ba8]' : 'text-[#fab387]'}`}
+                  className={`shrink-0 ${f.status === 'A' ? 'text-success' : f.status === 'D' ? 'text-danger' : 'text-[#fab387]'}`}
                 />
                 <span className="truncate">
                   <span className="text-sub">{dir}</span>
@@ -189,7 +227,7 @@ export function ConflictPanel() {
       </div>
 
       <div className="border-t border-surface p-4">
-        <label htmlFor="op-msg" className="mb-1 block text-[13px] text-sub">
+        <label htmlFor="op-msg" className="mb-1 block text-sm text-sub">
           Commit message
         </label>
         <textarea
@@ -197,13 +235,13 @@ export function ConflictPanel() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={5}
-          className="w-full resize-none rounded-md border border-surface bg-crust p-3 font-sans outline-none focus:border-[#4cc2ff]"
+          className="w-full resize-none rounded-md border border-surface bg-crust p-3 font-sans outline-none focus:border-accent"
         />
         {op.kind !== 'merge' && (
           <button
             onClick={skip}
             disabled={busy}
-            className="mt-1 text-[13px] text-sub underline hover:text-text disabled:opacity-40"
+            className="mt-1 text-sm text-sub underline hover:text-text disabled:opacity-40"
           >
             Skip this commit
           </button>
@@ -213,14 +251,14 @@ export function ConflictPanel() {
             onClick={cont}
             disabled={left > 0 || busy}
             title={left ? `Resolve ${left} conflicted file${left === 1 ? '' : 's'} first` : undefined}
-            className="min-h-[44px] rounded-md border border-[#a6e3a1]/50 bg-[#a6e3a1]/15 font-medium text-[#a6e3a1] hover:bg-[#a6e3a1]/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
+            className="min-h-[44px] rounded-md border border-success/50 bg-success/15 font-medium text-success hover:bg-success/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
           >
             {op.kind === 'merge' ? 'Commit Merge' : `Continue ${name}`}
           </button>
           <button
             onClick={abort}
             disabled={busy}
-            className="min-h-[44px] rounded-md border border-[#f38ba8]/60 bg-[#f38ba8]/10 font-medium text-[#f38ba8] hover:bg-[#f38ba8]/20 disabled:opacity-40"
+            className="min-h-[44px] rounded-md border border-danger/60 bg-danger/10 font-medium text-danger hover:bg-danger/20 disabled:opacity-40"
           >
             Abort {name}
           </button>
@@ -239,7 +277,7 @@ export function ConflictRow() {
     <button
       onClick={showConflicts}
       aria-pressed={conflictView}
-      className={`flex h-[30px] w-full shrink-0 items-center gap-2 px-4 text-left text-[13px] font-medium ${n ? 'bg-[#b7791f]/70 text-[#fff7e6] hover:bg-[#b7791f]/85' : 'bg-[#2f6f4f]/70 text-[#e7fff2] hover:bg-[#2f6f4f]/85'}`}
+      className={`flex h-[30px] w-full shrink-0 items-center gap-2 px-4 text-left text-sm font-medium ${n ? 'bg-[#b7791f]/70 text-[#fff7e6] hover:bg-[#b7791f]/85' : 'bg-[#2f6f4f]/70 text-[#e7fff2] hover:bg-[#2f6f4f]/85'}`}
     >
       <AlertTriangle size={14} aria-hidden />
       {n

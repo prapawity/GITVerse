@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReleaseUpdate } from '../shared/updates';
+import { desktopApi } from '../platform/api';
 
 export function ReleasePicker({ currentVersion, onClose }: { currentVersion: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -19,7 +20,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
     setReleases(null);
     setError('');
     Promise.resolve()
-      .then(() => (window as any).gitApi.updates.list())
+      .then(() => desktopApi().updates.list())
       .then((items: ReleaseUpdate[]) => {
         if (active) {
           setReleases(items);
@@ -75,7 +76,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
       )}
       {releases?.length === 0 && <p className="mt-4 text-sm text-sub">No stable releases found.</p>}
       {error && (
-        <p role="alert" className="mt-4 break-words text-sm text-[#f38ba8]">
+        <p role="alert" className="mt-4 break-words text-sm text-danger">
           {error}
         </p>
       )}
@@ -84,12 +85,12 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
           disabled={opening}
           onClick={async () => {
             try {
-              await (window as any).gitApi.updates.openReleaseList();
+              await desktopApi().updates.openReleaseList();
             } catch (reason) {
               setError(String((reason as Error)?.message ?? reason));
             }
           }}
-          className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
+          className="btn-secondary px-4 py-2"
         >
           View all releases
         </button>
@@ -101,11 +102,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
             Retry
           </button>
         )}
-        <button
-          disabled={opening}
-          onClick={onClose}
-          className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
-        >
+        <button disabled={opening} onClick={onClose} className="btn-secondary px-4 py-2">
           Close
         </button>
         <button
@@ -114,7 +111,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
             setOpening(true);
             setError('');
             try {
-              await (window as any).gitApi.updates.openDownloads(selected);
+              await desktopApi().updates.openDownloads(selected);
               onClose();
             } catch (reason) {
               setError(String((reason as Error)?.message ?? reason));
@@ -122,7 +119,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
               setOpening(false);
             }
           }}
-          className="rounded-md bg-[#4cc2ff] px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
+          className="btn-primary px-4 py-2"
         >
           {opening ? 'Opening…' : 'Open downloads'}
         </button>

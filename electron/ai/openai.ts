@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AI_SYSTEM, AI_TOOLS, CONFLICT_SYSTEM, ConflictResolution } from '../../src/shared/aiTools';
 import type { AiErr, NMsg, ResolveResult, ToolCall, TurnResult } from '../../src/shared/aiTypes';
 import { canEncrypt, err, errText, Hooks, readPlain, readSecret, writePlain, writeSecret } from './common';
+import { parseResolution } from './parse';
 
 /**
  * ChatGPT via the *user's own* credentials, never the developer's:
@@ -591,14 +592,4 @@ export async function openaiCommitMessage(prompt: string, model: string | undefi
   return { ok: true as const, text: r.out.text.trim() };
 }
 
-/** Shared by every provider that returns the resolution as JSON text. */
-export function parseResolution(text: string): ResolveResult {
-  const m = text.match(/\{[\s\S]*\}/);
-  try {
-    const p = ConflictResolution.safeParse(JSON.parse(m ? m[0] : text));
-    if (p.success) return { ok: true, resolutions: p.data.resolutions };
-  } catch {
-    /* fall through */
-  }
-  return { ok: false, error: err('other', 'The AI did not return a usable result. Try again.') };
-}
+export { parseResolution };
