@@ -1,5 +1,7 @@
 import type { Commit, GraphLayout, GraphRow, Segment, StashRef } from '../shared/types';
 
+export const stashBranch = (stash: StashRef) => /^(?:On|WIP on) (.+?): /.exec(stash.body ?? '')?.[1];
+
 export function withStashes(commits: Commit[], stashes: StashRef[]): Commit[] {
   const rows = [...commits];
   const seen = new Set<string>();
@@ -16,6 +18,7 @@ export function withStashes(commits: Commit[], stashes: StashRef[]): Commit[] {
       subject: stash.message,
       body: stash.body?.split('\n').slice(1).join(' ').trim() || undefined,
       stashId: stash.id,
+      stashBranch: stashBranch(stash),
     };
     const existing = rows.findIndex((row) => row.hash === stash.hash);
     if (existing >= 0) {
@@ -23,9 +26,7 @@ export function withStashes(commits: Commit[], stashes: StashRef[]): Commit[] {
       continue;
     }
     const base = rows.findIndex((row) => row.hash === stash.baseHash);
-    const older = rows.findIndex((row) => row.date < commit.date);
-    const index = Math.min(base < 0 ? rows.length : base, older < 0 ? rows.length : older);
-    rows.splice(index, 0, commit);
+    if (base >= 0) rows.splice(base, 0, commit);
   }
   return rows;
 }
@@ -55,7 +56,7 @@ export function layoutGraph(commits: Commit[]): GraphLayout {
     before.forEach((h, k) => h === commit.hash && matches.push(k));
 
     let col: number;
-    if (matches.length) col = matches[0];
+    if (matches.length) col = matches.find((lane) => !beforeStash[lane]) ?? matches[0];
     else {
       col = freeSlot();
       colors[col] = nextColor++;
@@ -122,5 +123,17 @@ export function layoutGraph(commits: Commit[]): GraphLayout {
     rows.push({ commit, col, color, segments });
   }
 
+  const stashColors = new Map<number, number>();
+  for (const row of rows) {
+    if (!row.commit.stashId) continue;
+    const base = rows.find((candidate) => candidate.commit.hash === row.commit.parents[0]);
+    if (base) stashColors.set(row.color, base.color);
+  }
+  for (const row of rows) {
+    if (row.commit.stashId) row.color = stashColors.get(row.color) ?? row.color;
+    for (const segment of row.segments) {
+      if (segment.stash) segment.color = stashColors.get(segment.color) ?? segment.color;
+    }
+  }
   return { rows, maxLanes };
 }

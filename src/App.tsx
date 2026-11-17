@@ -20,7 +20,7 @@ import {
   X,
   ListOrdered,
 } from 'lucide-react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Panel, Group, Separator } from 'react-resizable-panels';
 import { CommitGraph } from './components/CommitGraph';
 import { CommitMenu } from './components/CommitMenu';
 import { askConfirm, askFlow, askText, DialogHost } from './components/Dialogs';
@@ -57,7 +57,7 @@ import { platformApi, desktopApi } from './platform/api';
 
 let restored = false;
 const shortcutModifier = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
-const Handle = () => <PanelResizeHandle className="w-px bg-surface transition-colors hover:bg-accent" />;
+const Handle = () => <Separator className="w-px bg-surface transition-colors hover:bg-accent" />;
 
 function ToolBtn({
   icon,
@@ -1026,7 +1026,7 @@ export default function App() {
                 )}
               </div>
             )}
-          <PanelGroup direction="horizontal" className="min-h-0 flex-1">
+          <Group orientation="horizontal" className="min-h-0 flex-1">
             {file || workingFile || conflictFile ? (
               <FileRail
                 onExpand={() => {
@@ -1036,7 +1036,7 @@ export default function App() {
                 }}
               />
             ) : (
-              <Panel defaultSize={20} minSize={12}>
+              <Panel defaultSize="20%" minSize="12%">
                 {repoPath && (
                   <Sidebar
                     onNavigate={navigateBranch}
@@ -1056,10 +1056,10 @@ export default function App() {
               </Panel>
             )}
             {!file && !workingFile && !conflictFile && <Handle />}
-            <Panel defaultSize={55} minSize={30}>
+            <Panel defaultSize="55%" minSize="30%">
               {/* center column: graph / diff / merge tool on top, terminal underneath */}
-              <PanelGroup direction="vertical">
-                <Panel minSize={20}>
+              <Group orientation="vertical">
+                <Panel minSize="20%">
                   <div className="flex h-full flex-col">
                     {!conflictFile && !file && <ConflictRow />}
                     {repoPath && !conflictFile && !file && !workingFile && !stashView && (
@@ -1174,16 +1174,16 @@ export default function App() {
                 </Panel>
                 {termOpen && (
                   <>
-                    <PanelResizeHandle className="h-px bg-surface transition-colors hover:bg-accent" />
-                    <Panel defaultSize={32} minSize={12}>
+                    <Separator className="h-px bg-surface transition-colors hover:bg-accent" />
+                    <Panel defaultSize="32%" minSize="12%">
                       <TerminalPanel cwd={repoPath} onHide={() => setTermOpen(false)} />
                     </Panel>
                   </>
                 )}
-              </PanelGroup>
+              </Group>
             </Panel>
             <Handle />
-            <Panel defaultSize={25} minSize={15} className="glass-panel bg-mantle">
+            <Panel defaultSize="25%" minSize="15%" className="glass-panel bg-mantle">
               {recoveryOpen && repoPath ? (
                 <RecoveryPanel
                   repoPath={repoPath}
@@ -1231,7 +1231,7 @@ export default function App() {
             {aiOpen && (
               <>
                 <Handle />
-                <Panel defaultSize={24} minSize={16} className="glass-panel bg-mantle">
+                <Panel defaultSize="24%" minSize="16%" className="glass-panel bg-mantle">
                   <AiPanel
                     onClose={() => setAiOpen(false)}
                     onOpenSettings={() => {
@@ -1242,7 +1242,7 @@ export default function App() {
                 </Panel>
               </>
             )}
-          </PanelGroup>
+          </Group>
         </>
       )}
       <ActivityLog />
