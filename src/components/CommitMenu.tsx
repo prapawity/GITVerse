@@ -301,35 +301,6 @@ export function CommitMenu({
           label: `Rebase ${current} onto this commit`,
           run: sure('Rebase', `Rebase ${current} onto ${short}?`, 'Rebase', () => exec('rebaseOnto', hash)),
         },
-        {
-          label: `Reset ${current} to this commit`,
-          sub: [
-            {
-              label: 'Soft — keep all changes staged',
-              run: sure('Soft reset', `Move ${current} to ${short}; changes stay staged.`, 'Reset', () =>
-                exec('reset', hash, 'soft'),
-              ),
-            },
-            {
-              label: 'Mixed — keep changes unstaged',
-              run: sure('Mixed reset', `Move ${current} to ${short}; changes stay in the working tree.`, 'Reset', () =>
-                exec('reset', hash, 'mixed'),
-              ),
-            },
-            {
-              label: 'Hard — discard all changes',
-              danger: true,
-              run: sure(
-                'Hard reset',
-                `Move ${current} to ${short} and DISCARD all uncommitted changes. This cannot be undone.`,
-                'Hard reset',
-                () => exec('reset', hash, 'hard'),
-                true,
-              ),
-            },
-          ],
-        },
-        { label: 'Revert commit', run: () => exec('revert', hash) },
         '-',
         {
           label: 'Copy commit sha',
@@ -387,6 +358,37 @@ export function CommitMenu({
             if (m) await exec('createAnnotatedTag', n, hash, m);
           }),
         },
+        '-',
+        {
+          label: `Reset ${current} to this commit`,
+          danger: true,
+          sub: [
+            {
+              label: 'Soft — keep all changes staged',
+              run: sure('Soft reset', `Move ${current} to ${short}; changes stay staged.`, 'Reset', () =>
+                exec('reset', hash, 'soft'),
+              ),
+            },
+            {
+              label: 'Mixed — keep changes unstaged',
+              run: sure('Mixed reset', `Move ${current} to ${short}; changes stay in the working tree.`, 'Reset', () =>
+                exec('reset', hash, 'mixed'),
+              ),
+            },
+            {
+              label: 'Hard — discard all changes',
+              danger: true,
+              run: sure(
+                'Hard reset',
+                `Move ${current} to ${short} and DISCARD all uncommitted changes. This cannot be undone.`,
+                'Hard reset',
+                () => exec('reset', hash, 'hard'),
+                true,
+              ),
+            },
+          ],
+        },
+        { label: 'Revert commit', danger: true, run: () => exec('revert', hash) },
       ];
 
   const W = Math.min(390, window.innerWidth - 16);

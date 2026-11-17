@@ -40,9 +40,6 @@ export function ActivityLog() {
       >
         <span className="truncate">v{version}</span>
       </span>
-      <span className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-[10px] sm:inline">
-        Crafted by Prapawity
-      </span>
       {open && (
         <section
           id="activity-log"

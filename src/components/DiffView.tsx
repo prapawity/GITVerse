@@ -21,11 +21,11 @@ type Res<T> = { data?: T; error?: string } | null;
 type Blame = { hash: string; author: string; time: number }[];
 type Hist = { hash: string; author: string; date: string; subject: string }[];
 
-const Code = ({ text, change }: { text: string; change?: [number, number] }) => {
+const Code = ({ text, change, plain }: { text: string; change?: [number, number]; plain?: boolean }) => {
   let offset = 0;
   return (
     <>
-      {highlight(text).map((token, i) => {
+      {(plain ? [{ t: text, c: '' }] : highlight(text)).map((token, i) => {
         const start = offset;
         offset += token.t.length;
         if (!change || change[0] === change[1] || offset <= change[0] || start >= change[1])
@@ -325,7 +325,7 @@ export function DiffView({
       <span className={NUM}>{l.newNo ?? ''}</span>
       <span className="select-none text-[#8b96a8]">{SIGN[l.type]}</span>
       <span className="whitespace-pre pr-4">
-        <Code text={l.text} change={showWhitespace ? inlineChanges.get(l) : undefined} />
+        <Code text={l.text} plain={isMd} change={showWhitespace ? inlineChanges.get(l) : undefined} />
       </span>
     </div>
   );
@@ -333,7 +333,7 @@ export function DiffView({
     <div key={k} className={`grid grid-cols-[52px_1fr] ${l ? BG[l.type] : 'bg-white/[0.03]'}`}>
       <span className={NUM}>{l ? (side === 'old' ? l.oldNo : l.newNo) : ''}</span>
       <span className="whitespace-pre pr-2">
-        {l ? <Code text={l.text} change={showWhitespace ? inlineChanges.get(l) : undefined} /> : ' '}
+        {l ? <Code text={l.text} plain={isMd} change={showWhitespace ? inlineChanges.get(l) : undefined} /> : ' '}
       </span>
     </div>
   );

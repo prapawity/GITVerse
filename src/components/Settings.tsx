@@ -927,7 +927,8 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
 
             {section === 'terminal' && (
               <>
-                <h1 className="mb-4 text-[28px] font-semibold">In-App Terminal</h1>
+                <h1 className="text-[28px] font-semibold">In-App Terminal</h1>
+                <p className="mb-6 mt-1 text-sm text-sub">Shell, font and behaviour of the built-in terminal.</p>
                 <Row
                   label="Shell"
                   htmlFor="sh"
@@ -978,7 +979,8 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
 
             {section === 'conflicts' && (
               <>
-                <h1 className="mb-4 text-[28px] font-semibold">Conflicts</h1>
+                <h1 className="text-[28px] font-semibold">Conflicts</h1>
+                <p className="mb-6 mt-1 text-sm text-sub">How GITVerse helps you resolve merge conflicts.</p>
                 <Row
                   label="Auto-scroll to conflicts"
                   htmlFor="cs"

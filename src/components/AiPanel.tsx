@@ -235,7 +235,7 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
         {!items.length && (
           <div className="space-y-3 text-[14px]">
             <p className="text-sub">
-              Ask in your own words — e.g. “pull แล้วบอกว่ามีอะไรเปลี่ยน”. {providerLabel(provider)} can fetch, pull,
+              Ask in your own words — e.g. “pull and tell me what changed”. {providerLabel(provider)} can fetch, pull,
               push, stash, check out and create branches. Anything that changes the repository asks for your approval
               first.
             </p>

@@ -85,6 +85,7 @@ export function ApplicationAbout() {
             Version {environment?.enabled ? environment.currentVersion : version}
             {environment && !environment.enabled ? ' (development build)' : ''}
           </p>
+          <p className="mt-0.5 text-xs text-sub">Crafted by Prapawity</p>
         </div>
       </div>
       <div className="py-7">

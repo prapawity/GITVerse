@@ -393,6 +393,7 @@ export function Sidebar({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             aria-label="Filter branches, stashes, and tags"
+            title="Enter locates a branch · Shift+Enter checks it out"
             placeholder="Filter branches, stashes, tags…"
             className="w-full rounded-md border border-surface bg-crust py-2 pl-9 pr-9 text-sm placeholder:text-sub focus:border-[#4cc2ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#4cc2ff]"
           />
@@ -414,7 +415,6 @@ export function Sidebar({
               : 'No matching branches, stashes, or tags.'}
           </p>
         )}
-        <p className="mt-2 text-[11px] text-sub">Enter locates a branch · Shift+Enter checks it out</p>
       </div>
       <Section icon={<Laptop />} title="Local" count={local.length} defaultOpen filtering={filtering}>
         <RefTree

@@ -461,7 +461,7 @@ export function WorkingChangesPanel({
                   onClick={() => void discard([f])}
                   aria-label={`Discard ${f.path}`}
                   title={`Discard ${f.path}`}
-                  className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+                  className="mr-3 shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
                 >
                   <Trash2 size={15} aria-hidden />
                 </button>
@@ -584,7 +584,7 @@ export function WorkingChangesPanel({
                 ? `Discard ${discardSelection.length} selected file${discardSelection.length === 1 ? '' : 's'}`
                 : 'Discard all unstaged changes'
           }
-          className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+          className="mr-3 shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
         >
           <Trash2 size={15} aria-hidden />
         </button>
