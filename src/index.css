@@ -49,6 +49,26 @@
   --ai: 112 64 176;
   color-scheme: light;
 }
+/* kept for the commit graph, which still uses literal hex classes */
+:root[data-theme='light'] .text-\[\#4cc2ff\] {
+  color: #006fae;
+}
+:root[data-theme='light'] .text-\[\#a6e3a1\] {
+  color: #257635;
+}
+:root[data-theme='light'] .text-\[\#fab387\] {
+  color: #a44711;
+}
+:root[data-theme='light'] .text-\[\#f38ba8\] {
+  color: #aa3052;
+}
+:root[data-theme='light'] .text-\[\#f9e2af\] {
+  color: #896000;
+}
+:root[data-theme='light'] .bg-\[\#4cc2ff\].text-crust,
+:root[data-theme='light'] .bg-\[\#cba6f7\].text-crust {
+  color: #132235;
+}
 html,
 body,
 #root {
