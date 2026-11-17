@@ -224,12 +224,7 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
             </button>
           </div>
         ))}
-        <button
-          aria-label="New terminal"
-          title="New terminal"
-          onClick={add}
-          className="rounded-md p-1.5 text-sub hover:bg-surface hover:text-text"
-        >
+        <button aria-label="New terminal" title="New terminal" onClick={add} className="btn-ghost p-1.5">
           <Plus size={15} />
         </button>
         <div className="ml-auto flex items-center gap-1">
@@ -241,12 +236,7 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
           >
             <Trash2 size={15} />
           </button>
-          <button
-            aria-label="Hide terminal"
-            title="Hide (Ctrl+`)"
-            onClick={onHide}
-            className="rounded-md p-1.5 text-sub hover:bg-surface hover:text-text"
-          >
+          <button aria-label="Hide terminal" title="Hide (Ctrl+`)" onClick={onHide} className="btn-ghost p-1.5">
             <ChevronDown size={16} />
           </button>
         </div>

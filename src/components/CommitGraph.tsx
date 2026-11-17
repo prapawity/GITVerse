@@ -75,6 +75,23 @@ const initials = (n: string) =>
     .join('')
     .toUpperCase() || '?';
 
+const META_AUTHOR_W = 110;
+const META_TIME_W = 72;
+
+/** Shortens from the middle so both the prefix (codex/) and the distinguishing end of a branch name stay visible. */
+function fitMiddle(ctx: CanvasRenderingContext2D, text: string, max: number) {
+  if (ctx.measureText(text).width <= max) return text;
+  let lo = 0,
+    hi = text.length;
+  const cut = (k: number) => text.slice(0, Math.ceil(k * 0.4)) + '…' + text.slice(text.length - Math.floor(k * 0.6));
+  while (lo < hi) {
+    const m = (lo + hi + 1) >> 1;
+    if (ctx.measureText(cut(m)).width <= max) lo = m;
+    else hi = m - 1;
+  }
+  return cut(lo);
+}
+
 function fit(ctx: CanvasRenderingContext2D, text: string, max: number) {
   if (ctx.measureText(text).width <= max) return text;
   let lo = 0,
@@ -164,8 +181,10 @@ export function CommitGraph({
     gR = REF_W + graphW;
   const clampX = (x: number) => Math.max(gL, Math.min(gR, x));
   const msgX = REF_W + graphW + 10;
-  const availMsg = Math.max(0, size.w - msgX - 12);
-  const maxMsgScroll = Math.max(0, maxMsgW.current - availMsg + 110); // +110 so the end clears the date badge
+  // fixed author + time column on the right, dropped when the message area gets too narrow
+  const metaW = size.w - msgX > 400 ? META_AUTHOR_W + META_TIME_W + 24 : 0;
+  const availMsg = Math.max(0, size.w - msgX - 12 - metaW);
+  const maxMsgScroll = Math.max(0, maxMsgW.current - availMsg + 16);
   const ms = Math.min(msgScroll, maxMsgScroll);
 
   useEffect(() => {
@@ -260,9 +279,12 @@ export function CommitGraph({
         ctx.strokeRect(1, top + 1, Math.max(0, size.w - 2), ROW_H - 2);
       }
       // band from the node across to the message column, ending in a lane-coloured bar
+      // only the selected row gets the band; other rows keep just the lane bar so the list stays calm
       const bx = clampX(cx);
-      ctx.fillStyle = lane + (selected ? '40' : '1f');
-      ctx.fillRect(bx, top + 3, msgX - 6 - bx, ROW_H - 6);
+      if (selected) {
+        ctx.fillStyle = lane + '33';
+        ctx.fillRect(bx, top + 3, msgX - 6 - bx, ROW_H - 6);
+      }
       ctx.fillStyle = lane;
       ctx.fillRect(msgX - 8, top + 3, 3, ROW_H - 6);
       // separator where the relative-date bucket changes
@@ -366,7 +388,7 @@ export function CommitGraph({
         const hasRemote = ref.kind === 'remote' || group.remotes.length > 0;
         const iconW = (hasLocal ? 17 : 0) + (hasRemote || ref.kind === 'tag' ? 18 : 0);
         const extraW = extra ? ctx.measureText(extra).width + 8 : 0;
-        const name = fit(ctx, ref.kind === 'head' ? 'Detached HEAD' : ref.name, REF_W - 30 - iconW - extraW);
+        const name = fitMiddle(ctx, ref.kind === 'head' ? 'Detached HEAD' : ref.name, REF_W - 30 - iconW - extraW);
         const w = ctx.measureText(name).width + 16 + iconW + extraW;
         const dim = !ref.current && c.hash !== selectedHash;
         ctx.globalAlpha = dim ? 0.75 : 1;
@@ -479,15 +501,14 @@ export function CommitGraph({
       // message: subject, then dim body preview
       ctx.font = FONT;
       const subjW = ctx.measureText(c.subject).width;
-      const metadata = `${c.author} · ${relTime(c.date)}`;
-      const total = subjW + 24 + ctx.measureText(metadata).width + (c.hash === headHash ? 44 : 0);
+      const total = subjW + (c.hash === headHash ? 44 : 0);
       if (total > maxMsgW.current + 1) {
         maxMsgW.current = total;
         grew = true;
       }
       ctx.save();
       ctx.beginPath();
-      ctx.rect(msgX, top, size.w - msgX, ROW_H); // clip so scrolled text never bleeds into the graph
+      ctx.rect(msgX, top, availMsg, ROW_H); // clip so scrolled text never bleeds into the graph or the meta column
       ctx.clip();
       ctx.fillStyle = light ? '#1d2939' : '#e8eef6';
       const prefix = c.hash === headHash ? 'HEAD  ' : '';
@@ -498,22 +519,13 @@ export function CommitGraph({
       }
       const prefixW = ctx.measureText(prefix).width;
       ctx.fillText(c.subject, msgX - ms + prefixW, mid + 0.5);
-      ctx.fillStyle = light ? '#586b81' : '#a2afbf';
-      ctx.fillText(metadata, msgX - ms + prefixW + subjW + 24, mid + 0.5);
       ctx.restore();
-
-      // date badge on the last row of each relative-date bucket
-      if (label(i) !== label(i + 1)) {
-        ctx.font = '11px Inter, system-ui, sans-serif';
-        const t = label(i);
-        const tw = ctx.measureText(t).width + 12;
-        ctx.fillStyle = light ? '#d9e2ed' : '#2b3442';
-        ctx.beginPath();
-        ctx.roundRect(size.w - tw - 14, top + ROW_H - 9, tw, 16, 3);
-        ctx.fill();
-        ctx.fillStyle = light ? '#43546a' : '#c5cdd8';
-        ctx.fillText(t, size.w - tw - 8, top + ROW_H - 0.5);
-        ctx.font = FONT;
+      if (metaW) {
+        const metaX = size.w - 12 - metaW + 12;
+        ctx.fillStyle = light ? '#586b81' : '#a2afbf';
+        ctx.fillText(fit(ctx, c.author, META_AUTHOR_W), metaX, mid + 0.5);
+        const when = relTime(c.date);
+        ctx.fillText(when, size.w - 14 - ctx.measureText(when).width, mid + 0.5);
       }
     }
     if (grew) setMsgVer((v) => v + 1);
@@ -574,7 +586,7 @@ export function CommitGraph({
     return lane ?? null;
   };
 
-  const headCls = 'px-3 text-[11px] font-mono uppercase tracking-wider text-sub flex items-center';
+  const headCls = 'px-3 text-2xs font-mono uppercase tracking-wider text-sub flex items-center';
   return (
     <div className="relative flex h-full w-full flex-col bg-[var(--graph)]">
       <div className="flex shrink-0 border-b border-surface bg-[var(--graph)]" style={{ height: HEAD_H }}>
@@ -587,7 +599,7 @@ export function CommitGraph({
             role="separator"
             aria-label="Resize graph column"
             aria-orientation="vertical"
-            className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-[#4cc2ff]/60"
+            className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/60"
             onMouseDown={(e) => {
               const x0 = e.clientX,
                 w0 = graphW;
@@ -707,7 +719,7 @@ export function CommitGraph({
           if (!dx) return;
           // sideways scroll acts on whichever column the pointer is over
           const x = e.clientX - e.currentTarget.getBoundingClientRect().left;
-          const maxNow = Math.max(0, maxMsgW.current - availMsg + 110); // read live: render may be a frame behind
+          const maxNow = Math.max(0, maxMsgW.current - availMsg + 16); // read live: render may be a frame behind
           if (x > msgX) setMsgScroll(Math.max(0, Math.min(maxNow, ms + dx)));
           else if (maxGScroll) setGScroll((v) => Math.max(0, Math.min(maxGScroll, v + dx)));
         }}
@@ -814,7 +826,7 @@ export function CommitGraph({
               e.stopPropagation();
               onSelectWip();
             }}
-            className="absolute left-0 top-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]"
+            className="absolute left-0 top-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
           />
         )}
         {maxMsgScroll > 0 &&
@@ -887,7 +899,7 @@ export function CommitGraph({
           (headIndex + wipRows) * ROW_H >= scrollTop + size.h) && (
           <button
             onClick={onLocateCurrent}
-            className={`absolute right-4 z-20 rounded-full border border-[#4cc2ff]/50 bg-[#26374a] px-3 py-1.5 text-xs font-medium text-[#bdeaff] shadow-lg hover:bg-[#34526e] ${headIndex >= 0 && (headIndex + wipRows + 1) * ROW_H <= scrollTop ? 'top-9' : 'bottom-4'}`}
+            className={`absolute left-2 z-20 max-w-[calc(150px+40%)] rounded-full border border-accent/50 bg-crust px-3 py-1.5 text-xs font-medium text-accent shadow-[0_4px_16px_rgb(0_0_0/0.45)] hover:bg-mantle ${headIndex >= 0 && (headIndex + wipRows + 1) * ROW_H <= scrollTop ? 'top-9' : 'bottom-4'}`}
           >
             {headIndex < 0
               ? filter
@@ -928,11 +940,11 @@ export function CommitGraph({
               {shown.map((r) => {
                 const content = (
                   <>
-                    <span aria-hidden className="mt-px w-4 shrink-0 text-center text-[11px] text-sub">
+                    <span aria-hidden className="mt-px w-4 shrink-0 text-center text-2xs text-sub">
                       {r.kind === 'local' ? <Laptop size={14} /> : glyph[r.kind]}
                     </span>
                     <span className="min-w-0 break-all">{r.kind === 'head' ? 'Detached HEAD' : r.name}</span>
-                    <span className="ml-auto shrink-0 pl-3 text-[11px] text-sub">{r.current ? 'current' : r.kind}</span>
+                    <span className="ml-auto shrink-0 pl-3 text-2xs text-sub">{r.current ? 'current' : r.kind}</span>
                   </>
                 );
                 return r.kind === 'local' || r.kind === 'remote' ? (
@@ -940,7 +952,7 @@ export function CommitGraph({
                     key={r.kind + r.name}
                     type="button"
                     aria-label={`Open actions for ${r.kind} branch ${r.name}`}
-                    className={`flex w-full items-start gap-2 px-3 py-[4px] text-left text-[13px] leading-[19px] hover:bg-[#4cc2ff]/15 ${r.current ? 'font-semibold text-[#4cc2ff]' : ''}`}
+                    className={`flex w-full items-start gap-2 px-3 py-[4px] text-left text-sm leading-[19px] hover:bg-accent/15 ${r.current ? 'font-semibold text-accent' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onContextMenu?.(rows[hover].commit.hash, e.clientX, e.clientY, {
@@ -960,10 +972,7 @@ export function CommitGraph({
                     {content}
                   </button>
                 ) : (
-                  <div
-                    key={r.kind + r.name}
-                    className="flex items-start gap-2 px-3 py-[4px] text-[13px] leading-[19px]"
-                  >
+                  <div key={r.kind + r.name} className="flex items-start gap-2 px-3 py-[4px] text-sm leading-[19px]">
                     {content}
                   </div>
                 );
@@ -975,16 +984,16 @@ export function CommitGraph({
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center">
           <div
             role="status"
-            className="pointer-events-auto rounded-full border border-surface bg-mantle px-4 py-1.5 text-[13px] shadow-lg"
+            className="pointer-events-auto rounded-full border border-surface bg-mantle px-4 py-1.5 text-sm shadow-lg"
           >
             {loadingMore ? (
               <span className="flex items-center gap-2">
-                <Spinner size={14} className="text-[#4cc2ff]" /> Loading more commits…
+                <Spinner size={14} className="text-accent" /> Loading more commits…
               </span>
             ) : (
               <>
                 Searching {layout.rows.length} loaded commits ·{' '}
-                <button className="text-[#4cc2ff] underline" onClick={onLoadMore}>
+                <button className="text-accent underline" onClick={onLoadMore}>
                   Load more
                 </button>
               </>

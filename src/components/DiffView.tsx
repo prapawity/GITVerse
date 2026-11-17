@@ -365,12 +365,7 @@ export function DiffView({
             {discarding ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
           </button>
         )}
-        <button
-          onClick={onClose}
-          aria-label="Close file changes"
-          title="Close (Esc)"
-          className="rounded p-1 text-sub hover:bg-surface hover:text-text"
-        >
+        <button onClick={onClose} aria-label="Close file changes" title="Close (Esc)" className="btn-ghost p-1">
           <X size={18} />
         </button>
       </div>

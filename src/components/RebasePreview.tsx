@@ -58,12 +58,7 @@ export function RebasePreview({ repo, base, onClose }: { repo: string; base: str
             Explore a plan. Closing this window discards it; no Git operation is started.
           </p>
         </div>
-        <button
-          type="button"
-          aria-label="Close rebase preview"
-          onClick={onClose}
-          className="rounded p-2 hover:bg-surface"
-        >
+        <button type="button" aria-label="Close rebase preview" onClick={onClose} className="btn-ghost p-2">
           <X size={18} aria-hidden />
         </button>
       </header>

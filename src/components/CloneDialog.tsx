@@ -88,7 +88,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
             <p className="font-medium text-success">Repository cloned successfully</p>
             <p className="mt-2 break-all text-sm text-sub">{completed}</p>
             <div className="mt-5 flex justify-end gap-2">
-              <button onClick={onClose} className="rounded-md border border-surface px-3 py-2">
+              <button onClick={onClose} className="btn-secondary px-3 py-2">
                 Close
               </button>
               <button

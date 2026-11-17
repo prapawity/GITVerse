@@ -215,11 +215,7 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
         >
           <RotateCcw size={15} />
         </button>
-        <button
-          onClick={onClose}
-          aria-label="Close assistant"
-          className="rounded p-1.5 text-sub hover:bg-surface hover:text-text"
-        >
+        <button onClick={onClose} aria-label="Close assistant" className="btn-ghost p-1.5">
           <X size={16} />
         </button>
       </header>

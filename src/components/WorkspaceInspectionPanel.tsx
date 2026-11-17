@@ -80,7 +80,7 @@ export function WorkspaceInspectionPanel({ repoPath, onClose }: { repoPath: stri
           aria-label="Close remotes and worktrees"
           title="Close"
           onClick={onClose}
-          className="rounded-md p-2 hover:bg-surface/60"
+          className="btn-ghost p-2"
         >
           <X size={16} aria-hidden />
         </button>
