@@ -75,7 +75,7 @@ export function ApplicationAbout() {
   };
   return (
     <section className="max-w-[720px]" aria-label="Application and About">
-      <h1 className="text-[28px] font-semibold">About GITVerse</h1>
+      <h1 className="text-2xl font-semibold">About GITVerse</h1>
       <p className="mt-1 text-sm text-sub">Version information and application updates.</p>
       <div className="mt-7 flex items-center gap-4 rounded-xl border border-surface bg-mantle/60 p-5">
         <img src={new URL('../assets/gitverse-mark.svg', import.meta.url).href} width={48} height={48} alt="" />
@@ -95,7 +95,7 @@ export function ApplicationAbout() {
           <button
             onClick={() => void check()}
             disabled={!environment?.enabled || checking}
-            className="flex min-h-[40px] items-center gap-2 rounded-md border border-[#4cc2ff]/50 px-4 py-2 text-sm text-[#4cc2ff] hover:bg-[#4cc2ff]/10 disabled:opacity-40"
+            className="flex min-h-[40px] items-center gap-2 rounded-md border border-accent/50 px-4 py-2 text-sm text-accent hover:bg-accent/10 disabled:opacity-40"
           >
             {checking ? (
               <Loader2 size={16} className="animate-spin" aria-hidden />
@@ -120,7 +120,7 @@ export function ApplicationAbout() {
           </p>
         )}
         {error && (
-          <p role="alert" className="mt-3 break-words text-sm text-[#f38ba8]">
+          <p role="alert" className="mt-3 break-words text-sm text-danger">
             {error}
           </p>
         )}
@@ -156,7 +156,7 @@ export function ApplicationAbout() {
             ))}
         </div>
         {noticesError && (
-          <p role="alert" className="mt-3 break-words text-sm text-[#f38ba8]">
+          <p role="alert" className="mt-3 break-words text-sm text-danger">
             {noticesError}
           </p>
         )}

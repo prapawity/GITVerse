@@ -5,7 +5,7 @@ import { askConfirm } from './Dialogs';
 import { desktopApi } from '../platform/api';
 
 const api = () => desktopApi();
-const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]';
+const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent';
 const button = 'rounded-md border border-surface px-3 py-2 hover:bg-surface/60 disabled:opacity-40';
 const errorText = (e: unknown) =>
   String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
@@ -155,7 +155,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
   return (
     <div className="mx-auto max-w-[1080px] space-y-6">
       <div>
-        <h1 className="text-[28px] font-semibold">Profiles</h1>
+        <h1 className="text-2xl font-semibold">Profiles</h1>
         <p className="mt-2 text-sm leading-relaxed text-sub">
           Manage the name and email used for future commits in GITVerse, and switch profiles from the top bar.
         </p>
@@ -163,7 +163,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
       {error && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-[#f38ba8]/30 bg-[#f38ba8]/10 px-4 py-3 text-sm text-[#f38ba8]"
+          className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger"
         >
           <span aria-hidden>!</span>
           <span className="whitespace-pre-wrap">{error}</span>
@@ -173,7 +173,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
         <p
           role="status"
           aria-live="polite"
-          className="flex items-center gap-2 rounded-lg border border-[#a6e3a1]/30 bg-[#a6e3a1]/10 px-4 py-3 text-sm text-[#a6e3a1]"
+          className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
         >
           <CheckCircle2 size={16} aria-hidden />
           {message}
@@ -189,7 +189,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
         </div>
         <button
           disabled={busy}
-          className="flex min-h-[44px] items-center gap-2 rounded-md border border-[#a6e3a1]/60 px-3 py-2 text-sm text-[#a6e3a1] hover:bg-[#a6e3a1]/10 disabled:opacity-50"
+          className="flex min-h-[44px] items-center gap-2 rounded-md border border-success/60 px-3 py-2 text-sm text-success hover:bg-success/10 disabled:opacity-50"
           onClick={createIdentity}
         >
           <Plus size={15} aria-hidden /> Add a profile
@@ -205,17 +205,17 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
             return (
               <article
                 key={p.id}
-                className={`min-w-0 rounded-lg border p-4 transition-colors ${active ? 'border-[#4cc2ff]/60 bg-[#4cc2ff]/10' : 'border-surface bg-mantle'}`}
+                className={`min-w-0 rounded-lg border p-4 transition-colors ${active ? 'border-accent/60 bg-accent/10' : 'border-surface bg-mantle'}`}
               >
                 <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#cba6f7]/20 text-[#cba6f7]">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ai/20 text-ai">
                     <UserRound size={18} aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="break-words font-semibold">{p.name}</h3>
                       {active && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#4cc2ff]/15 px-2 py-0.5 text-xs font-medium text-[#4cc2ff]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
                           <Check size={12} aria-hidden />
                           Active
                         </span>
@@ -230,7 +230,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
                     disabled={busy || active}
                     onClick={() => void activate(p)}
                     aria-pressed={active}
-                    className="min-h-[40px] rounded-md bg-[#4cc2ff] px-3 text-sm font-medium text-crust disabled:cursor-default disabled:opacity-50"
+                    className="min-h-[40px] rounded-md bg-accent px-3 text-sm font-medium text-crust disabled:cursor-default disabled:opacity-50"
                   >
                     {active ? 'Currently active' : 'Use this profile'}
                   </button>
@@ -247,7 +247,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
                     </button>
                     <button
                       disabled={busy}
-                      className={`${button} min-h-[40px] text-[#f38ba8] disabled:opacity-50`}
+                      className={`${button} min-h-[40px] text-danger disabled:opacity-50`}
                       onClick={() => void deleteIdentity(p)}
                     >
                       Delete
@@ -298,7 +298,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
               <button
                 disabled={busy}
                 onClick={saveIdentity}
-                className="min-h-[40px] rounded-md bg-[#4cc2ff] px-4 font-medium text-crust disabled:opacity-40"
+                className="min-h-[40px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
               >
                 {busy ? 'Saving…' : 'Save profile'}
               </button>
@@ -347,7 +347,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
               <button className={button} onClick={() => void editProfile(p)}>
                 Edit
               </button>
-              <button disabled={busy} className={`${button} text-[#f38ba8]`} onClick={() => void deleteProfile(p)}>
+              <button disabled={busy} className={`${button} text-danger`} onClick={() => void deleteProfile(p)}>
                 Delete
               </button>
             </div>
@@ -444,7 +444,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
                 <button
                   disabled={busy}
                   onClick={saveProfile}
-                  className="rounded-md bg-[#4cc2ff] px-3 py-2 font-medium text-crust disabled:opacity-40"
+                  className="rounded-md bg-accent px-3 py-2 font-medium text-crust disabled:opacity-40"
                 >
                   Save
                 </button>

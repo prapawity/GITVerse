@@ -398,7 +398,7 @@ export function CommitMenu({
     : items;
   const top = Math.max(8, Math.min(y, window.innerHeight - Math.min(640, window.innerHeight - 16)));
   const row =
-    'flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-[13px] leading-snug hover:bg-[#4cc2ff]/15 focus-visible:bg-[#4cc2ff]/20';
+    'flex min-h-[36px] w-full cursor-pointer items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-sm leading-snug hover:bg-accent/15 focus-visible:bg-accent/20';
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
@@ -465,7 +465,7 @@ export function CommitMenu({
       onKeyDown={navigateMenu}
     >
       <div className="pointer-events-none border-b border-surface/60 px-3 pb-2 pt-1">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-sub">
+        <div className="text-2xs font-semibold uppercase tracking-wider text-sub">
           {stash ? 'Stash actions' : refName ? 'Branch actions' : 'Commit actions'}
         </div>
         <div className="mt-0.5 truncate text-sm font-semibold text-text" title={stash?.message ?? refName ?? hash}>
@@ -482,7 +482,7 @@ export function CommitMenu({
               data-menu-index={i}
               aria-haspopup={!!it.sub}
               aria-expanded={it.sub ? open === i : undefined}
-              className={`${row} ${it.danger ? 'text-[#f38ba8]' : ''} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
+              className={`${row} ${it.danger ? 'text-danger' : ''} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
               disabled={it.blocked}
               title={it.blocked ? BUSY_HINT : it.label}
               onClick={() => {
@@ -509,7 +509,7 @@ export function CommitMenu({
                 role="menu"
                 aria-label={it.label}
                 data-parent-index={i}
-                className="ml-3 rounded-lg border-l-2 border-[#4cc2ff]/40 bg-crust/60 py-1 pl-2"
+                className="ml-3 rounded-lg border-l-2 border-accent/40 bg-crust/60 py-1 pl-2"
               >
                 {it.sub.map(
                   (s) =>
@@ -517,7 +517,7 @@ export function CommitMenu({
                       <button
                         key={s.label}
                         role="menuitem"
-                        className={`${row} ${s.danger ? 'text-[#f38ba8]' : ''}`}
+                        className={`${row} ${s.danger ? 'text-danger' : ''}`}
                         onClick={() => {
                           onClose();
                           s.run?.();

@@ -76,7 +76,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
       )}
       {releases?.length === 0 && <p className="mt-4 text-sm text-sub">No stable releases found.</p>}
       {error && (
-        <p role="alert" className="mt-4 break-words text-sm text-[#f38ba8]">
+        <p role="alert" className="mt-4 break-words text-sm text-danger">
           {error}
         </p>
       )}
@@ -123,7 +123,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
               setOpening(false);
             }
           }}
-          className="rounded-md bg-[#4cc2ff] px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
         >
           {opening ? 'Opening…' : 'Open downloads'}
         </button>

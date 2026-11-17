@@ -71,7 +71,7 @@ export function RebasePreview({ repo, base, onClose }: { repo: string; base: str
         {error && (
           <p
             role="alert"
-            className="whitespace-pre-wrap rounded-md border border-[#f38ba8]/40 bg-[#f38ba8]/10 p-3 text-sm text-[#f38ba8]"
+            className="whitespace-pre-wrap rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger"
           >
             {error}
           </p>
@@ -112,7 +112,7 @@ export function RebasePreview({ repo, base, onClose }: { repo: string; base: str
                     <option value="drop">Drop</option>
                   </select>
                   <div className="min-w-[160px] flex-1">
-                    <span className="mr-2 font-mono text-xs text-[#4cc2ff]">{entry.hash.slice(0, 7)}</span>
+                    <span className="mr-2 font-mono text-xs text-accent">{entry.hash.slice(0, 7)}</span>
                     <span className="break-words text-sm">{entry.subject}</span>
                   </div>
                   <button
@@ -137,7 +137,7 @@ export function RebasePreview({ repo, base, onClose }: { repo: string; base: str
               ))}
             </ol>
             {invalid && (
-              <p role="status" className="mt-3 text-sm text-[#f9e2af]">
+              <p role="status" className="mt-3 text-sm text-warning">
                 Keep at least one commit, and start with Pick or Reword before Squash or Fixup.
               </p>
             )}

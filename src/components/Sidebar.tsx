@@ -54,7 +54,7 @@ function Section({
     <section className="border-b border-surface/60">
       <button
         aria-expanded={open}
-        className="flex min-h-[42px] w-full items-center gap-2.5 px-4 py-2 text-left text-[13px] font-semibold hover:bg-surface/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]"
+        className="flex min-h-[42px] w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-semibold hover:bg-surface/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
         onClick={() => setOpen(!open)}
       >
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -175,7 +175,7 @@ function RefTree({
               onFocus={() => setFocusPath(node.path)}
               onClick={() => toggle(key)}
               title={node.path}
-              className="flex min-h-[32px] w-full items-center gap-1.5 pr-4 text-left text-[14px] hover:bg-surface/50"
+              className="flex min-h-[32px] w-full items-center gap-1.5 pr-4 text-left text-sm hover:bg-surface/50"
               style={{ paddingLeft: pad }}
             >
               {expanded ? (
@@ -187,7 +187,7 @@ function RefTree({
               <span className="truncate" style={tint ? { color: tint } : undefined}>
                 {node.name}
               </span>
-              <span className="ml-auto shrink-0 pl-2 text-[12px] text-sub">{node.count}</span>
+              <span className="ml-auto shrink-0 pl-2 text-xs text-sub">{node.count}</span>
             </button>
           );
         }
@@ -229,7 +229,7 @@ function RefTree({
               }
             }}
             title={`${node.leaf!.full}${onNavigate ? ' — click to locate' : ''}${cur ? ' (current)' : ' — double-click or Shift+Enter to check out'}`}
-            className={`flex min-h-[32px] w-full items-center gap-2 pr-4 text-left text-[14px] hover:bg-surface/50 ${cur ? 'border-l-2 border-[#4cc2ff] bg-[#4cc2ff]/15 font-semibold text-[#4cc2ff]' : ''}`}
+            className={`flex min-h-[32px] w-full items-center gap-2 pr-4 text-left text-sm hover:bg-surface/50 ${cur ? 'border-l-2 border-accent bg-accent/15 font-semibold text-accent' : ''}`}
             style={{ paddingLeft: pad + 18 }}
           >
             {cur ? (
@@ -238,12 +238,12 @@ function RefTree({
               <GitBranch size={15} className="shrink-0 text-sub" aria-hidden />
             )}
             <span className="truncate">{node.name}</span>
-            {cur && <span className="ml-auto shrink-0 text-[11px] font-normal">Current</span>}
+            {cur && <span className="ml-auto shrink-0 text-2xs font-normal">Current</span>}
             {cur &&
               currentStatus?.upstream &&
               (currentStatus.gone || !!currentStatus.ahead || !!currentStatus.behind) && (
                 <span
-                  className="shrink-0 text-[11px] font-normal"
+                  className="shrink-0 text-2xs font-normal"
                   title={
                     currentStatus.gone
                       ? `${currentStatus.upstream} is unavailable`
@@ -395,14 +395,14 @@ export function Sidebar({
             aria-label="Filter branches, stashes, and tags"
             title="Enter locates a branch · Shift+Enter checks it out"
             placeholder="Filter branches, stashes, tags…"
-            className="w-full rounded-md border border-surface bg-crust py-2 pl-9 pr-9 text-sm placeholder:text-sub focus:border-[#4cc2ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#4cc2ff]"
+            className="w-full rounded-md border border-surface bg-crust py-2 pl-9 pr-9 text-sm placeholder:text-sub focus:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
           />
           {q && (
             <button
               type="button"
               aria-label="Clear filter"
               onClick={() => setQ('')}
-              className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-sub hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]"
+              className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-sub hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
             >
               <X size={14} aria-hidden />
             </button>
@@ -455,7 +455,7 @@ export function Sidebar({
             }}
             aria-pressed={!!s.hash && s.hash === selectedStashHash}
             title={s.message}
-            className={`block min-h-[32px] w-full truncate px-9 py-[7px] text-left text-[14px] hover:bg-surface/50 ${s.hash && s.hash === selectedStashHash ? 'bg-[#f5a623]/15 text-[#f5a623]' : ''}`}
+            className={`block min-h-[32px] w-full truncate px-9 py-[7px] text-left text-sm hover:bg-surface/50 ${s.hash && s.hash === selectedStashHash ? 'bg-[#f5a623]/15 text-[#f5a623]' : ''}`}
           >
             {s.message}
           </button>
@@ -501,7 +501,7 @@ export function Sidebar({
                   role="menuitem"
                   disabled={stashBusy || !!working || !!operation || !stashMenu.stash.hash}
                   onClick={() => void runStashAction(action)}
-                  className={`flex min-h-9 w-full items-center rounded-lg px-3 text-left text-[13px] capitalize hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff] disabled:opacity-40 ${action === 'drop' ? 'text-[#f38ba8]' : 'text-text'}`}
+                  className={`flex min-h-9 w-full items-center rounded-lg px-3 text-left text-sm capitalize hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40 ${action === 'drop' ? 'text-danger' : 'text-text'}`}
                 >
                   {action === 'apply' ? 'Apply stash' : action === 'pop' ? 'Pop stash' : 'Drop stash'}
                 </button>

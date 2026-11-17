@@ -107,7 +107,7 @@ export function RepoGroup({
           {node.repo && (
             <div
               style={{ paddingLeft: 28 + depth * 16 }}
-              className={`group flex min-h-[34px] items-center gap-2 rounded pr-2 text-sm hover:bg-surface/50 ${node.repo === current ? 'bg-[#4cc2ff]/15 text-[#4cc2ff]' : ''}`}
+              className={`group flex min-h-[34px] items-center gap-2 rounded pr-2 text-sm hover:bg-surface/50 ${node.repo === current ? 'bg-accent/15 text-accent' : ''}`}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -147,11 +147,11 @@ export function RepoGroup({
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="true"
-        className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${repos.includes(current ?? '') ? 'border-[#4cc2ff]/50 bg-[#4cc2ff]/10 text-[#4cc2ff]' : 'border-surface text-sub hover:bg-surface/50'}`}
+        className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${repos.includes(current ?? '') ? 'border-accent/50 bg-accent/10 text-accent' : 'border-surface text-sub hover:bg-surface/50'}`}
       >
         <Folder size={16} />
         <span className="max-w-[120px] truncate">{name}</span>
-        <span className="rounded-full bg-surface px-1.5 text-[11px]">{repos.length}</span>
+        <span className="rounded-full bg-surface px-1.5 text-2xs">{repos.length}</span>
         <ChevronDown size={14} />
       </button>
       {open && (
@@ -166,7 +166,7 @@ export function RepoGroup({
               onChange={(e) => setQuery(e.target.value)}
               aria-label={`Search repositories in ${name}`}
               placeholder="Search repositories or folders…"
-              className="w-full rounded-md border border-surface bg-crust py-2 pl-9 pr-3 text-sm outline-none focus:border-[#4cc2ff]"
+              className="w-full rounded-md border border-surface bg-crust py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
             />
           </div>
           <div className="max-h-[min(60vh,480px)] overflow-auto">
@@ -180,7 +180,7 @@ export function RepoGroup({
             <p className="text-xs text-sub">Right-click a repository to manage its group.</p>
             <button
               onClick={onDelete}
-              className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-[#f38ba8] hover:bg-[#f38ba8]/10"
+              className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-danger hover:bg-danger/10"
             >
               <Trash2 size={14} /> Delete group
             </button>

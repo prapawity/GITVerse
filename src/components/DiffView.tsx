@@ -10,11 +10,11 @@ import { askConfirm } from './Dialogs';
 import { isJsonFile, isSvgFile, JsonPreview, MediaPreview, mediaType } from './MediaPreview';
 import { desktopApi } from '../platform/api';
 
-const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-[#f38ba8]/[0.14]', ctx: '' } as const;
+const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-danger/[0.14]', ctx: '' } as const;
 const SIGN = { add: '+', del: '−', ctx: '' } as const;
 const NUM = 'select-none pr-2 text-right text-[#6c7a89]';
 const seg = (on: boolean) =>
-  `flex min-h-[30px] items-center gap-1.5 px-3 text-[13px] ${on ? 'bg-[#4cc2ff]/20 text-[#4cc2ff]' : 'text-sub hover:text-text'}`;
+  `flex min-h-[30px] items-center gap-1.5 px-3 text-sm ${on ? 'bg-accent/20 text-accent' : 'text-sub hover:text-text'}`;
 const grp = 'flex overflow-hidden rounded-md border border-surface';
 
 type Res<T> = { data?: T; error?: string } | null;
@@ -314,7 +314,7 @@ export function DiffView({
   const i = file.path.lastIndexOf('/');
   const err = (m?: string) =>
     m && (
-      <div role="alert" className="whitespace-pre-wrap p-4 text-[#f38ba8]">
+      <div role="alert" className="whitespace-pre-wrap p-4 text-danger">
         {m}
       </div>
     );
@@ -347,11 +347,11 @@ export function DiffView({
       <div className="glass-detail-header flex min-h-[56px] items-center gap-2 border-b border-surface bg-mantle px-4">
         <FilePen size={15} className="shrink-0 text-[#fab387]" aria-hidden />
         <span className="min-w-0 flex-1 py-1" title={file.path}>
-          <span className="block truncate text-[15px] font-semibold">{file.path.slice(i + 1)}</span>
+          <span className="block truncate text-base font-semibold">{file.path.slice(i + 1)}</span>
           {i >= 0 && <span className="block truncate text-xs text-sub">{file.path.slice(0, i + 1)}</span>}
         </span>
-        <span className="text-[12px] text-sub">UTF-8</span>
-        <span className="rounded-md border border-surface bg-crust/50 px-2 py-1 font-mono text-[12px] text-sub">
+        <span className="text-xs text-sub">UTF-8</span>
+        <span className="rounded-md border border-surface bg-crust/50 px-2 py-1 font-mono text-xs text-sub">
           {area ?? (readOnlySnapshot ? 'stash' : hash.slice(0, 7))}
         </span>
         {canDiscardFile && (
@@ -360,7 +360,7 @@ export function DiffView({
             disabled={discarding || !!working || !!operation || diff?.data == null}
             aria-label={`Discard ${file.path}`}
             title="Discard file changes"
-            className="shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+            className="shrink-0 rounded p-1.5 text-danger hover:bg-danger/15 disabled:opacity-40"
           >
             {discarding ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
           </button>
@@ -376,7 +376,7 @@ export function DiffView({
       </div>
 
       <div className="glass-detail-tools flex flex-wrap items-center gap-3 border-b border-surface/60 px-4 py-2">
-        <span className="text-[12px] font-medium text-sub">
+        <span className="text-xs font-medium text-sub">
           {area ? 'Local changes' : readOnlySnapshot ? 'Stash snapshot · read-only' : 'Commit · read-only'}
         </span>
         <div className="mx-auto flex items-center gap-3">
@@ -452,19 +452,19 @@ export function DiffView({
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto font-mono text-[13px] leading-[22px]">
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto font-mono text-sm leading-[22px]">
           {err(discardError)}
           {mode === 'diff' && !diff && <CodeSkeleton label="Loading changes…" />}
           {mode === 'diff' && staleWorkingFile ? (
-            <div role="alert" className="m-4 rounded-md border border-[#f9e2af]/40 bg-[#f9e2af]/10 p-4 font-sans">
-              <p className="text-sm font-medium text-[#f9e2af]">This change has moved since you opened it.</p>
+            <div role="alert" className="m-4 rounded-md border border-warning/40 bg-warning/10 p-4 font-sans">
+              <p className="text-sm font-medium text-warning">This change has moved since you opened it.</p>
               <p className="mt-1 text-sm text-sub">
                 Refresh the working changes to see its current staged or unstaged status.
               </p>
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={() => void onRefresh?.()}
-                  className="min-h-[40px] rounded-md bg-[#4cc2ff] px-3 text-sm font-medium text-crust hover:brightness-110"
+                  className="min-h-[40px] rounded-md bg-accent px-3 text-sm font-medium text-crust hover:brightness-110"
                 >
                   Refresh changes
                 </button>
@@ -491,7 +491,7 @@ export function DiffView({
           {mode === 'diff' &&
             parsed?.hunks.map((h, hi) => (
               <section key={hi} className="mb-3 min-w-0">
-                <div className="sticky top-0 z-10 flex min-h-[32px] items-center gap-3 border-y border-surface bg-[#232a35] px-4 text-[12px] text-[#8b96a8]">
+                <div className="sticky top-0 z-10 flex min-h-[32px] items-center gap-3 border-y border-surface bg-[#232a35] px-4 text-xs text-[#8b96a8]">
                   <span className="min-w-0 flex-1 truncate">{h.header}</span>
                   {canStageHunks && (
                     <button
@@ -499,7 +499,7 @@ export function DiffView({
                       onClick={() => void stageHunk(hi)}
                       disabled={discarding || !!working || !!operation}
                       aria-label={`${area === 'staged' ? 'Unstage' : 'Stage'} hunk ${hi + 1}`}
-                      className="shrink-0 rounded border border-[#4cc2ff]/40 px-2 py-1 font-sans text-[#a9e5ff] hover:bg-[#4cc2ff]/15 disabled:opacity-40"
+                      className="shrink-0 rounded border border-accent/40 px-2 py-1 font-sans text-[#a9e5ff] hover:bg-accent/15 disabled:opacity-40"
                     >
                       {area === 'staged' ? 'Unstage hunk' : 'Stage hunk'}
                     </button>
@@ -510,7 +510,7 @@ export function DiffView({
                       disabled={discarding || !!working || !!operation}
                       title="Discard this hunk"
                       aria-label={`Discard hunk ${hi + 1}`}
-                      className="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 font-sans text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+                      className="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 font-sans text-danger hover:bg-danger/15 disabled:opacity-40"
                     >
                       <Trash2 size={13} aria-hidden /> Discard hunk
                     </button>
@@ -553,11 +553,11 @@ export function DiffView({
                         disabled={!first}
                         onClick={() => b && onJumpToCommit?.(b.hash)}
                         title={b ? `${b.author} · ${b.hash.slice(0, 7)} — jump to commit` : ''}
-                        className={`flex items-center gap-2 overflow-hidden border-r border-surface/60 px-3 text-left font-sans text-[12px] ${first ? 'text-[#8b96a8] hover:text-[#4cc2ff]' : 'cursor-default'}`}
+                        className={`flex items-center gap-2 overflow-hidden border-r border-surface/60 px-3 text-left font-sans text-xs ${first ? 'text-[#8b96a8] hover:text-accent' : 'cursor-default'}`}
                       >
                         {first && (
                           <>
-                            <span className="font-mono text-[#4cc2ff]">{b!.hash.slice(0, 7)}</span>
+                            <span className="font-mono text-accent">{b!.hash.slice(0, 7)}</span>
                             <span className="truncate">{b!.author}</span>
                             <span className="ml-auto shrink-0">{relTime(new Date(b!.time).toISOString())}</span>
                           </>
@@ -580,7 +580,7 @@ export function DiffView({
             aria-label="File history"
             className="flex w-[300px] shrink-0 flex-col border-l border-surface bg-mantle"
           >
-            <div className="border-b border-surface px-4 py-2 text-[13px] font-semibold">History</div>
+            <div className="border-b border-surface px-4 py-2 text-sm font-semibold">History</div>
             <div className="min-h-0 flex-1 overflow-auto">
               {!histRes && <ListSkeleton label="Loading history…" />}
               {err(histRes?.error)}
@@ -588,11 +588,11 @@ export function DiffView({
                 <button
                   key={h.hash}
                   onClick={() => onJumpToCommit?.(h.hash)}
-                  className={`block w-full border-b border-surface/50 px-4 py-2 text-left font-sans hover:bg-surface/40 ${h.hash === hash ? 'bg-[#4cc2ff]/15' : ''}`}
+                  className={`block w-full border-b border-surface/50 px-4 py-2 text-left font-sans hover:bg-surface/40 ${h.hash === hash ? 'bg-accent/15' : ''}`}
                 >
-                  <div className="truncate text-[13px]">{h.subject}</div>
-                  <div className="mt-0.5 flex gap-2 text-[12px] text-sub">
-                    <span className="font-mono text-[#4cc2ff]">{h.hash.slice(0, 7)}</span>
+                  <div className="truncate text-sm">{h.subject}</div>
+                  <div className="mt-0.5 flex gap-2 text-xs text-sub">
+                    <span className="font-mono text-accent">{h.hash.slice(0, 7)}</span>
                     <span className="truncate">{h.author}</span>
                     <span className="ml-auto shrink-0">{relTime(h.date)}</span>
                   </div>

@@ -70,7 +70,7 @@ export function UpdateNotice({
           </p>
         )}
         {error && (
-          <p role="alert" className="mt-3 break-words text-sm text-[#f38ba8]">
+          <p role="alert" className="mt-3 break-words text-sm text-danger">
             {error}
           </p>
         )}
@@ -112,7 +112,7 @@ export function UpdateNotice({
                 setOpening(false);
               }
             }}
-            className="flex items-center gap-2 rounded-md bg-[#4cc2ff] px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
+            className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
           >
             {opening ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}{' '}
             {download?.state === 'downloaded'

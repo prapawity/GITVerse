@@ -45,7 +45,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
   const remote = refs.remote.filter((b) => matches(b.name));
   const repos = recentRepos.filter(matches);
   const item =
-    'flex min-h-[38px] w-full items-center gap-2 rounded px-3 py-2 text-left text-[13px] hover:bg-surface/70 focus-visible:bg-surface';
+    'flex min-h-[38px] w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-surface/70 focus-visible:bg-surface';
 
   return (
     <div ref={container} className="flex min-w-0 items-center">
@@ -59,8 +59,8 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           title={repoPath ?? undefined}
           className="block max-w-full rounded px-1 text-left hover:bg-surface/50"
         >
-          <span className="block text-[12px] text-sub">repository</span>
-          <span className="flex min-w-0 items-center gap-1 text-[18px] font-semibold leading-tight">
+          <span className="block text-xs text-sub">repository</span>
+          <span className="flex min-w-0 items-center gap-1 text-lg font-semibold leading-tight">
             <span className="truncate">{repoPath?.split(/[\\/]/).filter(Boolean).pop() ?? '—'}</span>
             <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
           </span>
@@ -78,7 +78,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
                 onChange={(e) => setQuery(e.target.value)}
                 aria-label="Filter repositories"
                 placeholder="Filter repositories…"
-                className="w-full rounded border border-surface bg-crust py-2 pl-9 pr-3 outline-none focus:border-[#4cc2ff]"
+                className="w-full rounded border border-surface bg-crust py-2 pl-9 pr-3 outline-none focus:border-accent"
               />
             </div>
             <div className="max-h-72 overflow-auto">
@@ -99,7 +99,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
                     <span className="block truncate text-xs text-sub">{path}</span>
                   </span>
                   {path === repoPath && (
-                    <Check size={15} className="shrink-0 text-[#4cc2ff]" aria-label="Current repository" />
+                    <Check size={15} className="shrink-0 text-accent" aria-label="Current repository" />
                   )}
                 </button>
               ))}
@@ -110,7 +110,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
                 setOpen(null);
                 void openRepo();
               }}
-              className={`${item} mt-1 border-t border-surface text-[#4cc2ff]`}
+              className={`${item} mt-1 border-t border-surface text-accent`}
             >
               <FolderOpen size={15} aria-hidden />
               Open repository…
@@ -130,8 +130,8 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           title={current}
           className="block max-w-full rounded px-1 text-left hover:bg-surface/50 disabled:opacity-50"
         >
-          <span className="block text-[12px] text-sub">branch</span>
-          <span className="flex min-w-0 items-center gap-1 text-[18px] font-semibold leading-tight">
+          <span className="block text-xs text-sub">branch</span>
+          <span className="flex min-w-0 items-center gap-1 text-lg font-semibold leading-tight">
             <span className="truncate">{current}</span>
             <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
           </span>
@@ -149,7 +149,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
                 onChange={(e) => setQuery(e.target.value)}
                 aria-label="Filter branches"
                 placeholder="Filter branches…"
-                className="w-full rounded border border-surface bg-crust py-2 pl-9 pr-3 outline-none focus:border-[#4cc2ff]"
+                className="w-full rounded border border-surface bg-crust py-2 pl-9 pr-3 outline-none focus:border-accent"
               />
             </div>
             <div className="max-h-80 overflow-auto">
@@ -169,7 +169,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
                 >
                   <GitBranch size={15} className="shrink-0 text-sub" aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{b.name}</span>
-                  {b.current && <Check size={15} className="shrink-0 text-[#4cc2ff]" aria-label="Current branch" />}
+                  {b.current && <Check size={15} className="shrink-0 text-accent" aria-label="Current branch" />}
                 </button>
               ))}
               {remote.length > 0 && (

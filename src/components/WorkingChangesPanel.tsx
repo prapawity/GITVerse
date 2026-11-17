@@ -382,15 +382,15 @@ export function WorkingChangesPanel({
           <button
             disabled={busy}
             onClick={() => changeStage(area === 'staged' ? 'unstage' : 'stage', files)}
-            className="rounded border border-[#a6e3a1]/50 px-2 py-1 text-[11px] normal-case tracking-normal text-[#a6e3a1] hover:bg-[#a6e3a1]/10 disabled:opacity-40"
+            className="rounded border border-success/50 px-2 py-1 text-2xs normal-case tracking-normal text-success hover:bg-success/10 disabled:opacity-40"
           >
             {area === 'staged' ? 'Unstage all' : 'Stage all'}
           </button>
         )}
       </div>
       {!collapsed[area] && selection?.repo === repoPath && selection.area === area && selectedPaths.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-[#4cc2ff]/20 bg-[#4cc2ff]/10 px-4 py-2 text-xs">
-          <span className="mr-auto font-medium text-[#4cc2ff]">{selectedPaths.length} selected</span>
+        <div className="flex flex-wrap items-center gap-2 border-b border-accent/20 bg-accent/10 px-4 py-2 text-xs">
+          <span className="mr-auto font-medium text-accent">{selectedPaths.length} selected</span>
           <button
             type="button"
             disabled={busy}
@@ -409,7 +409,7 @@ export function WorkingChangesPanel({
               type="button"
               disabled={busy || !!operation}
               onClick={() => void discard(discardSelection)}
-              className="rounded border border-[#f38ba8]/40 px-2 py-1 text-[#f38ba8] hover:bg-[#f38ba8]/10 disabled:opacity-40"
+              className="rounded border border-danger/40 px-2 py-1 text-danger hover:bg-danger/10 disabled:opacity-40"
             >
               Discard selected
             </button>
@@ -428,7 +428,7 @@ export function WorkingChangesPanel({
           return (
             <div
               key={f.path}
-              className={`group flex items-center ${chosen ? 'bg-[#4cc2ff]/20' : active ? 'bg-surface/25' : 'hover:bg-surface/40'}`}
+              className={`group flex items-center ${chosen ? 'bg-accent/20' : active ? 'bg-surface/25' : 'hover:bg-surface/40'}`}
             >
               <button
                 onClick={(event) => selectFile({ path: f.path, status: code, area: kind }, area, files, event)}
@@ -438,7 +438,7 @@ export function WorkingChangesPanel({
                 className="flex min-h-[38px] min-w-0 flex-1 select-none items-center gap-2 px-4 text-left"
               >
                 <span
-                  className={`w-4 shrink-0 text-center font-mono text-xs font-semibold ${code === 'D' ? 'text-[#f38ba8]' : code === 'A' || code === '?' ? 'text-[#a6e3a1]' : 'text-[#fab387]'}`}
+                  className={`w-4 shrink-0 text-center font-mono text-xs font-semibold ${code === 'D' ? 'text-danger' : code === 'A' || code === '?' ? 'text-success' : 'text-[#fab387]'}`}
                 >
                   {code}
                 </span>
@@ -448,7 +448,7 @@ export function WorkingChangesPanel({
                 </span>
                 {byChanges && changeCounts.has(f.path) && (
                   <span
-                    className="min-w-[28px] shrink-0 text-right font-mono text-[11px] text-sub"
+                    className="min-w-[28px] shrink-0 text-right font-mono text-2xs text-sub"
                     title="Added and deleted lines"
                   >
                     {changeCounts.get(f.path)?.[area] ?? 'bin'}
@@ -461,7 +461,7 @@ export function WorkingChangesPanel({
                   onClick={() => void discard([f])}
                   aria-label={`Discard ${f.path}`}
                   title={`Discard ${f.path}`}
-                  className="mr-3 shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+                  className="mr-3 shrink-0 rounded p-1.5 text-danger hover:bg-danger/15 disabled:opacity-40"
                 >
                   <Trash2 size={15} aria-hidden />
                 </button>
@@ -557,7 +557,7 @@ export function WorkingChangesPanel({
                     sortMenu.current.querySelector('summary')?.focus();
                   }
                 }}
-                className={`flex min-h-[32px] w-full items-center gap-2 px-3 text-left text-xs hover:bg-surface/60 disabled:opacity-40 ${sort === mode.id ? 'text-[#4cc2ff]' : 'text-sub'}`}
+                className={`flex min-h-[32px] w-full items-center gap-2 px-3 text-left text-xs hover:bg-surface/60 disabled:opacity-40 ${sort === mode.id ? 'text-accent' : 'text-sub'}`}
               >
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                   {sort === mode.id && <Check size={14} aria-hidden />}
@@ -584,13 +584,13 @@ export function WorkingChangesPanel({
                 ? `Discard ${discardSelection.length} selected file${discardSelection.length === 1 ? '' : 's'}`
                 : 'Discard all unstaged changes'
           }
-          className="mr-3 shrink-0 rounded p-1.5 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+          className="mr-3 shrink-0 rounded p-1.5 text-danger hover:bg-danger/15 disabled:opacity-40"
         >
           <Trash2 size={15} aria-hidden />
         </button>
       </div>
       {sortError && (
-        <p role="alert" className="px-4 py-2 text-xs text-[#f38ba8]">
+        <p role="alert" className="px-4 py-2 text-xs text-danger">
           {sortError}
         </p>
       )}
@@ -605,7 +605,7 @@ export function WorkingChangesPanel({
       >
         {conflict.length > 0 && (
           <section>
-            <div className="border-b border-surface/60 px-4 py-2 text-xs font-semibold uppercase text-[#f9e2af]">
+            <div className="border-b border-surface/60 px-4 py-2 text-xs font-semibold uppercase text-warning">
               Conflicted · {conflict.length}
             </div>
             {conflict.map((f) => (
@@ -613,7 +613,7 @@ export function WorkingChangesPanel({
                 key={f.path}
                 onClick={() => openConflict(f.path)}
                 title={f.path}
-                className="block w-full truncate px-4 py-2 text-left text-sm text-[#f9e2af] hover:bg-surface/40"
+                className="block w-full truncate px-4 py-2 text-left text-sm text-warning hover:bg-surface/40"
               >
                 {f.path}
               </button>
@@ -632,14 +632,14 @@ export function WorkingChangesPanel({
       >
         <div className="font-semibold">Commit</div>
         {error && !(staleErrorDismissed && isStaleWorkingChangesError(error)) && (
-          <div role="alert" className="space-y-2 text-xs text-[#f38ba8]">
+          <div role="alert" className="space-y-2 text-xs text-danger">
             <p className="max-h-24 overflow-auto whitespace-pre-wrap">{error}</p>
             {isStaleWorkingChangesError(error) && (
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => void refreshAfterStaleError()}
-                className="min-h-[36px] rounded-md border border-[#4cc2ff]/60 px-3 font-medium text-[#4cc2ff] hover:bg-[#4cc2ff]/10 disabled:opacity-50"
+                className="min-h-[36px] rounded-md border border-accent/60 px-3 font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
               >
                 {pending ? 'Refreshing…' : 'Refresh working changes'}
               </button>
@@ -647,10 +647,10 @@ export function WorkingChangesPanel({
           </div>
         )}
         {operation && (
-          <p className="text-xs text-[#f9e2af]">Finish or abort the {operation.kind} using the conflict panel.</p>
+          <p className="text-xs text-warning">Finish or abort the {operation.kind} using the conflict panel.</p>
         )}
         {!operation && conflict.length > 0 && (
-          <p className="text-xs text-[#f9e2af]">Resolve conflicts before committing.</p>
+          <p className="text-xs text-warning">Resolve conflicts before committing.</p>
         )}
         {/* while a merge/rebase is in progress the commit happens in the conflict panel */}
         {!operation && (
@@ -661,7 +661,7 @@ export function WorkingChangesPanel({
                 checked={amend}
                 disabled={busy}
                 onChange={(e) => void changeAmend(e.target.checked)}
-                className="accent-[#4cc2ff]"
+                className="accent-accent"
               />{' '}
               Amend previous commit
             </label>
@@ -670,10 +670,10 @@ export function WorkingChangesPanel({
               onClick={() => void generate()}
               disabled={busy || !staged.length || !!operation || conflict.length > 0}
               title={`Send staged changes to ${providerLabel(provider)} and review the result before committing`}
-              className="flex min-h-[36px] w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-[#9333ea] to-[#6366f1] px-3 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-40"
+              className="flex min-h-[36px] w-full items-center justify-center gap-2 rounded-md border border-ai/40 bg-ai/10 px-3 text-sm font-semibold text-ai hover:bg-ai/20 disabled:opacity-40"
             >
               {generating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}{' '}
-              {generating ? 'Generating…' : 'Generate commit message with AI'}
+              {generating ? 'Generating…' : 'Write message with AI'}
             </button>
             <p className="text-xs text-sub">
               Sends staged changes to {providerLabel(provider)}. Review the message before committing.
@@ -688,7 +688,7 @@ export function WorkingChangesPanel({
                 disabled={busy}
                 onChange={(e) => updateDraft({ summary: e.target.value })}
                 placeholder={amend ? 'Commit summary (optional)' : 'Commit summary'}
-                className="w-full rounded-md border border-surface bg-crust px-3 py-2 pr-12 outline-none focus:border-[#4cc2ff]"
+                className="w-full rounded-md border border-surface bg-crust px-3 py-2 pr-12 outline-none focus:border-accent"
               />
               <span className="absolute right-3 top-2.5 text-xs text-sub" title="Recommended summary length">
                 {summary.length}/72
@@ -708,13 +708,13 @@ export function WorkingChangesPanel({
                 onChange={(e) => updateDraft({ description: e.target.value })}
                 placeholder="Add more context…"
                 rows={3}
-                className="mt-2 w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
+                className="mt-2 w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent"
               />
             </details>
             <button
               type="submit"
               disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}
-              className="min-h-[40px] w-full rounded-md border border-[#a6e3a1]/60 bg-[#a6e3a1]/15 px-3 py-2 font-medium text-[#a6e3a1] hover:bg-[#a6e3a1]/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
+              className="min-h-[40px] w-full rounded-md border border-success/60 bg-success/15 px-3 py-2 font-medium text-success hover:bg-success/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
             >
               {generating
                 ? 'Generating message…'

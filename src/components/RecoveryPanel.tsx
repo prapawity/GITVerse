@@ -87,7 +87,7 @@ export function RecoveryPanel({
         may no longer appear in the graph.
       </p>
       {error && (
-        <p role="alert" className="px-4 py-3 text-sm text-[#f38ba8]">
+        <p role="alert" className="px-4 py-3 text-sm text-danger">
           {error}
         </p>
       )}

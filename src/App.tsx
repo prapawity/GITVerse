@@ -56,7 +56,7 @@ import { platformApi, desktopApi } from './platform/api';
 
 let restored = false;
 const shortcutModifier = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
-const Handle = () => <PanelResizeHandle className="w-px bg-surface transition-colors hover:bg-[#4cc2ff]" />;
+const Handle = () => <PanelResizeHandle className="w-px bg-surface transition-colors hover:bg-accent" />;
 
 function ToolBtn({
   icon,
@@ -78,10 +78,10 @@ function ToolBtn({
       aria-label={label}
       aria-busy={busy}
       title={label}
-      className={`flex min-h-[52px] w-[60px] flex-col items-center justify-center gap-1 rounded-md text-[12px] ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
+      className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[60px] items-center justify-center gap-1 rounded-md text-xs ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
     >
-      {busy ? <Spinner size={22} className="text-[#4cc2ff]" /> : icon}
-      {label}
+      {busy ? <Spinner size={22} className="text-accent" /> : icon}
+      <span className="hidden min-[1400px]:block">{label}</span>
     </button>
   );
 }
@@ -149,6 +149,11 @@ export default function App() {
   const [rebasePreviewOpen, setRebasePreviewOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('general');
   const [aiOpen, setAiOpen] = useState(false);
+  useEffect(() => {
+    if (!aiOpen) return;
+    setRecoveryOpen(false);
+    setWorkspaceInspectionOpen(false);
+  }, [aiOpen]);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const addRepoDialogRef = useRef<HTMLElement>(null);
@@ -560,7 +565,7 @@ export default function App() {
         <div
           className={`fixed inset-0 z-[80] flex items-center justify-center bg-crust/80 ${scanningFolders ? '' : 'pointer-events-none'}`}
         >
-          <div className="mx-4 w-full max-w-[560px] rounded-xl border-2 border-dashed border-[#4cc2ff] bg-mantle p-8 text-center shadow-2xl">
+          <div className="mx-4 w-full max-w-[560px] rounded-xl border-2 border-dashed border-accent bg-mantle p-8 text-center shadow-2xl">
             <div role="status" aria-live="polite">
               <h2 className="text-lg font-semibold">
                 {scanningFolders ? 'Finding repositories…' : 'Drop folders to open repositories'}
@@ -597,7 +602,7 @@ export default function App() {
           aria-label="Open repositories"
           className="glass-tabs flex min-w-0 items-center gap-1 border-b border-surface bg-crust px-2"
         >
-          <div className="flex shrink-0 items-center gap-2 px-2 pr-4 text-[14px] font-bold" aria-label="GITVerse">
+          <div className="flex shrink-0 items-center gap-2 px-2 pr-4 text-sm font-bold" aria-label="GITVerse">
             <img src={new URL('./assets/gitverse-mark.svg', import.meta.url).href} width={24} height={24} alt="" />
             <span>
               GIT<span className="font-medium text-[#a78bfa]">Verse</span>
@@ -650,7 +655,7 @@ export default function App() {
                   setGroupMenu({ repo: r, x: e.clientX, y: e.clientY });
                 }}
                 title={`${r} — right-click to organize groups`}
-                className={`repo-tab group relative my-1 flex min-h-[36px] min-w-0 max-w-[220px] items-center gap-1 rounded-lg px-2 text-[13px] ${r === repoPath ? 'repo-tab-active text-text' : 'text-sub hover:bg-white/5 hover:text-text'}`}
+                className={`repo-tab group relative my-1 flex min-h-[36px] min-w-0 max-w-[220px] items-center gap-1 rounded-lg px-2 text-sm ${r === repoPath ? 'repo-tab-active text-text' : 'text-sub hover:bg-white/5 hover:text-text'}`}
               >
                 <button
                   type="button"
@@ -663,7 +668,7 @@ export default function App() {
                 </button>
                 <button
                   aria-label={`Close ${r.split(/[\\/]/).filter(Boolean).pop() || r}`}
-                  className="shrink-0 rounded p-1 text-sub hover:bg-surface hover:text-[#f38ba8]"
+                  className="shrink-0 rounded p-1 text-sub hover:bg-surface hover:text-danger"
                   onClick={(e) => {
                     e.stopPropagation();
                     closeRepo(r);
@@ -696,7 +701,7 @@ export default function App() {
             aria-pressed={settingsOpen}
             aria-label="Preferences"
             title="Preferences"
-            className={`mr-2 flex h-9 w-9 items-center justify-center rounded-md ${settingsOpen ? 'bg-[#4cc2ff]/20 text-[#4cc2ff]' : 'text-sub hover:bg-surface hover:text-text'}`}
+            className={`mr-2 flex h-9 w-9 items-center justify-center rounded-md ${settingsOpen ? 'bg-accent/20 text-accent' : 'text-sub hover:bg-surface hover:text-text'}`}
           >
             <GearIcon size={18} aria-hidden />
           </button>
@@ -717,8 +722,8 @@ export default function App() {
         <main className="flex min-h-0 flex-1 overflow-y-auto bg-canvas px-6 py-12 sm:px-12">
           <div className="m-auto w-full max-w-3xl">
             <div className="mb-9 flex items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[#4cc2ff]/25 bg-mantle">
-                <GitBranch size={26} className="text-[#4cc2ff]" aria-hidden />
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-mantle">
+                <GitBranch size={26} className="text-accent" aria-hidden />
               </div>
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Your repositories, in one place</h1>
@@ -728,9 +733,9 @@ export default function App() {
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 onClick={() => void chooseFolder()}
-                className="flex min-h-[112px] items-start gap-4 rounded-lg border border-[#4cc2ff]/40 bg-mantle p-5 text-left hover:border-[#4cc2ff] hover:bg-surface/30"
+                className="flex min-h-[112px] items-start gap-4 rounded-lg border border-accent/40 bg-mantle p-5 text-left hover:border-accent hover:bg-surface/30"
               >
-                <FolderOpen size={22} className="mt-0.5 shrink-0 text-[#4cc2ff]" aria-hidden />
+                <FolderOpen size={22} className="mt-0.5 shrink-0 text-accent" aria-hidden />
                 <span>
                   <span className="block font-semibold">Open a local folder</span>
                   <span className="mt-1 block text-sm text-sub">
@@ -740,9 +745,9 @@ export default function App() {
               </button>
               <button
                 onClick={() => setCloneOpen(true)}
-                className="flex min-h-[112px] items-start gap-4 rounded-lg border border-surface bg-mantle p-5 text-left hover:border-[#4cc2ff]/60 hover:bg-surface/30"
+                className="flex min-h-[112px] items-start gap-4 rounded-lg border border-surface bg-mantle p-5 text-left hover:border-accent/60 hover:bg-surface/30"
               >
-                <Download size={22} className="mt-0.5 shrink-0 text-[#4cc2ff]" aria-hidden />
+                <Download size={22} className="mt-0.5 shrink-0 text-accent" aria-hidden />
                 <span>
                   <span className="block font-semibold">Clone a repository</span>
                   <span className="mt-1 block text-sm text-sub">Get a project from an HTTPS or SSH URL.</span>
@@ -780,7 +785,7 @@ export default function App() {
           {/* toolbar */}
           <header className="glass-toolbar flex shrink-0 flex-wrap items-center gap-x-1 gap-y-1 border-b border-surface bg-mantle px-3 py-2 sm:px-5">
             <RepoBranchDropdown current={current} />
-            <div className="mx-3 hidden h-9 w-px shrink-0 bg-surface lg:block xl:mx-5" aria-hidden />
+            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block xl:mx-5" aria-hidden />
             <div className="flex shrink-0" role="group" aria-label="Index history">
               <span title="Undo the last stage or unstage action">
                 <ToolBtn
@@ -816,7 +821,7 @@ export default function App() {
                 <details className="group relative">
                   <summary
                     aria-label="Choose fetch or pull mode"
-                    className="flex h-full min-h-[52px] w-7 cursor-pointer list-none items-center justify-center rounded-r-md border-l border-surface hover:bg-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4cc2ff]"
+                    className="flex h-full min-h-[44px] w-6 cursor-pointer min-[1400px]:min-h-[52px] min-[1400px]:w-7 list-none items-center justify-center rounded-r-md border-l border-surface hover:bg-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
                   >
                     <ChevronDown size={14} aria-hidden />
                   </summary>
@@ -840,7 +845,7 @@ export default function App() {
                           useSettings.getState().set('fetchMode', mode);
                           event.currentTarget.closest('details')?.removeAttribute('open');
                         }}
-                        className={`block w-full rounded px-3 py-2 text-left text-[13px] hover:bg-surface ${fetchMode === mode ? 'bg-[#a6e3a1]/20' : ''}`}
+                        className={`block w-full rounded px-3 py-2 text-left text-sm hover:bg-surface ${fetchMode === mode ? 'bg-success/20' : ''}`}
                       >
                         {fetchMode === mode ? '● ' : '○ '}
                         {label}
@@ -885,26 +890,30 @@ export default function App() {
             <button
               onClick={() => {
                 setWorkspaceInspectionOpen(false);
+                setAiOpen(false);
                 setRecoveryOpen((value) => !value);
               }}
               aria-pressed={recoveryOpen}
+              aria-label="Recovery"
               title="Recovery history"
-              className={`flex min-h-[52px] w-[68px] flex-col items-center justify-center gap-1 rounded-md text-[12px] ${recoveryOpen ? 'bg-[#4cc2ff]/15 text-[#4cc2ff]' : 'hover:bg-surface/60'}`}
+              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${recoveryOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <History size={21} aria-hidden />
-              Recovery
+              <span className="hidden min-[1400px]:block">Recovery</span>
             </button>
             <button
               onClick={() => {
                 setRecoveryOpen(false);
+                setAiOpen(false);
                 setWorkspaceInspectionOpen((value) => !value);
               }}
               aria-pressed={workspaceInspectionOpen}
+              aria-label="Workspace"
               title="Remotes and worktrees"
-              className={`flex min-h-[52px] w-[68px] flex-col items-center justify-center gap-1 rounded-md text-[12px] ${workspaceInspectionOpen ? 'bg-[#4cc2ff]/15 text-[#4cc2ff]' : 'hover:bg-surface/60'}`}
+              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${workspaceInspectionOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <GitFork size={21} aria-hidden />
-              Workspace
+              <span className="hidden min-[1400px]:block">Workspace</span>
             </button>
             <ToolBtn
               icon={<History size={21} />}
@@ -917,22 +926,22 @@ export default function App() {
               aria-pressed={termOpen}
               aria-label="Terminal"
               title="Terminal (Ctrl+`)"
-              className={`flex min-h-[52px] w-[68px] flex-col items-center justify-center gap-1 rounded-md text-[12px] ${termOpen ? 'bg-[#4cc2ff]/15 text-[#4cc2ff]' : 'hover:bg-surface/60'}`}
+              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${termOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <SquareTerminal size={22} aria-hidden />
-              Terminal
+              <span className="hidden min-[1400px]:block">Terminal</span>
             </button>
             <button
               onClick={() => setAiOpen((v) => !v)}
               aria-pressed={aiOpen}
               aria-label="Ask AI"
               title={`Ask AI (${shortcutModifier}J)`}
-              className={`flex min-h-[52px] w-[68px] flex-col items-center justify-center gap-1 rounded-md text-[12px] font-semibold text-[#b86bef] hover:bg-[#a855f7]/10 ${aiOpen ? 'bg-[#a855f7]/15 ring-1 ring-[#a855f7]/60' : ''}`}
+              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs font-semibold text-ai hover:bg-ai/10 ${aiOpen ? 'bg-ai/15 ring-1 ring-ai/60' : ''}`}
             >
               <Sparkles size={22} aria-hidden />
-              Ask AI
+              <span className="hidden min-[1400px]:block">Ask AI</span>
             </button>
-            <div className="relative ml-auto min-w-[180px] flex-1 sm:max-w-72">
+            <div className="relative ml-auto min-w-[132px] flex-1 sm:max-w-72">
               <Search size={13} className="absolute left-2.5 top-3 text-sub" aria-hidden />
               <input
                 ref={searchRef}
@@ -940,7 +949,7 @@ export default function App() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search commits"
-                className="w-full rounded-md border border-transparent bg-surface py-2 pl-8 pr-16 outline-none placeholder:text-sub focus:border-[#4cc2ff] focus-visible:ring-2 focus-visible:ring-[#4cc2ff]"
+                className="w-full rounded-md border border-transparent bg-surface py-2 pl-8 pr-16 outline-none placeholder:text-sub focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
               />
               {search ? (
                 <button
@@ -951,7 +960,7 @@ export default function App() {
                   <X size={14} />
                 </button>
               ) : (
-                <kbd className="absolute right-2 top-2 rounded border border-sub/40 px-1.5 text-[11px] text-sub">
+                <kbd className="absolute right-2 top-2 rounded border border-sub/40 px-1.5 text-2xs text-sub">
                   {shortcutModifier}F
                 </kbd>
               )}
@@ -959,10 +968,7 @@ export default function App() {
           </header>
           <ActivityBar />
           {detached && !operation && !loading && (
-            <div
-              role="status"
-              className="border-b border-[#f9e2af]/25 bg-[#f9e2af]/10 px-5 py-2 text-[13px] text-[#f9e2af]"
-            >
+            <div role="status" className="border-b border-warning/25 bg-warning/10 px-5 py-2 text-sm text-warning">
               Detached HEAD: a commit is checked out without a branch. Double-click a local branch in the sidebar to
               check it out, or create a branch from this commit.
             </div>
@@ -974,7 +980,7 @@ export default function App() {
             (currentBranch.gone || !!currentBranch.behind || !!currentBranch.ahead) && (
               <div
                 role="status"
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#4cc2ff]/25 bg-[#4cc2ff]/10 px-5 py-2 text-[13px]"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-accent/25 bg-accent/10 px-5 py-2 text-sm"
               >
                 <span className="min-w-0 flex-1">
                   {currentBranch.gone
@@ -990,7 +996,7 @@ export default function App() {
                     type="button"
                     disabled={!!working}
                     onClick={() => void action('fetch', 'ff-only')}
-                    className="min-h-[32px] rounded-md border border-[#4cc2ff]/50 px-3 font-medium text-[#4cc2ff] hover:bg-[#4cc2ff]/10 disabled:opacity-50"
+                    className="min-h-[32px] rounded-md border border-accent/50 px-3 font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
                     title="Pull using fast-forward only; Git will stop if histories have diverged"
                   >
                     Pull fast-forward
@@ -1001,7 +1007,7 @@ export default function App() {
                     type="button"
                     disabled={!!working}
                     onClick={() => void action('fetch', 'all')}
-                    className="min-h-[32px] rounded-md border border-[#4cc2ff]/50 px-3 font-medium text-[#4cc2ff] hover:bg-[#4cc2ff]/10 disabled:opacity-50"
+                    className="min-h-[32px] rounded-md border border-accent/50 px-3 font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
                   >
                     Fetch remotes
                   </button>
@@ -1146,7 +1152,7 @@ export default function App() {
                           </div>
                           {!repoPath && (
                             <button
-                              className="rounded bg-[#4cc2ff] px-4 py-2 font-medium text-crust"
+                              className="rounded bg-accent px-4 py-2 font-medium text-crust"
                               onClick={openAddRepo}
                             >
                               Add repository
@@ -1159,7 +1165,7 @@ export default function App() {
                 </Panel>
                 {termOpen && (
                   <>
-                    <PanelResizeHandle className="h-px bg-surface transition-colors hover:bg-[#4cc2ff]" />
+                    <PanelResizeHandle className="h-px bg-surface transition-colors hover:bg-accent" />
                     <Panel defaultSize={32} minSize={12}>
                       <TerminalPanel cwd={repoPath} onHide={() => setTermOpen(false)} />
                     </Panel>
@@ -1195,13 +1201,13 @@ export default function App() {
               ) : (
                 <div className="flex h-full min-h-0 flex-col">
                   {repoPath && status.length > 0 && (
-                    <div className="flex items-center gap-2 border-b border-surface bg-[#4cc2ff]/15 px-4 py-2 text-[13px]">
+                    <div className="flex items-center gap-2 border-b border-surface bg-accent/15 px-4 py-2 text-sm">
                       <span className="min-w-0 flex-1">
                         {status.length} local file change{status.length === 1 ? '' : 's'}
                       </span>
                       <button
                         onClick={showWorking}
-                        className="shrink-0 rounded border border-[#4cc2ff]/50 px-2 py-1 text-[#4cc2ff] hover:bg-[#4cc2ff]/15"
+                        className="shrink-0 rounded border border-accent/50 px-2 py-1 text-accent hover:bg-accent/15"
                       >
                         View changes
                       </button>
@@ -1276,7 +1282,7 @@ export default function App() {
             <button
               role="menuitem"
               onClick={() => setNewGroup('')}
-              className="block w-full rounded border-t border-surface px-3 py-2 text-left text-sm text-[#4cc2ff] hover:bg-surface/60"
+              className="block w-full rounded border-t border-surface px-3 py-2 text-left text-sm text-accent hover:bg-surface/60"
             >
               + New group…
             </button>
@@ -1301,12 +1307,12 @@ export default function App() {
                 value={newGroup}
                 onChange={(e) => setNewGroup(e.target.value)}
                 placeholder="Group name"
-                className="w-full rounded border border-surface bg-crust px-2 py-1.5 text-sm outline-none focus:border-[#4cc2ff]"
+                className="w-full rounded border border-surface bg-crust px-2 py-1.5 text-sm outline-none focus:border-accent"
               />
               <button
                 type="submit"
                 disabled={!newGroup.trim()}
-                className="w-full rounded bg-[#4cc2ff] px-3 py-1.5 text-sm font-medium text-crust disabled:opacity-40"
+                className="w-full rounded bg-accent px-3 py-1.5 text-sm font-medium text-crust disabled:opacity-40"
               >
                 Create group
               </button>
@@ -1385,7 +1391,7 @@ export default function App() {
                 }}
                 className="flex w-full items-center gap-3 rounded-lg border border-surface px-4 py-3 text-left hover:bg-surface/50"
               >
-                <FolderOpen size={20} className="shrink-0 text-[#4cc2ff]" />
+                <FolderOpen size={20} className="shrink-0 text-accent" />
                 <span>
                   <span className="block font-medium">Open local folder</span>
                   <span className="block text-sm text-sub">Choose a repository or folder containing repositories</span>
@@ -1398,7 +1404,7 @@ export default function App() {
                 }}
                 className="flex w-full items-center gap-3 rounded-lg border border-surface px-4 py-3 text-left hover:bg-surface/50"
               >
-                <Download size={20} className="shrink-0 text-[#4cc2ff]" />
+                <Download size={20} className="shrink-0 text-accent" />
                 <span>
                   <span className="block font-medium">Clone repository</span>
                   <span className="block text-sm text-sub">Clone from an HTTPS or SSH URL</span>

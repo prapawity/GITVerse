@@ -99,7 +99,7 @@ function Media({ kind, src, name }: { kind: MediaKind; src: string; name: string
           backgroundSize: '16px 16px',
         }}
       />
-      <span className="font-sans text-[12px] text-sub">{dims}</span>
+      <span className="font-sans text-xs text-sub">{dims}</span>
     </div>
   );
 }
@@ -124,7 +124,7 @@ function Pane({
   const blob = useBlob(load, type, deps);
   return (
     <figure className="flex min-w-0 flex-1 flex-col items-center gap-2 font-sans">
-      {label && <figcaption className="text-[12px] uppercase tracking-wide text-sub">{label}</figcaption>}
+      {label && <figcaption className="text-xs uppercase tracking-wide text-sub">{label}</figcaption>}
       {!load && <div className="text-sub">{empty ?? 'Not available'}</div>}
       {load && !blob && (
         <div role="status" className="flex items-center gap-2 text-sub">
@@ -132,14 +132,14 @@ function Pane({
         </div>
       )}
       {blob && 'error' in blob && (
-        <div role="alert" className="whitespace-pre-wrap text-[#f38ba8]">
+        <div role="alert" className="whitespace-pre-wrap text-danger">
           {blob.error}
         </div>
       )}
       {blob && 'url' in blob && (
         <>
           <Media kind={kind} src={blob.url} name={name} />
-          <span className="text-[12px] text-sub">{size(blob.size)}</span>
+          <span className="text-xs text-sub">{size(blob.size)}</span>
         </>
       )}
     </figure>
@@ -198,7 +198,7 @@ export function JsonPreview({ text }: { text: string }) {
   return (
     <div className="min-w-max py-2">
       {result.error && (
-        <div role="alert" className="px-4 pb-2 font-sans text-[#f9e2af]">
+        <div role="alert" className="px-4 pb-2 font-sans text-warning">
           Not valid JSON ({result.error}). Showing the raw file.
         </div>
       )}

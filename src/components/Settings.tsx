@@ -39,7 +39,7 @@ const defaultShellHint = /Win/.test(navigator.platform)
 export type Section = 'general' | 'appearance' | 'terminal' | 'conflicts' | 'ai' | 'gitflow' | 'profiles' | 'about';
 
 const input =
-  'w-full max-w-[360px] rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]';
+  'w-full max-w-[360px] rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent';
 
 function Row({
   label,
@@ -57,16 +57,16 @@ function Row({
   return (
     <div className="grid max-w-[850px] grid-cols-1 items-start gap-x-8 gap-y-2 border-b border-surface/60 py-5 sm:grid-cols-[minmax(160px,220px)_1fr]">
       {htmlFor ? (
-        <label htmlFor={htmlFor} className="text-[14px] font-medium sm:pt-2">
+        <label htmlFor={htmlFor} className="text-sm font-medium sm:pt-2">
           {label}
         </label>
       ) : (
-        <div className="text-[14px] font-medium sm:pt-2">{label}</div>
+        <div className="text-sm font-medium sm:pt-2">{label}</div>
       )}
       <div className="min-w-0">
         {children}
-        {hint && <p className="mt-2 max-w-[640px] text-[13px] leading-relaxed text-sub">{hint}</p>}
-        {warn && <p className="mt-1.5 flex max-w-[640px] gap-1.5 text-[13px] text-[#f9e2af]">{warn}</p>}
+        {hint && <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-sub">{hint}</p>}
+        {warn && <p className="mt-1.5 flex max-w-[640px] gap-1.5 text-sm text-warning">{warn}</p>}
       </div>
     </div>
   );
@@ -85,11 +85,11 @@ function AiRow({
 }) {
   return (
     <div className="border-t border-surface/70 py-5 first:border-0 first:pt-0 last:pb-0">
-      <label htmlFor={htmlFor} className="mb-2 block text-[13px] font-semibold text-text">
+      <label htmlFor={htmlFor} className="mb-2 block text-sm font-semibold text-text">
         {label}
       </label>
       {children}
-      {hint && <p className="mt-2 max-w-[640px] text-[13px] leading-relaxed text-sub">{hint}</p>}
+      {hint && <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-sub">{hint}</p>}
     </div>
   );
 }
@@ -112,9 +112,9 @@ function Check({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-[18px] w-[18px] accent-[#4cc2ff]"
+        className="h-[18px] w-[18px] accent-accent"
       />
-      {children && <span className="text-[14px] text-sub">{children}</span>}
+      {children && <span className="text-sm text-sub">{children}</span>}
     </label>
   );
 }
@@ -190,14 +190,14 @@ function SecretField({
           await onSave(v);
           setV('');
         }}
-        className="min-h-[38px] rounded-md bg-[#4cc2ff] px-4 font-medium text-crust disabled:opacity-40"
+        className="min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
       >
         Save
       </button>
       {saved && (
         <button
           onClick={onRemove}
-          className="min-h-[38px] rounded-md border border-[#f38ba8]/60 px-3 text-[#f38ba8] hover:bg-[#f38ba8]/15"
+          className="min-h-[38px] rounded-md border border-danger/60 px-3 text-danger hover:bg-danger/15"
         >
           Remove
         </button>
@@ -236,7 +236,7 @@ function ModelPick({
     if (enabled) load();
     else setList(null);
   }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!enabled) return <div className="pt-2 text-[14px] text-sub">Connect an account first.</div>;
+  if (!enabled) return <div className="pt-2 text-sm text-sub">Connect an account first.</div>;
   return (
     <div>
       <div className="flex max-w-[520px] items-center gap-2">
@@ -253,9 +253,9 @@ function ModelPick({
           Refresh
         </button>
       </div>
-      {!list && <p className="mt-1 text-[13px] text-sub">Loading models…</p>}
+      {!list && <p className="mt-1 text-sm text-sub">Loading models…</p>}
       {err && (
-        <p role="alert" className="mt-1 text-[13px] text-[#f38ba8]">
+        <p role="alert" className="mt-1 text-sm text-danger">
           {err}
         </p>
       )}
@@ -365,7 +365,7 @@ function AiSettings() {
     msg[k] ? (
       <p
         role={msg[k]!.ok ? 'status' : 'alert'}
-        className={`mt-2 max-w-[560px] text-[13px] ${msg[k]!.ok ? 'text-[#a6e3a1]' : 'text-[#f38ba8]'}`}
+        className={`mt-2 max-w-[560px] text-sm ${msg[k]!.ok ? 'text-success' : 'text-danger'}`}
       >
         {msg[k]!.text}
       </p>
@@ -376,25 +376,25 @@ function AiSettings() {
   return (
     <div className="mx-auto max-w-[920px] space-y-6 pb-4">
       <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#4cc2ff]/25 bg-[#4cc2ff]/10 text-[#4cc2ff]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 text-accent">
           <Sparkles size={22} aria-hidden />
         </div>
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#4cc2ff]">Preferences</p>
-          <h1 className="text-[28px] font-semibold leading-tight">AI Assistant</h1>
-          <p className="mt-2 max-w-[700px] text-[14px] leading-relaxed text-sub">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent">Preferences</p>
+          <h1 className="text-2xl font-semibold leading-tight">AI Assistant</h1>
+          <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-sub">
             Connect your own account to chat about your repository and get help resolving conflicts. Actions that change
             the repository always require your approval.
           </p>
         </div>
       </div>
-      {!ai && <p className="text-[#f9e2af]">The AI assistant is available in the desktop app.</p>}
+      {!ai && <p className="text-warning">The AI assistant is available in the desktop app.</p>}
 
       <section className={card} aria-labelledby="ai-provider-heading">
-        <h2 id="ai-provider-heading" className="text-[17px] font-semibold">
+        <h2 id="ai-provider-heading" className="text-lg font-semibold">
           Choose your assistant
         </h2>
-        <p className="mt-1 text-[13px] text-sub">
+        <p className="mt-1 text-sm text-sub">
           Used for chat and Auto-resolve with AI. You can also switch providers in chat.
         </p>
         <div role="group" aria-label="AI provider" className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -403,13 +403,13 @@ function AiSettings() {
               key={p.id}
               aria-pressed={st.aiProvider === p.id}
               onClick={() => st.set('aiProvider', p.id)}
-              className={`min-h-[84px] rounded-lg border px-4 py-3 text-left transition-colors ${st.aiProvider === p.id ? 'border-[#4cc2ff] bg-[#4cc2ff]/10' : 'border-surface bg-crust/50 hover:border-sub/60 hover:bg-surface/40'}`}
+              className={`min-h-[84px] rounded-lg border px-4 py-3 text-left transition-colors ${st.aiProvider === p.id ? 'border-accent bg-accent/10' : 'border-surface bg-crust/50 hover:border-sub/60 hover:bg-surface/40'}`}
             >
               <div className="flex items-center justify-between gap-2 font-semibold">
                 {p.label}
-                {st.aiProvider === p.id && <CheckCircle2 size={17} className="shrink-0 text-[#4cc2ff]" aria-hidden />}
+                {st.aiProvider === p.id && <CheckCircle2 size={17} className="shrink-0 text-accent" aria-hidden />}
               </div>
-              <div className="mt-1 text-[12px] text-sub">{p.sub}</div>
+              <div className="mt-1 text-xs text-sub">{p.sub}</div>
             </button>
           ))}
         </div>
@@ -421,14 +421,14 @@ function AiSettings() {
             <KeyRound size={19} aria-hidden />
           </div>
           <div>
-            <h2 id="claude-heading" className="text-[17px] font-semibold">
+            <h2 id="claude-heading" className="text-lg font-semibold">
               Claude
             </h2>
-            <p className="text-[13px] text-sub">Connect with an Anthropic API key</p>
+            <p className="text-sm text-sub">Connect with an Anthropic API key</p>
           </div>
         </div>
         <AiRow label="Model">
-          <div className="font-mono text-[14px]">{AI_MODEL}</div>
+          <div className="font-mono text-sm">{AI_MODEL}</div>
         </AiRow>
         <AiRow
           label="Anthropic API key"
@@ -455,7 +455,7 @@ function AiSettings() {
           />
           <Msgline k="claude" />
           {c && !c.canEncrypt && (
-            <p className="mt-2 text-[13px] text-[#f9e2af]">
+            <p className="mt-2 text-sm text-warning">
               Secure storage is unavailable on this system — set ANTHROPIC_API_KEY instead.
             </p>
           )}
@@ -464,14 +464,14 @@ function AiSettings() {
 
       <section className={card} aria-labelledby="chatgpt-heading">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#a6e3a1]/15 text-[#a6e3a1]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/15 text-success">
             <Sparkles size={19} aria-hidden />
           </div>
           <div>
-            <h2 id="chatgpt-heading" className="text-[17px] font-semibold">
+            <h2 id="chatgpt-heading" className="text-lg font-semibold">
               ChatGPT
             </h2>
-            <p className="text-[13px] text-sub">Connect your account or API key</p>
+            <p className="text-sm text-sub">Connect your account or API key</p>
           </div>
         </div>
         <AiRow
@@ -484,7 +484,7 @@ function AiSettings() {
           }
         >
           <div className="flex max-w-[520px] items-center gap-2 pt-1">
-            <span className="min-w-0 flex-1 truncate text-[14px]">
+            <span className="min-w-0 flex-1 truncate text-sm">
               {!o ? (
                 'Checking…'
               ) : o.signedIn ? (
@@ -518,14 +518,14 @@ function AiSettings() {
               <button
                 disabled={!ai}
                 onClick={signIn}
-                className="min-h-[38px] rounded-md bg-[#4cc2ff] px-4 font-medium text-crust disabled:opacity-40"
+                className="min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
               >
                 Sign in with ChatGPT
               </button>
             )}
           </div>
           {signing && (
-            <p role="status" className="mt-2 text-[13px] text-sub">
+            <p role="status" className="mt-2 text-sm text-sub">
               Finish signing in in your browser, then return here…
             </p>
           )}
@@ -563,14 +563,14 @@ function AiSettings() {
 
       <section className={card} aria-labelledby="copilot-heading">
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#cba6f7]/15 text-[#cba6f7]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-ai/15 text-ai">
             <SquareTerminal size={19} aria-hidden />
           </div>
           <div>
-            <h2 id="copilot-heading" className="text-[17px] font-semibold">
+            <h2 id="copilot-heading" className="text-lg font-semibold">
               GitHub Copilot
             </h2>
-            <p className="text-[13px] text-sub">Connect your Copilot subscription</p>
+            <p className="text-sm text-sub">Connect your Copilot subscription</p>
           </div>
         </div>
         <AiRow
@@ -584,7 +584,7 @@ function AiSettings() {
           }
         >
           <div className="flex max-w-[560px] items-center gap-2 pt-1">
-            <span className="min-w-0 flex-1 text-[14px]">
+            <span className="min-w-0 flex-1 text-sm">
               {!cop ? (
                 'Checking…'
               ) : cop.authenticated ? (
@@ -601,7 +601,7 @@ function AiSettings() {
                   {cop.authType ? <span className="text-sub"> ({cop.authType})</span> : ''}
                 </>
               ) : (
-                <span className="text-[#f9e2af]">{cop.available ? 'Not signed in' : 'Runtime unavailable'}</span>
+                <span className="text-warning">{cop.available ? 'Not signed in' : 'Runtime unavailable'}</span>
               )}
             </span>
             {copSigning ? (
@@ -619,7 +619,7 @@ function AiSettings() {
                 <button
                   disabled={!ai || !cop?.available}
                   onClick={signInCopilot}
-                  className="min-h-[38px] rounded-md bg-[#4cc2ff] px-4 font-medium text-crust disabled:opacity-40"
+                  className="min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
                 >
                   Sign in with GitHub
                 </button>
@@ -633,22 +633,22 @@ function AiSettings() {
             </button>
           </div>
           {copSigning && (
-            <p role="status" className="mt-2 text-[13px] text-sub">
+            <p role="status" className="mt-2 text-sm text-sub">
               Complete sign-in in your browser, then return here…
             </p>
           )}
           <Msgline k="copilot" />
           {cop && !cop.authenticated && (
-            <div className="mt-2 max-w-[560px] text-[13px] text-sub">
+            <div className="mt-2 max-w-[560px] text-sm text-sub">
               {cop.message && <p className="mb-2 break-words">{cop.message}</p>}
               Sign in once in the built-in terminal (⌃`) with either command, then press Recheck:
               {['gh auth login', 'npx @github/copilot login'].map((cmd) => (
                 <div
                   key={cmd}
-                  className="mt-1.5 flex items-center gap-2 rounded bg-crust px-3 py-1.5 font-mono text-[13px] text-text"
+                  className="mt-1.5 flex items-center gap-2 rounded bg-crust px-3 py-1.5 font-mono text-sm text-text"
                 >
                   <span className="flex-1">{cmd}</span>
-                  <button onClick={() => copyCmd(cmd)} className="text-[12px] text-sub underline hover:text-text">
+                  <button onClick={() => copyCmd(cmd)} className="text-xs text-sub underline hover:text-text">
                     Copy
                   </button>
                 </div>
@@ -681,11 +681,11 @@ function AiSettings() {
         </AiRow>
       </section>
 
-      <section className="flex gap-3 rounded-xl border border-[#4cc2ff]/20 bg-[#4cc2ff]/5 p-5">
-        <ShieldCheck size={20} className="mt-0.5 shrink-0 text-[#4cc2ff]" aria-hidden />
+      <section className="flex gap-3 rounded-xl border border-accent/20 bg-accent/5 p-5">
+        <ShieldCheck size={20} className="mt-0.5 shrink-0 text-accent" aria-hidden />
         <div>
           <h2 className="font-semibold">Your data, your choice</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-sub">
+          <p className="mt-1 text-sm leading-relaxed text-sub">
             Nothing is sent until you ask. Chat sends your messages and the repository details its tools read, such as
             branch names, commit subjects, authors and changed file names. Auto-resolve sends conflicted regions with
             about 25 lines of context. Data goes only to your chosen provider.
@@ -725,7 +725,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
       aria-current={section === id ? 'page' : undefined}
       aria-label={label}
       title={label}
-      className={`flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-[14px] ${section === id ? 'bg-[#4cc2ff]/15 font-medium text-text' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
+      className={`flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-sm ${section === id ? 'bg-accent/15 font-medium text-text' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
     >
       <I size={19} className="shrink-0" aria-hidden /> <span className="hidden sm:inline">{label}</span>
     </button>
@@ -766,7 +766,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
           aria-label="Preferences"
           className="glass-panel flex w-14 shrink-0 flex-col overflow-y-auto border-r border-surface bg-mantle px-1.5 py-5 sm:w-[240px] sm:px-3"
         >
-          <div className="hidden px-3 pb-2 pt-1 text-[12px] font-medium text-sub sm:block">Preferences</div>
+          <div className="hidden px-3 pb-2 pt-1 text-xs font-medium text-sub sm:block">Preferences</div>
           {nav('general', 'General', Gear)}
           {nav('appearance', 'Appearance', Palette)}
           {nav('about', 'Application / About', Info)}
@@ -774,8 +774,8 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
           {nav('terminal', 'In-App Terminal', SquareTerminal)}
           {nav('conflicts', 'Conflicts', GitMerge)}
           {nav('ai', 'AI Assistant', Sparkles)}
-          <div className="hidden px-3 pb-1 pt-6 text-[12px] font-medium text-sub sm:block">Repository settings</div>
-          <div className="hidden truncate px-3 pb-2 text-[13px] sm:block" title={repoPath ?? undefined}>
+          <div className="hidden px-3 pb-1 pt-6 text-xs font-medium text-sub sm:block">Repository settings</div>
+          <div className="hidden truncate px-3 pb-2 text-sm sm:block" title={repoPath ?? undefined}>
             {repoName ? (
               <>
                 Repo: <span className="font-medium">{repoName}</span>
@@ -792,7 +792,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
             {section === 'about' && <ApplicationAbout />}
             {section === 'general' && (
               <>
-                <h1 className="text-[28px] font-semibold">General</h1>
+                <h1 className="text-2xl font-semibold">General</h1>
                 <p className="mb-5 mt-1 text-sm text-sub">
                   Manage updates, repository history, and your workspace. Changes save automatically.
                 </p>
@@ -860,7 +860,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                       )
                         recentRepos.slice().forEach((r) => useRepo.getState().closeRepo(r));
                     }}
-                    className="min-h-[36px] rounded-md border border-[#f38ba8]/60 px-4 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+                    className="min-h-[36px] rounded-md border border-danger/60 px-4 text-danger hover:bg-danger/15 disabled:opacity-40"
                   >
                     Forget All
                   </button>
@@ -893,7 +893,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
 
             {section === 'appearance' && (
               <>
-                <h1 className="mb-2 text-[28px] font-semibold">Appearance</h1>
+                <h1 className="mb-2 text-2xl font-semibold">Appearance</h1>
                 <p className="mb-6 text-sm text-sub">Choose a theme for GITVerse. Changes apply immediately.</p>
                 <div role="group" aria-label="Theme" className="grid max-w-[700px] grid-cols-1 gap-3 sm:grid-cols-3">
                   {(
@@ -909,7 +909,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                       type="button"
                       aria-pressed={st.theme === option.id}
                       onClick={() => st.set('theme', option.id)}
-                      className={`rounded-lg border p-3 text-left transition-colors ${st.theme === option.id ? 'border-[#4cc2ff] bg-[#4cc2ff]/10' : 'border-surface hover:bg-surface/50'}`}
+                      className={`rounded-lg border p-3 text-left transition-colors ${st.theme === option.id ? 'border-accent bg-accent/10' : 'border-surface hover:bg-surface/50'}`}
                     >
                       <span
                         className="mb-3 flex h-16 overflow-hidden rounded-md border border-white/10"
@@ -927,7 +927,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
 
             {section === 'terminal' && (
               <>
-                <h1 className="text-[28px] font-semibold">In-App Terminal</h1>
+                <h1 className="text-2xl font-semibold">In-App Terminal</h1>
                 <p className="mb-6 mt-1 text-sm text-sub">Shell, font and behaviour of the built-in terminal.</p>
                 <Row
                   label="Shell"
@@ -979,7 +979,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
 
             {section === 'conflicts' && (
               <>
-                <h1 className="text-[28px] font-semibold">Conflicts</h1>
+                <h1 className="text-2xl font-semibold">Conflicts</h1>
                 <p className="mb-6 mt-1 text-sm text-sub">How GITVerse helps you resolve merge conflicts.</p>
                 <Row
                   label="Auto-scroll to conflicts"
@@ -996,8 +996,8 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
 
             {section === 'gitflow' && repoPath && (
               <>
-                <h1 className="mb-1 text-[28px] font-semibold">Gitflow</h1>
-                <p className="mb-4 text-[14px] text-sub">
+                <h1 className="mb-1 text-2xl font-semibold">Gitflow</h1>
+                <p className="mb-4 text-sm text-sub">
                   Used by the Branch button for <span className="font-medium text-text">{repoName}</span>. Prefixes
                   include the trailing slash.
                 </p>

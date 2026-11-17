@@ -25,17 +25,17 @@ export function ActivityLog() {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls="activity-log"
-        className={`ml-auto flex h-full shrink-0 items-center gap-2 rounded px-2 hover:bg-surface/50 hover:text-text ${open ? 'text-[#4cc2ff]' : ''}`}
+        className={`ml-auto flex h-full shrink-0 items-center gap-2 rounded px-2 hover:bg-surface/50 hover:text-text ${open ? 'text-accent' : ''}`}
       >
         <ClipboardList size={15} /> Activity log{' '}
         {activity.length > 0 && (
-          <span className="rounded-full bg-surface px-1.5 py-0.5 text-[10px]">{activity.length}</span>
+          <span className="rounded-full bg-surface px-1.5 py-0.5 text-2xs">{activity.length}</span>
         )}
       </button>
       <span
         aria-label={`App version ${version}`}
         title={`GITVerse ${version}`}
-        className="ml-2 inline-flex h-5 max-w-[30%] min-w-0 shrink-0 items-center bg-[#c2410c] px-3 text-[11px] font-semibold text-white"
+        className="ml-2 inline-flex h-5 max-w-[30%] min-w-0 shrink-0 items-center bg-[#c2410c] px-3 text-2xs font-semibold text-white"
         style={{ clipPath: 'polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)' }}
       >
         <span className="truncate">v{version}</span>
@@ -47,12 +47,12 @@ export function ActivityLog() {
           className="absolute bottom-full right-2 z-[70] mb-2 flex max-h-[min(60vh,520px)] w-[min(520px,90vw)] flex-col overflow-hidden rounded-lg border border-surface bg-mantle shadow-2xl"
         >
           <header className="flex shrink-0 items-center gap-2 border-b border-surface px-4 py-3">
-            <ClipboardList size={16} className="text-[#4cc2ff]" />
+            <ClipboardList size={16} className="text-accent" />
             <h2 className="flex-1 text-sm font-semibold text-text">Activity log</h2>
             <button
               onClick={clear}
               disabled={!activity.length}
-              className="flex items-center gap-1 rounded px-2 py-1 text-[#f38ba8] hover:bg-[#f38ba8]/15 disabled:opacity-40"
+              className="flex items-center gap-1 rounded px-2 py-1 text-danger hover:bg-danger/15 disabled:opacity-40"
             >
               <Trash2 size={14} /> Clear
             </button>
@@ -77,12 +77,12 @@ export function ActivityLog() {
                       : Info;
                 const color =
                   item.kind === 'success'
-                    ? 'text-[#a6e3a1]'
+                    ? 'text-success'
                     : item.kind === 'error'
-                      ? 'text-[#f38ba8]'
+                      ? 'text-danger'
                       : item.kind === 'warning'
-                        ? 'text-[#f9e2af]'
-                        : 'text-[#4cc2ff]';
+                        ? 'text-warning'
+                        : 'text-accent';
                 return (
                   <div key={item.id} className="flex gap-3 border-b border-surface/50 px-4 py-3 last:border-0">
                     <Icon size={16} className={`mt-0.5 shrink-0 ${color}`} />
@@ -102,7 +102,7 @@ export function ActivityLog() {
                         </details>
                       )}
                     </div>
-                    <time className="shrink-0 text-[11px]" dateTime={new Date(item.time).toISOString()}>
+                    <time className="shrink-0 text-2xs" dateTime={new Date(item.time).toISOString()}>
                       {new Date(item.time).toLocaleString()}
                     </time>
                   </div>
@@ -110,7 +110,7 @@ export function ActivityLog() {
               })
             )}
           </div>
-          <p className="border-t border-surface px-4 py-2 text-[11px]">
+          <p className="border-t border-surface px-4 py-2 text-2xs">
             Activity is kept for this session, up to 200 entries.
           </p>
         </section>

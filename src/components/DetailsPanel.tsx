@@ -11,9 +11,9 @@ type F = ChangedFile;
 
 const icon = (s: string) => {
   const p = { size: 15, 'aria-hidden': true } as const;
-  if (s === 'A') return <FilePlus {...p} className="shrink-0 text-[#a6e3a1]" />;
-  if (s === 'D') return <FileMinus {...p} className="shrink-0 text-[#f38ba8]" />;
-  if (s === 'R' || s === 'C') return <FileSymlink {...p} className="shrink-0 text-[#cba6f7]" />;
+  if (s === 'A') return <FilePlus {...p} className="shrink-0 text-success" />;
+  if (s === 'D') return <FileMinus {...p} className="shrink-0 text-danger" />;
+  if (s === 'R' || s === 'C') return <FileSymlink {...p} className="shrink-0 text-ai" />;
   return <FilePen {...p} className="shrink-0 text-[#fab387]" />;
 };
 const LABEL: Record<string, string> = { M: 'modified', A: 'added', D: 'deleted', R: 'renamed', C: 'copied' };
@@ -44,7 +44,7 @@ function FileRow({
     <button
       onClick={() => onSelect(f)}
       aria-pressed={selected}
-      className={`flex min-h-[44px] w-full items-center gap-2 px-4 text-left hover:bg-surface/40 focus-visible:bg-surface ${selected ? 'border-l-2 border-[#4cc2ff] bg-[#4cc2ff]/15' : 'border-l-2 border-transparent'}`}
+      className={`flex min-h-[44px] w-full items-center gap-2 px-4 text-left hover:bg-surface/40 focus-visible:bg-surface ${selected ? 'border-l-2 border-accent bg-accent/15' : 'border-l-2 border-transparent'}`}
       title={f.path}
     >
       {icon(f.status)}
@@ -52,8 +52,8 @@ function FileRow({
         <span className="block truncate font-medium">{f.path.slice(i + 1)}</span>
         {!tree && i >= 0 && <span className="block truncate text-xs text-sub">{f.path.slice(0, i + 1)}</span>}
       </span>
-      <span className="shrink-0 text-[11px] text-sub">{LABEL[f.status] ?? f.status}</span>
-      {f.untracked && <span className="shrink-0 text-[11px] text-sub">untracked</span>}
+      <span className="shrink-0 text-2xs text-sub">{LABEL[f.status] ?? f.status}</span>
+      {f.untracked && <span className="shrink-0 text-2xs text-sub">untracked</span>}
     </button>
   );
 }
@@ -123,7 +123,7 @@ export function DetailsPanel({
 
   if (stash && snapshot?.key === stashKey && snapshot.error)
     return (
-      <p role="alert" className="whitespace-pre-wrap p-4 text-[#f38ba8]">
+      <p role="alert" className="whitespace-pre-wrap p-4 text-danger">
         {snapshot.error}
       </p>
     );
@@ -145,7 +145,7 @@ export function DetailsPanel({
     <button
       aria-pressed={view === v}
       onClick={() => setView(v)}
-      className={`flex min-h-[32px] items-center gap-1.5 px-3 text-[13px] ${view === v ? 'bg-[#4cc2ff]/20 text-[#4cc2ff]' : 'text-sub hover:text-text'}`}
+      className={`flex min-h-[32px] items-center gap-1.5 px-3 text-sm ${view === v ? 'bg-accent/20 text-accent' : 'text-sub hover:text-text'}`}
     >
       <I size={14} aria-hidden /> {label}
     </button>
@@ -222,7 +222,7 @@ export function DetailsPanel({
       <div className="glass-detail-header flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-surface px-4 py-3 text-sub">
         <span>
           {stash ? 'stash' : 'commit'}:{' '}
-          <span className="font-mono text-[15px] font-semibold text-text">{c.hash.slice(0, 6)}</span>
+          <span className="font-mono text-base font-semibold text-text">{c.hash.slice(0, 6)}</span>
           {stash && <span className="ml-2 font-mono text-[#f5a623]">{c.stashId}</span>}
         </span>
         <span>
@@ -240,14 +240,14 @@ export function DetailsPanel({
                 type="button"
                 disabled={stashActionBusy || !!state.working || !!state.operation || !stash.hash}
                 onClick={() => void runStashAction(action)}
-                className={`min-h-[36px] rounded-md border px-3 text-sm font-medium disabled:opacity-40 ${action === 'drop' ? 'border-[#f38ba8]/40 text-[#f38ba8] hover:bg-[#f38ba8]/10' : 'border-surface hover:bg-surface/60'}`}
+                className={`min-h-[36px] rounded-md border px-3 text-sm font-medium disabled:opacity-40 ${action === 'drop' ? 'border-danger/40 text-danger hover:bg-danger/10' : 'border-surface hover:bg-surface/60'}`}
               >
                 {action[0].toUpperCase() + action.slice(1)}
               </button>
             ))}
           </div>
           {stashActionError && (
-            <p role="alert" className="mt-2 whitespace-pre-wrap text-xs text-[#f38ba8]">
+            <p role="alert" className="mt-2 whitespace-pre-wrap text-xs text-danger">
               {stashActionError}
             </p>
           )}
@@ -269,10 +269,10 @@ export function DetailsPanel({
                 setStashName(event.target.value);
                 setEditingStash(true);
               }}
-              className="w-full rounded border border-surface bg-mantle px-3 py-2 text-[16px] outline-none focus:border-[#4cc2ff]"
+              className="w-full rounded border border-surface bg-mantle px-3 py-2 text-base outline-none focus:border-accent"
             />
             {stashEditError && (
-              <p role="alert" className="mt-2 text-sm text-[#f38ba8]">
+              <p role="alert" className="mt-2 text-sm text-danger">
                 {stashEditError}
               </p>
             )}
@@ -298,7 +298,7 @@ export function DetailsPanel({
                       setSavingStashName(false);
                     }
                   }}
-                  className="min-h-9 flex-1 rounded border border-[#a6e3a1] bg-[#a6e3a1]/20 px-3 text-sm disabled:opacity-40"
+                  className="min-h-9 flex-1 rounded border border-success bg-success/20 px-3 text-sm disabled:opacity-40"
                 >
                   Update Message
                 </button>
@@ -309,7 +309,7 @@ export function DetailsPanel({
                     setEditingStash(false);
                     setStashEditError('');
                   }}
-                  className="min-h-9 flex-1 rounded border border-[#f38ba8] bg-[#f38ba8]/15 px-3 text-sm disabled:opacity-40"
+                  className="min-h-9 flex-1 rounded border border-danger bg-danger/15 px-3 text-sm disabled:opacity-40"
                 >
                   Cancel Amend
                 </button>
@@ -318,11 +318,11 @@ export function DetailsPanel({
           </>
         ) : (
           <>
-            <div className="text-[17px] font-semibold leading-snug">{title}</div>
+            <div className="select-text text-lg font-semibold leading-snug">{title}</div>
           </>
         )}
         {rest.join('\n').trim() && (
-          <pre className="mt-3 whitespace-pre-wrap font-sans text-[13px] leading-relaxed text-sub">
+          <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed text-sub">
             {rest.join('\n').trim()}
           </pre>
         )}
@@ -331,14 +331,14 @@ export function DetailsPanel({
       <div className="flex items-center gap-3 px-4 pb-3">
         <div
           aria-hidden
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#cba6f7] text-[15px] font-bold text-crust"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-ai text-base font-bold text-crust"
         >
           {initials}
         </div>
         <div className="min-w-0">
-          <div className="truncate text-[15px] font-medium">{c.author}</div>
-          {c.email && <div className="break-all text-[13px] text-sub">{c.email}</div>}
-          <div className="text-[13px] text-sub">
+          <div className="truncate text-base font-medium">{c.author}</div>
+          {c.email && <div className="break-all text-sm text-sub">{c.email}</div>}
+          <div className="text-sm text-sub">
             {c.date ? `authored ${new Date(c.date).toLocaleString()}` : 'Loading metadata...'}
           </div>
         </div>
@@ -381,7 +381,7 @@ export function DetailsPanel({
           groups.map(([dir, fs]) => (
             <div key={dir}>
               {dir && (
-                <div className="flex items-center gap-2 px-4 py-1.5 text-[13px] text-sub">
+                <div className="flex items-center gap-2 px-4 py-1.5 text-sm text-sub">
                   <Folder size={14} aria-hidden /> <span className="truncate">{dir}</span>
                 </div>
               )}

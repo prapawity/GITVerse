@@ -92,7 +92,7 @@ export function WorkspaceInspectionPanel({ repoPath, onClose }: { repoPath: stri
           </p>
         )}
         {error && (
-          <p role="alert" className="p-4 text-sm text-[#f38ba8]">
+          <p role="alert" className="p-4 text-sm text-danger">
             {error}
           </p>
         )}

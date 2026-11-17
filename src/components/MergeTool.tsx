@@ -59,13 +59,13 @@ function Side({
   let k = -1;
   return (
     <div className="flex min-h-0 min-w-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-surface bg-mantle px-3 py-1.5 text-[13px]">
+      <div className="flex items-center gap-2 border-b border-surface bg-mantle px-3 py-1.5 text-sm">
         <span className="rounded px-1.5 font-semibold text-crust" style={{ background: tone }}>
           {side.toUpperCase()}
         </span>
         <span className="truncate">{label}</span>
       </div>
-      <div data-pane={side} className="relative min-h-0 flex-1 overflow-auto font-mono text-[13px] leading-[21px]">
+      <div data-pane={side} className="relative min-h-0 flex-1 overflow-auto font-mono text-sm leading-[21px]">
         <div className="w-max min-w-full py-1">
           {segs.map((s, i) => {
             if (s.kind === 'text')
@@ -99,7 +99,7 @@ function Side({
                 className={`my-1 border-y ${focus === idx ? 'outline outline-2 -outline-offset-2 outline-[#f5a623]' : ''}`}
                 style={{ borderColor: tone + '66', background: tone + (on ? '33' : '14') }}
               >
-                <label className="sticky left-0 flex cursor-pointer items-center gap-2 px-3 py-1 font-sans text-[12px]">
+                <label className="sticky left-0 flex cursor-pointer items-center gap-2 px-3 py-1 font-sans text-xs">
                   <input
                     type="checkbox"
                     ref={(el) => {
@@ -438,11 +438,11 @@ export function MergeTool({ path }: { path: string }) {
     >
       <div className="flex min-h-[48px] items-center gap-2 border-b border-surface bg-mantle px-4">
         <AlertTriangle size={15} className="shrink-0 text-[#f5a623]" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-[15px]" title={path}>
+        <span className="min-w-0 flex-1 truncate text-base" title={path}>
           {path}
         </span>
         {idx >= 0 && op && (
-          <span className="text-[12px] text-sub">
+          <span className="text-xs text-sub">
             file {idx + 1} of {op.files.length}
           </span>
         )}
@@ -457,7 +457,7 @@ export function MergeTool({ path }: { path: string }) {
       </div>
 
       {err && (
-        <div role="alert" className="p-4 text-[#f38ba8]">
+        <div role="alert" className="p-4 text-danger">
           {err}
         </div>
       )}
@@ -487,7 +487,7 @@ export function MergeTool({ path }: { path: string }) {
 
       {src != null && count > 0 && (
         <>
-          <div className="flex flex-wrap items-center gap-2 border-b border-surface/60 px-4 py-2 text-[13px]">
+          <div className="flex flex-wrap items-center gap-2 border-b border-surface/60 px-4 py-2 text-sm">
             <div className="flex items-center gap-1" role="group" aria-label="Conflict navigation">
               <button
                 onClick={() => go(-1)}
@@ -524,7 +524,7 @@ export function MergeTool({ path }: { path: string }) {
                 onClick={autoResolve}
                 disabled={aiBusy}
                 title={`${aiName} proposes a merged version of every conflict; nothing is saved until you press Save`}
-                className="flex min-h-[30px] items-center gap-1.5 rounded-md bg-gradient-to-r from-[#9333ea] to-[#6366f1] px-3 font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-50"
+                className="flex min-h-[30px] items-center gap-1.5 rounded-md border border-ai/40 bg-ai/10 px-3 font-semibold text-ai hover:bg-ai/20 disabled:opacity-50"
               >
                 {aiBusy ? (
                   <Loader2 size={14} className="animate-spin" aria-hidden />
@@ -578,7 +578,7 @@ export function MergeTool({ path }: { path: string }) {
               />
             </div>
             <div className="flex min-h-0 min-w-0 flex-col">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface bg-mantle px-3 py-1.5 text-[13px]">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface bg-mantle px-3 py-1.5 text-sm">
                 <span className="font-semibold">Output</span>
                 {edited ? (
                   <>
@@ -606,7 +606,7 @@ export function MergeTool({ path }: { path: string }) {
                     </button>
                   </>
                 ) : (
-                  <span className="flex flex-wrap items-center gap-3 text-[12px] text-sub" aria-label="Colour legend">
+                  <span className="flex flex-wrap items-center gap-3 text-xs text-sub" aria-label="Colour legend">
                     {(['a', 'b', 'ab', 'ai', 'none'] as const).map((k) => (
                       <span key={k} className="flex items-center gap-1">
                         <span
@@ -620,14 +620,14 @@ export function MergeTool({ path }: { path: string }) {
                   </span>
                 )}
                 <div className="ml-auto flex items-center gap-1" role="group" aria-label="Output conflict navigation">
-                  <span aria-live="polite" className="text-accent text-[#4cc2ff]">
+                  <span aria-live="polite" className="text-accent text-accent">
                     conflict {focus + 1} of {count}
                   </span>
                   <button
                     onClick={() => go(-1)}
                     aria-label="Previous conflict"
                     title="Previous conflict (Alt+↑)"
-                    className="rounded border border-[#4cc2ff]/60 p-1 text-[#4cc2ff] hover:bg-[#4cc2ff]/15"
+                    className="rounded border border-accent/60 p-1 text-accent hover:bg-accent/15"
                   >
                     <ChevronUp size={15} />
                   </button>
@@ -635,7 +635,7 @@ export function MergeTool({ path }: { path: string }) {
                     onClick={() => go(1)}
                     aria-label="Next conflict"
                     title="Next conflict (Alt+↓)"
-                    className="rounded border border-[#4cc2ff]/60 p-1 text-[#4cc2ff] hover:bg-[#4cc2ff]/15"
+                    className="rounded border border-accent/60 p-1 text-accent hover:bg-accent/15"
                   >
                     <ChevronDown size={15} />
                   </button>
@@ -643,7 +643,7 @@ export function MergeTool({ path }: { path: string }) {
               </div>
               {aiPicks.length > 0 && !edited && (
                 <div
-                  className="min-h-0 min-w-0 max-h-[50%] shrink-0 overflow-auto border-b border-[#f472b6]/30 bg-[#f472b6]/10 px-3 py-2 text-[13px]"
+                  className="min-h-0 min-w-0 max-h-[50%] shrink-0 overflow-auto border-b border-[#f472b6]/30 bg-[#f472b6]/10 px-3 py-2 text-sm"
                   role="region"
                   aria-label="AI resolution suggestions"
                 >
@@ -678,7 +678,7 @@ export function MergeTool({ path }: { path: string }) {
               )}
               <div
                 ref={outBox}
-                className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-[#161a21] font-mono text-[13px]"
+                className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-[#161a21] font-mono text-sm"
                 style={{ lineHeight: `${LH}px` }}
               >
                 <div className="flex min-h-full w-max min-w-full">
@@ -731,7 +731,7 @@ export function MergeTool({ path }: { path: string }) {
             </div>
           </div>
           <div className="flex items-center gap-3 border-t border-surface px-4 py-2.5">
-            <span className="text-[13px] text-sub">
+            <span className="text-sm text-sub">
               {!editMapped
                 ? 'Cannot map edits to conflicts. Reset to picks to continue.'
                 : unresolved
@@ -743,7 +743,7 @@ export function MergeTool({ path }: { path: string }) {
             <button
               onClick={save}
               disabled={unresolved || aiBusy}
-              className="ml-auto min-h-[38px] rounded-md bg-[#4cc2ff] px-4 font-medium text-crust disabled:opacity-40"
+              className="ml-auto min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
             >
               Save & mark resolved
             </button>

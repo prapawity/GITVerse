@@ -10,6 +10,11 @@
   --text: 205 214 244;
   --sub: 158 165 190;
   --graph: #1b1f27;
+  --accent: 76 194 255;
+  --danger: 243 139 168;
+  --warning: 249 226 175;
+  --success: 166 227 161;
+  --ai: 203 166 247;
 }
 :root[data-theme='midnight'] {
   --canvas: 15 28 48;
@@ -37,26 +42,12 @@
   --text: 29 41 57;
   --sub: 84 99 120;
   --graph: #f4f7fb;
+  --accent: 0 111 174;
+  --danger: 170 48 82;
+  --warning: 137 96 0;
+  --success: 37 118 53;
+  --ai: 112 64 176;
   color-scheme: light;
-}
-:root[data-theme='light'] .text-\[\#4cc2ff\] {
-  color: #006fae;
-}
-:root[data-theme='light'] .text-\[\#a6e3a1\] {
-  color: #257635;
-}
-:root[data-theme='light'] .text-\[\#fab387\] {
-  color: #a44711;
-}
-:root[data-theme='light'] .text-\[\#f38ba8\] {
-  color: #aa3052;
-}
-:root[data-theme='light'] .text-\[\#f9e2af\] {
-  color: #896000;
-}
-:root[data-theme='light'] .bg-\[\#4cc2ff\].text-crust,
-:root[data-theme='light'] .bg-\[\#cba6f7\].text-crust {
-  color: #132235;
 }
 html,
 body,
@@ -65,6 +56,9 @@ body,
   margin: 0;
 }
 body {
+  /* app chrome is not selectable; content (inputs, code, diffs, messages, paths) opts back in */
+  user-select: none;
+  -webkit-user-select: none;
   background: rgb(var(--canvas));
   color: rgb(var(--text));
   font-family: Inter, system-ui, sans-serif;
@@ -307,4 +301,18 @@ button {
 }
 .fade-in {
   animation: fade-in 160ms ease-out;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+pre,
+code,
+kbd,
+.font-mono,
+.xterm,
+.select-text,
+[role='alert'] {
+  user-select: text;
+  -webkit-user-select: text;
 }

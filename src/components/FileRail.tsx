@@ -32,7 +32,7 @@ export function FileRail({ onExpand }: { onExpand: () => void }) {
           className="flex min-h-[48px] w-11 flex-col items-center justify-center rounded-md text-sub hover:bg-surface hover:text-text"
         >
           <I size={19} aria-hidden />
-          <span className="text-[11px] font-semibold text-[#4cc2ff]">{n}</span>
+          <span className="text-2xs font-semibold text-accent">{n}</span>
         </button>
       ))}
     </nav>

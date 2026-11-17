@@ -201,7 +201,7 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
         {sessions.map((s, i) => (
           <div
             key={s.key}
-            className={`group flex h-[28px] items-center gap-1.5 rounded-md pl-2.5 pr-1 text-[13px] ${s === current ? 'bg-surface text-text' : 'text-sub hover:bg-surface/50'}`}
+            className={`group flex h-[28px] items-center gap-1.5 rounded-md pl-2.5 pr-1 text-sm ${s === current ? 'bg-surface text-text' : 'text-sub hover:bg-surface/50'}`}
           >
             <button
               role="tab"
