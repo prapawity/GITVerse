@@ -141,6 +141,7 @@ const R = '\x1e';
 
 export async function log(cwd: string, limit = 400, skip = 0): Promise<Commit[]> {
   const fmt = ['%H', '%P', '%D', '%an', '%ae', '%aI', '%s', '%b'].join('%x1f') + '%x1e';
+  const bases = (await stashEntries(cwd)).map((stash) => stash.baseHash).filter((hash): hash is string => !!hash);
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
     () => true,
     () => false,
@@ -156,6 +157,7 @@ export async function log(cwd: string, limit = 400, skip = 0): Promise<Commit[]>
     `-n${limit}`,
     `--format=${fmt}`,
     ...(hasHead ? ['HEAD'] : []),
+    ...bases,
   ]);
   return out
     .split(R)
@@ -651,6 +653,7 @@ export async function agentCheckpoints(cwd: string) {
 
 export async function historyPosition(cwd: string, hash: string) {
   if (!/^[0-9a-f]{40,64}$/i.test(hash)) throw new Error('Invalid commit ID.');
+  const bases = (await stashEntries(cwd)).map((stash) => stash.baseHash).filter((base): base is string => !!base);
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
     () => true,
     () => false,
@@ -662,6 +665,7 @@ export async function historyPosition(cwd: string, hash: string) {
     '--tags',
     '--topo-order',
     ...(hasHead ? ['HEAD'] : []),
+    ...bases,
   ]);
   const index = out.split('\n').indexOf(hash);
   if (index < 0) throw new Error('This commit is no longer in the repository history. Refresh and try again.');

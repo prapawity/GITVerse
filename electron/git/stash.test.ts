@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { log, refs, stashAction, stashDetail, stashFileAt, stashFileDiff, stashRename } from './git';
+import { historyPosition, log, refs, stashAction, stashDetail, stashFileAt, stashFileDiff, stashRename } from './git';
 import { layoutGraph, withStashes } from '../../src/lib/graphLayout';
 
 const run = promisify(execFile);
@@ -80,6 +80,66 @@ test('stash connection stays dashed through other commits until its base', () =>
   assert.ok(
     graph.rows[2].segments.some((segment) => segment.x1 === stashLane && segment.half === 'top' && segment.stash),
   );
+  assert.equal(graph.rows[2].col, graph.rows[1].col);
+  assert.notEqual(stashLane, graph.rows[2].col);
+  assert.equal(graph.rows[0].color, graph.rows[2].color);
+  assert.ok(
+    graph.rows
+      .flatMap((row) => row.segments)
+      .filter((segment) => segment.stash)
+      .every((segment) => segment.color === graph.rows[2].color),
+  );
+});
+
+test('stash rows appear at their base even when newer commits predate the stash', () => {
+  const commit = (hash: string, date: string) => ({
+    hash,
+    parents: [],
+    refs: [],
+    author: 'Test',
+    email: '',
+    date,
+    subject: hash,
+  });
+  const commits = [commit('newer', '2024-02-01'), commit('base', '2024-01-01')];
+  const stashes = [
+    { id: 'stash@{0}', hash: 'stash-new', baseHash: 'base', date: '2024-04-01', message: 'new' },
+    { id: 'stash@{1}', hash: 'stash-old', baseHash: 'base', date: '2024-03-01', message: 'old' },
+  ];
+  const combined = withStashes(commits, stashes);
+  assert.deepEqual(
+    combined.map((row) => row.hash),
+    ['newer', 'stash-new', 'stash-old', 'base'],
+  );
+  assert.deepEqual(withStashes(combined, stashes), combined);
+  assert.deepEqual(
+    withStashes(commits.slice(0, 1), stashes).map((row) => row.hash),
+    ['newer'],
+  );
+});
+
+test('history retains the original base of a stash after its branch moves', async (t) => {
+  const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-stash-base-'));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+  await command('init', '--quiet', '-b', 'main');
+  await command('config', 'user.name', 'Stash Test');
+  await command('config', 'user.email', 'stash@example.com');
+  await command('commit', '--allow-empty', '-m', 'Root');
+  const root = await command('rev-parse', 'HEAD');
+  await writeFile(path.join(cwd, 'file.txt'), 'base\n');
+  await command('add', 'file.txt');
+  await command('commit', '-m', 'Original base');
+  const base = await command('rev-parse', 'HEAD');
+  await writeFile(path.join(cwd, 'file.txt'), 'saved\n');
+  await command('stash', 'push', '-m', 'Saved');
+  await command('reset', '--hard', root);
+  const commits = await log(cwd);
+  const stash = (await refs(cwd)).stashes[0];
+  assert.equal(stash.baseHash, base);
+  assert.equal(commits[await historyPosition(cwd, base)].hash, base);
+  const rows = withStashes(commits, [stash]);
+  assert.equal(rows[rows.findIndex((row) => row.hash === base) - 1].hash, stash.hash);
 });
 
 test('renaming a stash updates its name and moves it to the top without changing its object', async (t) => {
@@ -101,6 +161,7 @@ test('renaming a stash updates its name and moves it to the top without changing
   const entries = (await refs(cwd)).stashes;
   assert.equal(entries[0].hash, old.hash);
   assert.equal(entries[0].message, 'Renamed stash');
+  assert.equal(withStashes(await log(cwd), entries).find((row) => row.hash === old.hash)?.stashBranch, 'main');
   assert.equal(entries[1].message, 'Newer stash');
   assert.equal(await stashFileAt(cwd, old.hash!, 'file.txt'), 'saved\n');
 });
@@ -149,6 +210,7 @@ test('all stash reflog entries appear as graph nodes with only their base parent
   for (const stash of references.stashes) {
     const row = combined.find((commit) => commit.hash === stash.hash)!;
     assert.equal(row.stashId, stash.id);
+    assert.equal(row.stashBranch, 'main');
     assert.deepEqual(row.parents, [base]);
     assert.ok(combined.indexOf(row) < combined.findIndex((commit) => commit.hash === base));
   }

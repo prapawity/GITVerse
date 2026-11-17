@@ -14,6 +14,7 @@ export interface Commit {
   subject: string;
   body?: string; // first non-empty line of the body
   stashId?: string;
+  stashBranch?: string;
 }
 
 export interface StashRef {

@@ -75,7 +75,8 @@ const matches = (r: GraphRow, q: string) => {
     c.hash.startsWith(q) ||
     c.subject.toLowerCase().includes(q) ||
     c.author.toLowerCase().includes(q) ||
-    !!c.stashId?.toLowerCase().includes(q)
+    !!c.stashId?.toLowerCase().includes(q) ||
+    !!c.stashBranch?.toLowerCase().includes(q)
   );
 };
 const initials = (n: string) =>
@@ -161,6 +162,7 @@ export function CommitGraph({
 }: Props) {
   const light = useSettings((s) => s.theme === 'light');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const navigated = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const anchor = useRef<string | null>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -207,9 +209,10 @@ export function CommitGraph({
   }, []);
 
   useEffect(() => {
-    if (!navigate) return;
+    if (!navigate || navigated.current === navigate.id) return;
     const index = rows.findIndex((row) => row.commit.hash === navigate.hash);
     if (index < 0 || !scrollRef.current) return;
+    navigated.current = navigate.id;
     const laneX = PAD + wipOffset + rows[index].col * LANE_W + LANE_W / 2;
     setGScroll((value) =>
       laneX < value
@@ -378,16 +381,26 @@ export function CommitGraph({
       const top = (i + wipRows) * ROW_H - scrollTop;
       const mid = top + ROW_H / 2;
       const cx = gx(showLines ? row.col : 0);
-      const lane = c.stashId ? (light ? '#a86400' : '#f5a623') : col(row.color, light);
+      const lane = col(row.color, light);
 
       if (c.stashId) {
         ctx.font = FONT;
-        ctx.fillStyle = light ? '#fff2d5' : '#40321b';
+        const prefix = '[Stash]';
+        const label = c.stashBranch
+          ? `: ${fitMiddle(ctx, c.stashBranch, REF_W - 35 - ctx.measureText(prefix).width)}`
+          : '';
+        const width = ctx.measureText(prefix + label).width + 16;
+        ctx.fillStyle = light ? '#f5f0e7' : '#292c2e';
         ctx.beginPath();
-        ctx.roundRect(8, mid - 10, Math.min(REF_W - 16, ctx.measureText(c.stashId).width + 16), 20, 3);
+        ctx.roundRect(8, mid - 10, width, 20, 3);
         ctx.fill();
-        ctx.fillStyle = lane;
-        ctx.fillText(c.stashId, 16, mid + 0.5);
+        ctx.fillStyle = light ? '#80603a' : '#c7a978';
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillText(prefix + label, 16, mid + 0.5);
       }
 
       if (c.refs.length) {
@@ -810,7 +823,7 @@ export function CommitGraph({
           {graphFocused && keyboardRow === -1
             ? `Local changes, ${changeCount} files, ${stagedCount} staged`
             : graphFocused && keyboardRow !== null && rows[keyboardRow]
-              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${commitTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, ${rows[keyboardRow].commit.stashId}` : ''}`
+              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${commitTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, stash ${rows[keyboardRow].commit.stashBranch ?? ''}` : ''}`
               : ''}
         </div>
         <div style={{ height: totalRows * ROW_H }} />
@@ -820,7 +833,7 @@ export function CommitGraph({
               <button
                 key={row.commit.hash}
                 type="button"
-                aria-label={`${row.commit.stashId}: ${row.commit.subject}`}
+                aria-label={`Stash${row.commit.stashBranch ? `: ${row.commit.stashBranch}` : ''}, ${row.commit.subject}`}
                 aria-pressed={selectedHash === row.commit.hash}
                 onClick={(event) => {
                   event.stopPropagation();
