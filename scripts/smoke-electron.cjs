@@ -165,11 +165,15 @@ if (!process.versions.electron) {
           'saved untracked\n',
         );
         assert.equal(
-          await win.webContents.executeJavaScript(`!!document.querySelector('button[aria-label^="stash@{0}:"]')`),
+          await win.webContents.executeJavaScript(
+            `!!document.querySelector('button[aria-label="Stash: main, Smoke stash fixture"]')`,
+          ),
           true,
           'Stash node should appear in the graph',
         );
-        await win.webContents.executeJavaScript(`document.querySelector('button[aria-label^="stash@{0}:"]').click()`);
+        await win.webContents.executeJavaScript(
+          `document.querySelector('button[aria-label="Stash: main, Smoke stash fixture"]').click()`,
+        );
         for (let attempt = 0; attempt < 50; attempt++) {
           if (await win.webContents.executeJavaScript(`!!document.querySelector('button[title="stash-new.txt"]')`))
             break;
