@@ -3,6 +3,7 @@ import { Download, Loader2 } from 'lucide-react';
 import type { AppUpdateCheck } from '../shared/updates';
 import { ReleasePicker } from './ReleasePicker';
 import { desktopApi } from '../platform/api';
+import { runUpdate } from '../lib/runUpdate';
 
 export function UpdateNotice({
   update,
@@ -18,7 +19,7 @@ export function UpdateNotice({
   const [showVersions, setShowVersions] = useState(false);
   const [error, setError] = useState('');
   const [download, setDownload] = useState<{ state: string; percent?: number } | null>(null);
-  const [manualInstall, setManualInstall] = useState(false);
+  const [manualInstall, setManualInstall] = useState<boolean | null>(null);
   useEffect(() => desktopApi().updates.onStatus(setDownload), []);
   useEffect(() => {
     let active = true;
@@ -26,6 +27,9 @@ export function UpdateNotice({
       .updates.environment()
       .then((environment: { manualInstall?: boolean }) => {
         if (active) setManualInstall(!!environment.manualInstall);
+      })
+      .catch(() => {
+        if (active) setError('Could not determine how to install updates. Please try again later.');
       });
     return () => {
       active = false;
@@ -91,20 +95,18 @@ export function UpdateNotice({
             Later
           </button>
           <button
-            disabled={opening || download?.state === 'downloading'}
+            disabled={opening || download?.state === 'downloading' || manualInstall === null}
             onClick={async () => {
-              if (download?.state === 'downloaded') {
-                try {
-                  await desktopApi().updates.install();
-                } catch (reason) {
-                  setError(String((reason as Error)?.message ?? reason));
-                }
-                return;
-              }
+              if (manualInstall === null) return;
               setOpening(true);
               setError('');
               try {
-                await desktopApi().updates.download(update.version);
+                await runUpdate(
+                  download?.state === 'downloaded',
+                  manualInstall,
+                  () => desktopApi().updates.download(update.version),
+                  () => desktopApi().updates.install(),
+                );
               } catch (reason) {
                 setDownload(null);
                 setError(String((reason as Error)?.message ?? reason));

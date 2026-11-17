@@ -30,13 +30,13 @@ updates like a development build and the Settings page offers the release list i
      - `GITVERSE_UPDATER_PUBKEY`: the full contents of `gitverse-updater.key.pub`
        (a repository secret with this name works too)
 
-That is all: the next run of **Release (Tauri preview)** builds signed bundles.
+That is all: the next run of **Release** builds signed bundles.
 
 ## How a release reaches users
 
 1. Push a `vX.Y.Z` tag that matches `package.json`.
-2. **Release** drafts the GitHub release; **Release (Tauri preview)** builds the installers, signs
-   the update bundles and uploads `latest.json` plus `GITVerse_X.Y.Z_<platform>.*` to that draft.
+2. **Release** builds the installers, signs the update bundles and creates a draft release with
+   `latest.json` plus `GITVerse_X.Y.Z_<platform>.*`.
 3. Publish the draft. Installed apps read
    `https://github.com/prapawity/GITVerse/releases/latest/download/latest.json`, find the new
    version, download and verify the bundle, install it and restart.
