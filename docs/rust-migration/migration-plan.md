@@ -71,7 +71,7 @@
 - [x] Data dir = `<appData>/GITVerse` เหมือน Electron → repo/ settings ใช้ร่วมกัน
 - [x] TS: `src/platform/tauri.ts` + `initPlatform()`; `main.tsx` init bridge ก่อน import stores; method ที่ยังไม่ port reject พร้อมข้อความชัดเจน; updates ทำตัวเป็น development build
 - [x] `vite.config.ts` ข้าม electron plugin เมื่อรันจาก Tauri CLI; scripts `dev:tauri`, `build:tauri`, `test:rust`
-- [ ] ทดสอบ `npm run dev:tauri` บน Windows/macOS
+- [x] ทดสอบ `npm run dev:tauri` บน Windows/macOS — macOS (Apple Silicon, 2026-11-17): build + เปิดแอปได้, migrate keychain สำเร็จ, `npm run test:rust` และ `npm test` ผ่านทั้งหมด
 - [ ] Drag-and-drop โฟลเดอร์ (Tauri ใช้ drag-drop event แทน `File.path`)
 
 ## Phase 2 — สถานะ (2026-11-16)
