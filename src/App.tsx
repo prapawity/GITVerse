@@ -79,7 +79,7 @@ function ToolBtn({
       aria-label={label}
       aria-busy={busy}
       title={label}
-      className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[60px] items-center justify-center gap-1 rounded-md text-xs ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
+      className={`flex min-h-[44px] w-10 flex-col xl:w-11 min-[1400px]:min-h-[52px] min-[1400px]:w-[60px] items-center justify-center gap-1 rounded-md text-xs ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
     >
       {busy ? <Spinner size={22} className="text-accent" /> : icon}
       <span className="hidden min-[1400px]:block">{label}</span>
@@ -786,7 +786,7 @@ export default function App() {
           {/* toolbar */}
           <header className="glass-toolbar flex shrink-0 flex-wrap items-center gap-x-1 gap-y-1 border-b border-surface bg-mantle px-3 py-2 sm:px-5">
             <RepoBranchDropdown current={current} />
-            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block xl:mx-5" aria-hidden />
+            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block xl:mx-5" aria-hidden />
             <div className="flex shrink-0" role="group" aria-label="Index history">
               <span title="Undo the last stage or unstage action">
                 <ToolBtn
@@ -809,7 +809,7 @@ export default function App() {
                 />
               </span>
             </div>
-            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block" aria-hidden />
+            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block" aria-hidden />
             <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Remote and branch actions">
               <div className="flex items-stretch rounded-md border border-surface">
                 <ToolBtn
@@ -903,7 +903,7 @@ export default function App() {
                 />
               </span>
             </div>
-            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block" aria-hidden />
+            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block" aria-hidden />
             <button
               onClick={() => {
                 setWorkspaceInspectionOpen(false);
@@ -913,7 +913,7 @@ export default function App() {
               aria-pressed={recoveryOpen}
               aria-label="Recovery"
               title="Recovery history"
-              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${recoveryOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
+              className={`flex min-h-[44px] w-10 xl:w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${recoveryOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <History size={21} aria-hidden />
               <span className="hidden min-[1400px]:block">Recovery</span>
@@ -927,7 +927,7 @@ export default function App() {
               aria-pressed={workspaceInspectionOpen}
               aria-label="Workspace"
               title="Remotes and worktrees"
-              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${workspaceInspectionOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
+              className={`flex min-h-[44px] w-10 xl:w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${workspaceInspectionOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <GitFork size={21} aria-hidden />
               <span className="hidden min-[1400px]:block">Workspace</span>
@@ -937,23 +937,23 @@ export default function App() {
               aria-pressed={termOpen}
               aria-label="Terminal"
               title="Terminal (Ctrl+`)"
-              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${termOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
+              className={`flex min-h-[44px] w-10 xl:w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${termOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <SquareTerminal size={22} aria-hidden />
               <span className="hidden min-[1400px]:block">Terminal</span>
             </button>
-            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block" aria-hidden />
+            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block" aria-hidden />
             <button
               onClick={() => setAiOpen((v) => !v)}
               aria-pressed={aiOpen}
               aria-label="Ask AI"
               title={`Ask AI (${shortcutModifier}J)`}
-              className={`flex min-h-[44px] w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs font-semibold text-ai hover:bg-ai/10 ${aiOpen ? 'bg-ai/15 ring-1 ring-ai/60' : ''}`}
+              className={`flex min-h-[44px] w-10 xl:w-11 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs font-semibold text-ai hover:bg-ai/10 ${aiOpen ? 'bg-ai/15 ring-1 ring-ai/60' : ''}`}
             >
               <Sparkles size={22} aria-hidden />
               <span className="hidden min-[1400px]:block">Ask AI</span>
             </button>
-            <div className="relative ml-auto min-w-[132px] flex-1 sm:max-w-72">
+            <div className="relative ml-auto min-w-[120px] flex-1 sm:max-w-72">
               <Search size={13} className="absolute left-2.5 top-3 text-sub" aria-hidden />
               <input
                 ref={searchRef}
