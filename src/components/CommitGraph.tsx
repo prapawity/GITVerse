@@ -18,6 +18,18 @@ const LIGHT_PALETTE = ['#087eaa', '#8334c8', '#628b08', '#a86400', '#ba2675', '#
 const col = (i: number, light: boolean) => (light ? LIGHT_PALETTE : PALETTE)[i % PALETTE.length];
 const FONT = '13px Inter, system-ui, sans-serif';
 
+/** Time column: relative within the last 24 hours, otherwise the date ("17 Nov", or "3 Mar 2025" in another year). */
+export const commitTime = (iso: string) => {
+  const date = new Date(iso);
+  if (Date.now() - date.getTime() < 86400e3) return relTime(iso);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+};
+
 export const relTime = (iso: string) => {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
   if (s < 3600) return 'just now';
@@ -76,7 +88,7 @@ const initials = (n: string) =>
     .toUpperCase() || '?';
 
 const META_AUTHOR_W = 110;
-const META_TIME_W = 72;
+const META_TIME_W = 88;
 
 /** Shortens from the middle so both the prefix (codex/) and the distinguishing end of a branch name stay visible. */
 function fitMiddle(ctx: CanvasRenderingContext2D, text: string, max: number) {
@@ -524,7 +536,7 @@ export function CommitGraph({
         const metaX = size.w - 12 - metaW + 12;
         ctx.fillStyle = light ? '#586b81' : '#a2afbf';
         ctx.fillText(fit(ctx, c.author, META_AUTHOR_W), metaX, mid + 0.5);
-        const when = relTime(c.date);
+        const when = commitTime(c.date);
         ctx.fillText(when, size.w - 14 - ctx.measureText(when).width, mid + 0.5);
       }
     }
@@ -791,7 +803,7 @@ export function CommitGraph({
           {graphFocused && keyboardRow === -1
             ? `Local changes, ${changeCount} files, ${stagedCount} staged`
             : graphFocused && keyboardRow !== null && rows[keyboardRow]
-              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${relTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, ${rows[keyboardRow].commit.stashId}` : ''}`
+              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${commitTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, ${rows[keyboardRow].commit.stashId}` : ''}`
               : ''}
         </div>
         <div style={{ height: totalRows * ROW_H }} />
