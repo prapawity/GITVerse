@@ -617,7 +617,7 @@ export function CommitGraph({
           />
         </div>
         <div className={headCls + ' min-w-0 flex-1 justify-between gap-2'}>
-          <span>Commit message</span>
+          <span className="shrink-0 whitespace-nowrap">Commit message</span>
           {upstream && (
             <span
               className="truncate normal-case tracking-normal"

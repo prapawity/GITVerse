@@ -961,7 +961,7 @@ export default function App() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search commits"
-                className="w-full rounded-md border border-transparent bg-surface py-2 pl-8 pr-3 min-[1400px]:pr-16 outline-none placeholder:text-sub focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
+                className="w-full rounded-md border border-transparent bg-surface py-2 pl-8 pr-3 min-[1600px]:pr-16 outline-none placeholder:text-sub focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
               />
               {search ? (
                 <button
@@ -972,7 +972,7 @@ export default function App() {
                   <X size={14} />
                 </button>
               ) : (
-                <kbd className="absolute right-2 top-2 hidden rounded border border-sub/40 px-1.5 text-2xs text-sub min-[1400px]:block">
+                <kbd className="absolute right-2 top-2 hidden rounded border border-sub/40 px-1.5 text-2xs text-sub min-[1600px]:block">
                   {shortcutModifier}F
                 </kbd>
               )}
