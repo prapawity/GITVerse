@@ -70,6 +70,14 @@
         "subject": "Merge branch 'feature/login'"
       },
       {
+        "hash": "bbb599bb87f351c65576034282edf1172e1b1e43",
+        "parents": [
+          "91c715e205d487e2b1de6f2a295ab25fe528f877",
+          "a09ece8d194bc68dc38cbc13e94f265015b85b1c"
+        ],
+        "subject": "Merge branch 'feature/login'"
+      },
+      {
         "hash": "a09ece8d194bc68dc38cbc13e94f265015b85b1c",
         "parents": [
           "4930805154d05c106bbfe081cefa3f1f0f453cff"
