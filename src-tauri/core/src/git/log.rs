@@ -120,6 +120,7 @@ pub fn parse_log(out: &str) -> Vec<Commit> {
 }
 
 pub async fn log(git: &GitRunner, cwd: &Path, limit: u64, skip: u64) -> Result<Vec<Commit>> {
+    let stashes = super::refs::stash_entries(git, cwd).await?;
     let fmt = format!(
         "{}%x1e",
         ["%H", "%P", "%D", "%an", "%ae", "%aI", "%s", "%b"].join("%x1f")
@@ -144,6 +145,12 @@ pub async fn log(git: &GitRunner, cwd: &Path, limit: u64, skip: u64) -> Result<V
     if has_head {
         args.push("HEAD");
     }
+    args.extend(
+        stashes
+            .iter()
+            .map(|stash| stash.base_hash.as_str())
+            .filter(|hash| !hash.is_empty()),
+    );
     Ok(parse_log(&git.run(cwd, &args, RunOpts::default()).await?))
 }
 
@@ -156,6 +163,7 @@ pub async fn history_position(git: &GitRunner, cwd: &Path, hash: &str) -> Result
     if !is_object_id(hash) {
         return Err(AppError::Invalid("Invalid commit ID.".into()));
     }
+    let stashes = super::refs::stash_entries(git, cwd).await?;
     let has_head = git.succeeds(cwd, &["rev-parse", "--verify", "HEAD"]).await;
     let mut args = vec![
         "rev-list",
@@ -167,6 +175,12 @@ pub async fn history_position(git: &GitRunner, cwd: &Path, hash: &str) -> Result
     if has_head {
         args.push("HEAD");
     }
+    args.extend(
+        stashes
+            .iter()
+            .map(|stash| stash.base_hash.as_str())
+            .filter(|hash| !hash.is_empty()),
+    );
     let out = git.run(cwd, &args, RunOpts::default()).await?;
     out.split('\n')
         .position(|line| line == hash)

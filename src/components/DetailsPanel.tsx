@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileMinus, FilePen, FilePlus, FileSymlink, Folder, List, ListTree } from 'lucide-react';
+import { Archive, FileMinus, FilePen, FilePlus, FileSymlink, Folder, List, ListTree } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { DetailsSkeleton, Skeleton } from './Loading';
 import type { StashDetail, StashRef } from '../shared/types';
 import { askConfirm } from './Dialogs';
 import { desktopApi } from '../platform/api';
+import { stashBranch } from '../lib/graphLayout';
 
 export type ChangedFile = { status: string; path: string; oldPath?: string; untracked?: boolean };
 type F = ChangedFile;
@@ -108,7 +109,6 @@ export function DetailsPanel({
         email: saved?.email ?? stash.email ?? '',
         date: saved?.date ?? stash.date ?? '',
         subject: stash.message,
-        stashId: saved?.id ?? stash.id,
       }
     : graph.rows.find((r) => r.commit.hash === selectedHash)?.commit;
 
@@ -219,7 +219,12 @@ export function DetailsPanel({
         <span>
           {stash ? 'stash' : 'commit'}:{' '}
           <span className="font-mono text-base font-semibold text-text">{c.hash.slice(0, 6)}</span>
-          {stash && <span className="ml-2 font-mono text-[#f5a623]">{c.stashId}</span>}
+          {stash && (
+            <span className="ml-2 inline-flex items-center gap-1.5 rounded-sm border border-dashed border-[#c7a978]/50 bg-[#c7a978]/5 px-2 py-0.5 text-xs font-medium text-[#c7a978]">
+              <Archive size={13} aria-hidden="true" />
+              {stashBranch(stash) ? `[Stash]: ${stashBranch(stash)}` : '[Stash]'}
+            </span>
+          )}
         </span>
         <span>
           {stash ? 'base' : 'parent'}:{' '}
