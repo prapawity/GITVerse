@@ -109,6 +109,15 @@ if (!process.versions.electron) {
           );
         };
         await checkRestored();
+        const panelLayout = await win.webContents.executeJavaScript(`(() => {
+          const group = document.querySelector('[data-group]');
+          const panels = group && Array.from(group.children).filter((element) => element.hasAttribute('data-panel'));
+          return panels?.map((panel) => panel.getBoundingClientRect().width / group.getBoundingClientRect().width);
+        })()`);
+        assert.ok(
+          panelLayout?.length >= 3 && panelLayout.every((width) => width > 0.1),
+          'Panels should retain their percentage-based sizes',
+        );
         assert.equal(app.isPackaged, false);
         const updateItem = Menu.getApplicationMenu().getMenuItemById('check-for-updates');
         assert.ok(updateItem, 'Update menu item should exist');
