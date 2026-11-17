@@ -48,7 +48,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
     'flex min-h-[38px] w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-surface/70 focus-visible:bg-surface';
 
   return (
-    <div ref={container} className="flex min-w-0 max-w-[300px] flex-col items-start gap-0.5">
+    <div ref={container} className="flex min-w-0 max-w-[320px] flex-col items-start gap-1">
       <div className="relative min-w-0 max-w-full">
         <button
           ref={repoButton}
@@ -59,10 +59,10 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           title={repoPath ?? undefined}
           className="block max-w-full rounded px-1 py-0.5 text-left hover:bg-surface/50"
         >
-          <span className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-tight">
-            <FolderOpen size={15} className="shrink-0 text-sub" aria-hidden />
+          <span className="flex min-w-0 items-center gap-2 text-lg font-semibold leading-tight">
+            <FolderOpen size={18} className="shrink-0 text-sub" aria-hidden />
             <span className="truncate">{repoPath?.split(/[\\/]/).filter(Boolean).pop() ?? '—'}</span>
-            <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
+            <ChevronDown size={16} className="shrink-0 text-sub" aria-hidden />
           </span>
         </button>
         {open === 'repo' && (
@@ -129,10 +129,10 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           title={current}
           className="block max-w-full rounded px-1 py-0.5 text-left hover:bg-surface/50 disabled:opacity-50"
         >
-          <span className="flex min-w-0 items-center gap-1.5 text-sm leading-tight text-accent">
-            <GitBranch size={15} className="shrink-0" aria-hidden />
+          <span className="flex min-w-0 items-center gap-2 text-base font-medium leading-tight text-accent">
+            <GitBranch size={17} className="shrink-0" aria-hidden />
             <span className="truncate">{current}</span>
-            <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
+            <ChevronDown size={16} className="shrink-0 text-sub" aria-hidden />
           </span>
         </button>
         {open === 'branch' && (
