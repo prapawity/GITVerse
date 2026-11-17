@@ -80,6 +80,9 @@ let localChanges = new URLSearchParams(location.search).has('changes')
         : f,
     );
   },
+  trackedStage: async (repo: string, action: 'stage' | 'unstage', paths: string[]) =>
+    (window as any).gitApi[action](repo, paths),
+  indexUndoState: async () => ({ undo: false, redo: false }),
   commit: async () => {
     localChanges = localChanges.filter((f) => f.index === ' ' || f.index === '?');
   },
@@ -111,8 +114,8 @@ let localChanges = new URLSearchParams(location.search).has('changes')
       { status: 'A', path: 'docs/readme.md' },
     ],
   }),
-  commitFileDiff: async (_repo: string, _hash: string, path: string) =>
-    `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-Old message\n+Updated message\n`,
+  // a multi-hunk diff so commit details look like a real change in screenshots
+  commitFileDiff: async () => DIFF,
   workingFileDiff: async () => DIFF,
   pushInfo: async () => ({
     branch: 'feature/workspace/DEMO-18562',
