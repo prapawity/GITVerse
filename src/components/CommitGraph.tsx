@@ -18,6 +18,18 @@ const LIGHT_PALETTE = ['#087eaa', '#8334c8', '#628b08', '#a86400', '#ba2675', '#
 const col = (i: number, light: boolean) => (light ? LIGHT_PALETTE : PALETTE)[i % PALETTE.length];
 const FONT = '13px Inter, system-ui, sans-serif';
 
+/** Time column: relative within the last 24 hours, otherwise the date ("17 Nov", or "3 Mar 2025" in another year). */
+export const commitTime = (iso: string) => {
+  const date = new Date(iso);
+  if (Date.now() - date.getTime() < 86400e3) return relTime(iso);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+};
+
 export const relTime = (iso: string) => {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
   if (s < 3600) return 'just now';
@@ -76,7 +88,7 @@ const initials = (n: string) =>
     .toUpperCase() || '?';
 
 const META_AUTHOR_W = 110;
-const META_TIME_W = 72;
+const META_TIME_W = 88;
 
 /** Shortens from the middle so both the prefix (codex/) and the distinguishing end of a branch name stay visible. */
 function fitMiddle(ctx: CanvasRenderingContext2D, text: string, max: number) {
@@ -501,7 +513,10 @@ export function CommitGraph({
       // message: subject, then dim body preview
       ctx.font = FONT;
       const subjW = ctx.measureText(c.subject).width;
-      const total = subjW + (c.hash === headHash ? 44 : 0);
+      // when the window is too narrow for the fixed author/time column, they follow the subject and scroll with it
+      const inlineMeta = metaW ? '' : `${c.author} · ${commitTime(c.date)}`;
+      const inlineW = inlineMeta ? ctx.measureText(inlineMeta).width + 20 : 0;
+      const total = subjW + (c.hash === headHash ? 44 : 0) + inlineW;
       if (total > maxMsgW.current + 1) {
         maxMsgW.current = total;
         grew = true;
@@ -519,12 +534,16 @@ export function CommitGraph({
       }
       const prefixW = ctx.measureText(prefix).width;
       ctx.fillText(c.subject, msgX - ms + prefixW, mid + 0.5);
+      if (inlineMeta) {
+        ctx.fillStyle = light ? '#586b81' : '#a2afbf';
+        ctx.fillText(inlineMeta, msgX - ms + prefixW + subjW + 20, mid + 0.5);
+      }
       ctx.restore();
       if (metaW) {
         const metaX = size.w - 12 - metaW + 12;
         ctx.fillStyle = light ? '#586b81' : '#a2afbf';
         ctx.fillText(fit(ctx, c.author, META_AUTHOR_W), metaX, mid + 0.5);
-        const when = relTime(c.date);
+        const when = commitTime(c.date);
         ctx.fillText(when, size.w - 14 - ctx.measureText(when).width, mid + 0.5);
       }
     }
@@ -791,7 +810,7 @@ export function CommitGraph({
           {graphFocused && keyboardRow === -1
             ? `Local changes, ${changeCount} files, ${stagedCount} staged`
             : graphFocused && keyboardRow !== null && rows[keyboardRow]
-              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${relTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, ${rows[keyboardRow].commit.stashId}` : ''}`
+              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${commitTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, ${rows[keyboardRow].commit.stashId}` : ''}`
               : ''}
         </div>
         <div style={{ height: totalRows * ROW_H }} />
@@ -838,38 +857,54 @@ export function CommitGraph({
             return (
               <div className="pointer-events-none sticky z-10 h-0" style={{ bottom: 8 }}>
                 <div
-                  role="scrollbar"
-                  aria-orientation="horizontal"
-                  aria-label="Scroll commit messages"
-                  aria-valuenow={Math.round(ms)}
-                  aria-valuemin={0}
-                  aria-valuemax={Math.round(maxMsgScroll)}
-                  className="pointer-events-auto absolute h-2 cursor-grab rounded-full bg-white/30 hover:bg-white/50 active:cursor-grabbing"
-                  style={{ left, width: thumb, top: -8 }}
+                  className="pointer-events-auto absolute h-4 cursor-pointer"
+                  style={{ left: msgX, width: track, top: -12 }}
                   onClick={stop}
                   onDoubleClick={stop}
                   onContextMenu={stop}
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    const x0 = e.clientX,
-                      s0 = ms;
-                    const el = e.currentTarget;
-                    const move = (ev: PointerEvent) =>
-                      setMsgScroll(
-                        Math.max(
-                          0,
-                          Math.min(maxMsgScroll, s0 + ((ev.clientX - x0) / Math.max(1, track - thumb)) * maxMsgScroll),
-                        ),
-                      );
-                    const up = () => {
-                      el.removeEventListener('pointermove', move);
-                      el.removeEventListener('pointerup', up);
-                    };
-                    el.addEventListener('pointermove', move);
-                    el.addEventListener('pointerup', up);
+                    if ((e.target as HTMLElement).getAttribute('role') === 'scrollbar') return;
+                    const r = e.currentTarget.getBoundingClientRect();
+                    const ratio = (e.clientX - r.left - thumb / 2) / Math.max(1, track - thumb);
+                    setMsgScroll(Math.max(0, Math.min(maxMsgScroll, ratio * maxMsgScroll)));
                   }}
-                />
+                >
+                  <div className="absolute inset-x-0 bottom-1 h-2 rounded-full bg-white/10" />
+                  <div
+                    role="scrollbar"
+                    aria-orientation="horizontal"
+                    aria-label="Scroll commit messages"
+                    aria-valuenow={Math.round(ms)}
+                    aria-valuemin={0}
+                    aria-valuemax={Math.round(maxMsgScroll)}
+                    className="absolute bottom-1 h-2 cursor-grab rounded-full bg-white/40 hover:bg-white/60 active:cursor-grabbing"
+                    style={{ left: left - msgX, width: thumb }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      const x0 = e.clientX,
+                        s0 = ms;
+                      const el = e.currentTarget;
+                      const move = (ev: PointerEvent) =>
+                        setMsgScroll(
+                          Math.max(
+                            0,
+                            Math.min(
+                              maxMsgScroll,
+                              s0 + ((ev.clientX - x0) / Math.max(1, track - thumb)) * maxMsgScroll,
+                            ),
+                          ),
+                        );
+                      const up = () => {
+                        el.removeEventListener('pointermove', move);
+                        el.removeEventListener('pointerup', up);
+                      };
+                      el.addEventListener('pointermove', move);
+                      el.addEventListener('pointerup', up);
+                    }}
+                  />
+                </div>
               </div>
             );
           })()}
