@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, FolderOpen, GitBranch, Search } from 'lucide-react';
+import { Check, ChevronDown, FolderOpen, GitBranch, Search } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 
@@ -48,8 +48,8 @@ export function RepoBranchDropdown({ current }: { current: string }) {
     'flex min-h-[38px] w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-surface/70 focus-visible:bg-surface';
 
   return (
-    <div ref={container} className="flex min-w-0 items-center">
-      <div className="relative min-w-0 max-w-[220px]">
+    <div ref={container} className="flex min-w-0 max-w-[300px] flex-col items-start gap-0.5">
+      <div className="relative min-w-0 max-w-full">
         <button
           ref={repoButton}
           onClick={() => toggle('repo')}
@@ -57,10 +57,10 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           aria-expanded={open === 'repo'}
           aria-controls="repository-list"
           title={repoPath ?? undefined}
-          className="block max-w-full rounded px-1 text-left hover:bg-surface/50"
+          className="block max-w-full rounded px-1 py-0.5 text-left hover:bg-surface/50"
         >
-          <span className="block text-xs text-sub">repository</span>
-          <span className="flex min-w-0 items-center gap-1 text-lg font-semibold leading-tight">
+          <span className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-tight">
+            <FolderOpen size={15} className="shrink-0 text-sub" aria-hidden />
             <span className="truncate">{repoPath?.split(/[\\/]/).filter(Boolean).pop() ?? '—'}</span>
             <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
           </span>
@@ -118,8 +118,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           </div>
         )}
       </div>
-      <ChevronRight size={18} className="mx-2 shrink-0 text-sub" aria-hidden />
-      <div className="relative min-w-0 max-w-[320px]">
+      <div className="relative min-w-0 max-w-full">
         <button
           ref={branchButton}
           disabled={!repoPath || loading}
@@ -128,10 +127,10 @@ export function RepoBranchDropdown({ current }: { current: string }) {
           aria-expanded={open === 'branch'}
           aria-controls="branch-list"
           title={current}
-          className="block max-w-full rounded px-1 text-left hover:bg-surface/50 disabled:opacity-50"
+          className="block max-w-full rounded px-1 py-0.5 text-left hover:bg-surface/50 disabled:opacity-50"
         >
-          <span className="block text-xs text-sub">branch</span>
-          <span className="flex min-w-0 items-center gap-1 text-lg font-semibold leading-tight">
+          <span className="flex min-w-0 items-center gap-1.5 text-sm leading-tight text-accent">
+            <GitBranch size={15} className="shrink-0" aria-hidden />
             <span className="truncate">{current}</span>
             <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
           </span>
