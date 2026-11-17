@@ -18,6 +18,7 @@ import {
   Undo2,
   Upload,
   X,
+  ListOrdered,
 } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { CommitGraph } from './components/CommitGraph';
@@ -885,6 +886,22 @@ export default function App() {
                 busy={busy === 'stashPop'}
                 onClick={() => action('stashPop')}
               />
+              <span
+                title={
+                  operation
+                    ? 'Finish the current Git operation first'
+                    : selectedHash
+                      ? 'Plan a rebase onto the selected commit'
+                      : 'Select a commit to plan a rebase'
+                }
+              >
+                <ToolBtn
+                  icon={<ListOrdered size={21} />}
+                  label="Rebase"
+                  disabled={dis || !selectedHash || !!operation}
+                  onClick={() => setRebasePreviewOpen(true)}
+                />
+              </span>
             </div>
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block" aria-hidden />
             <button
@@ -915,12 +932,6 @@ export default function App() {
               <GitFork size={21} aria-hidden />
               <span className="hidden min-[1400px]:block">Workspace</span>
             </button>
-            <ToolBtn
-              icon={<History size={21} />}
-              label="Rebase"
-              disabled={dis || !selectedHash || !!operation}
-              onClick={() => setRebasePreviewOpen(true)}
-            />
             <button
               onClick={() => setTermOpen((v) => !v)}
               aria-pressed={termOpen}
@@ -931,6 +942,7 @@ export default function App() {
               <SquareTerminal size={22} aria-hidden />
               <span className="hidden min-[1400px]:block">Terminal</span>
             </button>
+            <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block" aria-hidden />
             <button
               onClick={() => setAiOpen((v) => !v)}
               aria-pressed={aiOpen}
@@ -949,7 +961,7 @@ export default function App() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search commits"
-                className="w-full rounded-md border border-transparent bg-surface py-2 pl-8 pr-16 outline-none placeholder:text-sub focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
+                className="w-full rounded-md border border-transparent bg-surface py-2 pl-8 pr-3 min-[1400px]:pr-16 outline-none placeholder:text-sub focus:border-accent focus-visible:ring-2 focus-visible:ring-accent"
               />
               {search ? (
                 <button
@@ -960,7 +972,7 @@ export default function App() {
                   <X size={14} />
                 </button>
               ) : (
-                <kbd className="absolute right-2 top-2 rounded border border-sub/40 px-1.5 text-2xs text-sub">
+                <kbd className="absolute right-2 top-2 hidden rounded border border-sub/40 px-1.5 text-2xs text-sub min-[1400px]:block">
                   {shortcutModifier}F
                 </kbd>
               )}

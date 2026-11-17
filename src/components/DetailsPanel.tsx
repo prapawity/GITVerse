@@ -259,6 +259,7 @@ export function DetailsPanel({
           <>
             <input
               aria-label="Stash name"
+              title="Click to rename"
               maxLength={200}
               value={editingStash ? stashName : stash.message}
               onFocus={() => {
@@ -269,7 +270,7 @@ export function DetailsPanel({
                 setStashName(event.target.value);
                 setEditingStash(true);
               }}
-              className="w-full rounded border border-surface bg-mantle px-3 py-2 text-base outline-none focus:border-accent"
+              className={`-mx-2 w-[calc(100%+1rem)] rounded border px-2 py-1 text-lg font-semibold outline-none ${editingStash ? 'border-accent bg-mantle' : 'border-transparent bg-transparent hover:border-surface'}`}
             />
             {stashEditError && (
               <p role="alert" className="mt-2 text-sm text-danger">

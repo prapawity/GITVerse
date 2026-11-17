@@ -66,7 +66,7 @@ function Row({
       <div className="min-w-0">
         {children}
         {hint && <p className="mt-2 max-w-[640px] text-sm leading-relaxed text-sub">{hint}</p>}
-        {warn && <p className="mt-1.5 flex max-w-[640px] gap-1.5 text-sm text-warning">{warn}</p>}
+        {warn && <p className="mt-1.5 flex max-w-[640px] gap-1.5 text-sm text-sub">{warn}</p>}
       </div>
     </div>
   );
@@ -110,9 +110,14 @@ function Check({
       <input
         id={id}
         type="checkbox"
+        role="switch"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-[18px] w-[18px] accent-accent"
+        className="peer sr-only"
+      />
+      <span
+        aria-hidden
+        className="relative h-5 w-9 shrink-0 rounded-full bg-surface transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-sub after:transition-transform peer-checked:bg-accent peer-checked:after:translate-x-4 peer-checked:after:bg-crust peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent motion-reduce:transition-none motion-reduce:after:transition-none"
       />
       {children && <span className="text-sm text-sub">{children}</span>}
     </label>
@@ -125,12 +130,14 @@ function Num({
   value,
   min,
   max,
+  unit,
   onCommit,
 }: {
   id: string;
   value: number;
   min: number;
   max: number;
+  unit?: string;
   onCommit: (n: number) => void;
 }) {
   const [text, setText] = useState(String(value));
@@ -140,7 +147,7 @@ function Num({
     onCommit(n);
     setText(String(n));
   };
-  return (
+  const field = (
     <input
       id={id}
       inputMode="numeric"
@@ -148,8 +155,16 @@ function Num({
       onChange={(e) => setText(e.target.value.replace(/[^\d]/g, ''))}
       onBlur={commit}
       onKeyDown={(e) => e.key === 'Enter' && commit()}
-      className={input}
+      className={`${input} !w-28 text-right tabular-nums`}
     />
+  );
+  return unit ? (
+    <span className="inline-flex items-center gap-2">
+      {field}
+      <span className="text-sm text-sub">{unit}</span>
+    </span>
+  ) : (
+    field
   );
 }
 
@@ -206,6 +221,21 @@ function SecretField({
   );
 }
 
+/** Readable name for a model id: claude-opus-5-5 → Claude Opus 5.5, gpt-5.1-mini → GPT-5.1 Mini. */
+function modelLabel(id: string) {
+  const parts = id.split('-');
+  const out: string[] = [];
+  for (const p of parts) {
+    const prev = out[out.length - 1];
+    if (/^\d+$/.test(p) && prev && /\d$/.test(prev)) out[out.length - 1] = `${prev}.${p}`;
+    else if (/^gpt$/i.test(p)) out.push('GPT');
+    else if (/^o\d/.test(p)) out.push(p);
+    else if (/^\d/.test(p) && prev && /^GPT$/.test(prev)) out[out.length - 1] = `${prev}-${p}`;
+    else out.push(p.charAt(0).toUpperCase() + p.slice(1));
+  }
+  return out.join(' ');
+}
+
 function ModelPick({
   id,
   value,
@@ -245,7 +275,7 @@ function ModelPick({
           {value && list && !list.includes(value) && <option value={value}>{value}</option>}
           {list?.map((m) => (
             <option key={m} value={m}>
-              {m}
+              {modelLabel(m)}
             </option>
           ))}
         </select>
@@ -375,18 +405,12 @@ function AiSettings() {
 
   return (
     <div className="mx-auto max-w-[920px] space-y-6 pb-4">
-      <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 text-accent">
-          <Sparkles size={22} aria-hidden />
-        </div>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent">Preferences</p>
-          <h1 className="text-2xl font-semibold leading-tight">AI Assistant</h1>
-          <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-sub">
-            Connect your own account to chat about your repository and get help resolving conflicts. Actions that change
-            the repository always require your approval.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold">AI Assistant</h1>
+        <p className="mt-1 max-w-[700px] text-sm text-sub">
+          Connect your own account to chat about your repository and get help resolving conflicts. Actions that change
+          the repository always require your approval.
+        </p>
       </div>
       {!ai && <p className="text-warning">The AI assistant is available in the desktop app.</p>}
 
@@ -428,7 +452,9 @@ function AiSettings() {
           </div>
         </div>
         <AiRow label="Model">
-          <div className="font-mono text-sm">{AI_MODEL}</div>
+          <div className="text-sm" title={AI_MODEL}>
+            {modelLabel(AI_MODEL)}
+          </div>
         </AiRow>
         <AiRow
           label="Anthropic API key"
@@ -804,37 +830,51 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                   <Check id="auto-update" checked={st.autoCheckUpdates} onChange={set('autoCheckUpdates')} />
                 </Row>
                 <Row
-                  label="Auto-Fetch Interval"
+                  label="Auto-fetch interval"
                   htmlFor="af"
                   hint="In minutes, between 0 and 60 (0 disables auto-fetch). Fetches from every remote in the background."
                   warn="If a repository has many remotes, frequent fetching may impact performance."
                 >
-                  <Num id="af" value={st.autoFetchMinutes} min={0} max={60} onCommit={set('autoFetchMinutes')} />
+                  <Num
+                    id="af"
+                    unit="minutes"
+                    value={st.autoFetchMinutes}
+                    min={0}
+                    max={60}
+                    onCommit={set('autoFetchMinutes')}
+                  />
                 </Row>
                 <Row
-                  label="Auto-Prune"
+                  label="Auto-prune"
                   htmlFor="ap"
                   hint="Remove remote-tracking branches that no longer exist on the remote whenever you fetch."
                 >
                   <Check id="ap" checked={st.autoPrune} onChange={set('autoPrune')} />
                 </Row>
                 <Row
-                  label="Show All Commits in Graph"
+                  label="Show all commits in graph"
                   htmlFor="sa"
                   warn="Loads the entire history at once. Enabling this may adversely affect performance on large repositories."
                 >
                   <Check id="sa" checked={st.showAll} onChange={set('showAll')} />
                 </Row>
                 <Row
-                  label="Initial Commits in Graph"
+                  label="Initial commits in graph"
                   htmlFor="ic"
                   hint="Minimum 100. When lazy loading is on, more commits are loaded as you scroll to the end of the graph."
                   warn="Increasing this value may adversely affect performance."
                 >
-                  <Num id="ic" value={st.initialCommits} min={100} max={100000} onCommit={set('initialCommits')} />
+                  <Num
+                    id="ic"
+                    unit="commits"
+                    value={st.initialCommits}
+                    min={100}
+                    max={100000}
+                    onCommit={set('initialCommits')}
+                  />
                 </Row>
                 <Row
-                  label="Lazy Load Commits in Graph"
+                  label="Lazy-load commits in graph"
                   htmlFor="ll"
                   hint="Load older commits page by page as you scroll. When off, only the initial commits are shown."
                 >
@@ -898,10 +938,19 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                 <div role="group" aria-label="Theme" className="grid max-w-[700px] grid-cols-1 gap-3 sm:grid-cols-3">
                   {(
                     [
-                      { id: 'light', name: 'Light', colors: ['#ffffff', '#f5f7fa', '#d7dce4'] },
-                      { id: 'dark', name: 'Dark', colors: ['#11111b', '#181825', '#313244'] },
-                      { id: 'midnight', name: 'Midnight', colors: ['#081120', '#0c182a', '#293d54'] },
-                      { id: 'graphite', name: 'Graphite', colors: ['#161618', '#1e1e21', '#444449'] },
+                      // canvas, sidebar, surface, text, accent — the theme's real values from index.css
+                      { id: 'light', name: 'Light', colors: ['#f2f5f9', '#f8fafc', '#cfd8e3', '#1d2939', '#006fae'] },
+                      { id: 'dark', name: 'Dark', colors: ['#1e1e2e', '#181825', '#313244', '#cdd6f4', '#4cc2ff'] },
+                      {
+                        id: 'midnight',
+                        name: 'Midnight',
+                        colors: ['#0f1c30', '#0c182a', '#293d54', '#dbe8f8', '#4cc2ff'],
+                      },
+                      {
+                        id: 'graphite',
+                        name: 'Graphite',
+                        colors: ['#27272a', '#1e1e21', '#444449', '#e8e8eb', '#4cc2ff'],
+                      },
                     ] as const
                   ).map((option) => (
                     <button
@@ -912,11 +961,36 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                       className={`rounded-lg border p-3 text-left transition-colors ${st.theme === option.id ? 'border-accent bg-accent/10' : 'border-surface hover:bg-surface/50'}`}
                     >
                       <span
-                        className="mb-3 flex h-16 overflow-hidden rounded-md border border-white/10"
-                        style={{ background: option.colors[0] }}
+                        aria-hidden
+                        className="mb-3 flex h-20 overflow-hidden rounded-md border"
+                        style={{ background: option.colors[0], borderColor: option.colors[2] }}
                       >
-                        <span className="w-1/3" style={{ background: option.colors[1] }} />
-                        <span className="m-2 h-3 flex-1 rounded" style={{ background: option.colors[2] }} />
+                        <span className="flex w-1/3 flex-col gap-1.5 p-2" style={{ background: option.colors[1] }}>
+                          <span className="h-1.5 w-3/4 rounded-full" style={{ background: option.colors[4] }} />
+                          <span
+                            className="h-1.5 w-1/2 rounded-full opacity-50"
+                            style={{ background: option.colors[3] }}
+                          />
+                          <span
+                            className="h-1.5 w-2/3 rounded-full opacity-50"
+                            style={{ background: option.colors[3] }}
+                          />
+                        </span>
+                        <span className="flex flex-1 flex-col gap-1.5 p-2">
+                          <span className="h-3 rounded" style={{ background: option.colors[2] }} />
+                          <span
+                            className="h-1.5 w-5/6 rounded-full opacity-80"
+                            style={{ background: option.colors[3] }}
+                          />
+                          <span
+                            className="h-1.5 w-2/3 rounded-full opacity-50"
+                            style={{ background: option.colors[3] }}
+                          />
+                          <span
+                            className="h-1.5 w-3/4 rounded-full opacity-50"
+                            style={{ background: option.colors[3] }}
+                          />
+                        </span>
                       </span>
                       <span className="font-medium">{option.name}</span>
                     </button>
@@ -962,14 +1036,21 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                   />
                 </Row>
                 <Row label="Font size" htmlFor="fs" hint="Between 10 and 24. Applies to open terminals immediately.">
-                  <Num id="fs" value={st.termFontSize} min={10} max={24} onCommit={set('termFontSize')} />
+                  <Num id="fs" unit="px" value={st.termFontSize} min={10} max={24} onCommit={set('termFontSize')} />
                 </Row>
                 <Row
                   label="Scrollback lines"
                   htmlFor="sb"
                   hint="How many lines each terminal remembers. Applies to new terminals."
                 >
-                  <Num id="sb" value={st.termScrollback} min={500} max={100000} onCommit={set('termScrollback')} />
+                  <Num
+                    id="sb"
+                    unit="lines"
+                    value={st.termScrollback}
+                    min={500}
+                    max={100000}
+                    onCommit={set('termScrollback')}
+                  />
                 </Row>
                 <Row label="Blinking cursor" htmlFor="cb">
                   <Check id="cb" checked={st.termCursorBlink} onChange={set('termCursorBlink')} />
