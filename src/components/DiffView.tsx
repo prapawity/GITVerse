@@ -13,9 +13,9 @@ import { desktopApi } from '../platform/api';
 const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-danger/[0.14]', ctx: '' } as const;
 const SIGN = { add: '+', del: '−', ctx: '' } as const;
 const NUM = 'select-none pr-2 text-right text-[#6c7a89]';
-const seg = (on: boolean) =>
-  `flex min-h-[30px] items-center gap-1.5 px-3 text-sm ${on ? 'bg-accent/20 text-accent' : 'text-sub hover:text-text'}`;
-const grp = 'flex overflow-hidden rounded-md border border-surface';
+// segmented controls share the .seg / .seg-item styles; the pressed look comes from aria-pressed
+const seg = (_on: boolean) => 'seg-item flex items-center gap-1.5';
+const grp = 'seg';
 
 type Res<T> = { data?: T; error?: string } | null;
 type Blame = { hash: string; author: string; time: number }[];
@@ -417,7 +417,7 @@ export function DiffView({
               aria-pressed={showWhitespace}
               title="Highlight changed text and whitespace within lines"
               onClick={() => setShowWhitespace(!showWhitespace)}
-              className={`${seg(showWhitespace)} rounded-md border border-surface`}
+              className={`${seg(showWhitespace)} !rounded-md border border-surface`}
             >
               Highlight changes
             </button>
@@ -462,16 +462,10 @@ export function DiffView({
                 Refresh the working changes to see its current staged or unstaged status.
               </p>
               <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => void onRefresh?.()}
-                  className="min-h-[40px] rounded-md bg-accent px-3 text-sm font-medium text-crust hover:brightness-110"
-                >
+                <button onClick={() => void onRefresh?.()} className="btn-primary min-h-[40px] px-3">
                   Refresh changes
                 </button>
-                <button
-                  onClick={onClose}
-                  className="min-h-[40px] rounded-md border border-surface px-3 text-sm hover:bg-surface/60"
-                >
+                <button onClick={onClose} className="btn-secondary min-h-[40px] px-3">
                   Close diff
                 </button>
               </div>

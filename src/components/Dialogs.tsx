@@ -31,7 +31,7 @@ const makeFlow = (c: FlowConfig) => [
   { id: '', prefix: '', hint: 'No prefix', color: '#4cc2ff' },
 ];
 
-const btn = 'rounded px-4 py-2 min-h-[36px] font-medium';
+const btn = 'px-4 py-2 min-h-[36px]';
 
 function Shell({ title, onCancel, children }: { title: string; onCancel: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -116,14 +116,10 @@ function FlowDialog({
         New branch will start at <span className="break-all font-medium text-text">{source}</span>.
       </p>
       <div className="mt-4 flex justify-end gap-2">
-        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>
+        <button className={`btn-ghost ${btn}`} onClick={() => done(null)}>
           Cancel
         </button>
-        <button
-          disabled={!!err}
-          className={`${btn} bg-accent text-crust disabled:opacity-40`}
-          onClick={() => done(full)}
-        >
+        <button disabled={!!err} className={`btn-primary ${btn}`} onClick={() => done(full)}>
           Create branch
         </button>
       </div>
@@ -150,12 +146,12 @@ export function DialogHost() {
       <Shell title={req.title} onCancel={() => done(false)}>
         <p className="mb-4 whitespace-pre-wrap break-words text-sub">{req.message}</p>
         <div className="flex justify-end gap-2">
-          <button className={`${btn} hover:bg-surface/60`} onClick={() => done(false)}>
+          <button className={`btn-ghost ${btn}`} onClick={() => done(false)}>
             Cancel
           </button>
           <button
             ref={ref}
-            className={`${btn} ${req.danger ? 'bg-danger' : 'bg-accent'} text-crust`}
+            className={`btn-primary ${btn} ${req.danger ? '!bg-danger' : ''}`}
             onClick={() => done(true)}
           >
             {req.label ?? 'Confirm'}
@@ -180,14 +176,10 @@ export function DialogHost() {
         className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-accent"
       />
       <div className="mt-4 flex justify-end gap-2">
-        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>
+        <button className={`btn-ghost ${btn}`} onClick={() => done(null)}>
           Cancel
         </button>
-        <button
-          disabled={!text.trim()}
-          className={`${btn} bg-accent text-crust disabled:opacity-40`}
-          onClick={() => done(text.trim())}
-        >
+        <button disabled={!text.trim()} className={`btn-primary ${btn}`} onClick={() => done(text.trim())}>
           OK
         </button>
       </div>

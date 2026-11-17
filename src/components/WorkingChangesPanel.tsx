@@ -400,7 +400,7 @@ export function WorkingChangesPanel({
                 files.filter((file) => selectedPaths.includes(file.path)),
               )
             }
-            className="rounded border border-surface px-2 py-1 hover:bg-surface/70 disabled:opacity-40"
+            className="btn-secondary px-2 py-1 hover:bg-surface/70"
           >
             {area === 'staged' ? 'Unstage selected' : 'Stage selected'}
           </button>

@@ -469,16 +469,10 @@ export function MergeTool({ path }: { path: string }) {
             This file has no conflict markers — it may be binary, or one side deleted it. Pick which version to keep:
           </p>
           <div className="flex gap-2">
-            <button
-              className="min-h-[36px] rounded-md border border-surface px-3 hover:bg-surface/60"
-              onClick={() => exec('resolveFile', path, 'ours')}
-            >
+            <button className="btn-secondary min-h-[36px] px-3" onClick={() => exec('resolveFile', path, 'ours')}>
               Keep A — {aLabel}
             </button>
-            <button
-              className="min-h-[36px] rounded-md border border-surface px-3 hover:bg-surface/60"
-              onClick={() => exec('resolveFile', path, 'theirs')}
-            >
+            <button className="btn-secondary min-h-[36px] px-3" onClick={() => exec('resolveFile', path, 'theirs')}>
               Keep B — {bLabel}
             </button>
           </div>
@@ -511,7 +505,7 @@ export function MergeTool({ path }: { path: string }) {
               <button
                 onClick={nextUndecided}
                 disabled={decided === count}
-                className="ml-1 min-h-[30px] rounded-md border border-surface px-3 hover:bg-surface/60 disabled:opacity-40"
+                className="btn-secondary ml-1 min-h-[30px] px-3"
               >
                 Next undecided
               </button>
@@ -533,18 +527,10 @@ export function MergeTool({ path }: { path: string }) {
                 )}{' '}
                 Auto-resolve with AI
               </button>
-              <button
-                onClick={() => all('a')}
-                disabled={aiBusy}
-                className="min-h-[30px] rounded-md border border-surface px-3 hover:bg-surface/60 disabled:opacity-40"
-              >
+              <button onClick={() => all('a')} disabled={aiBusy} className="btn-secondary min-h-[30px] px-3">
                 Take all A
               </button>
-              <button
-                onClick={() => all('b')}
-                disabled={aiBusy}
-                className="min-h-[30px] rounded-md border border-surface px-3 hover:bg-surface/60 disabled:opacity-40"
-              >
+              <button onClick={() => all('b')} disabled={aiBusy} className="btn-secondary min-h-[30px] px-3">
                 Take all B
               </button>
             </div>
@@ -740,11 +726,7 @@ export function MergeTool({ path }: { path: string }) {
                     : 'Choose A, B or edit every conflict'
                   : 'Ready to save'}
             </span>
-            <button
-              onClick={save}
-              disabled={unresolved || aiBusy}
-              className="ml-auto min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
-            >
+            <button onClick={save} disabled={unresolved || aiBusy} className="btn-primary ml-auto min-h-[38px] px-4">
               Save & mark resolved
             </button>
           </div>

@@ -96,7 +96,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                   onClose();
                   void useRepo.getState().openRepo(completed);
                 }}
-                className="rounded-md bg-accent px-4 py-2 font-medium text-crust"
+                className="btn-primary px-4 py-2"
               >
                 Open repository
               </button>
@@ -135,7 +135,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={browse}
                   disabled={running}
-                  className="flex shrink-0 items-center gap-1 rounded-md border border-surface px-3 hover:bg-surface/60"
+                  className="btn-secondary flex shrink-0 items-center gap-1 px-3"
                 >
                   <FolderOpen size={16} /> Browse
                 </button>
@@ -167,18 +167,13 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={running}
-                className="rounded-md border border-surface px-3 py-2 disabled:opacity-40"
-              >
+              <button type="button" onClick={onClose} disabled={running} className="btn-secondary px-3 py-2">
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={running || !url.trim() || !destination.trim()}
-                className="rounded-md bg-accent px-4 py-2 font-medium text-crust disabled:opacity-40"
+                className="btn-primary px-4 py-2"
               >
                 {running ? 'Cloning…' : 'Clone'}
               </button>

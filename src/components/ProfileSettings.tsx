@@ -6,7 +6,7 @@ import { desktopApi } from '../platform/api';
 
 const api = () => desktopApi();
 const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent';
-const button = 'rounded-md border border-surface px-3 py-2 hover:bg-surface/60 disabled:opacity-40';
+const button = 'btn-secondary px-3 py-2';
 const errorText = (e: unknown) =>
   String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
 
@@ -230,7 +230,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
                     disabled={busy || active}
                     onClick={() => void activate(p)}
                     aria-pressed={active}
-                    className="min-h-[40px] rounded-md bg-accent px-3 text-sm font-medium text-crust disabled:cursor-default disabled:opacity-50"
+                    className="btn-primary min-h-[40px] px-3"
                   >
                     {active ? 'Currently active' : 'Use this profile'}
                   </button>
@@ -295,11 +295,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
               </label>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                disabled={busy}
-                onClick={saveIdentity}
-                className="min-h-[40px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
-              >
+              <button disabled={busy} onClick={saveIdentity} className="btn-primary min-h-[40px] px-4">
                 {busy ? 'Saving…' : 'Save profile'}
               </button>
               <button disabled={busy} className={`${button} min-h-[40px]`} onClick={() => setIdentity(null)}>
@@ -441,11 +437,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
                 </>
               )}
               <div className="flex gap-2">
-                <button
-                  disabled={busy}
-                  onClick={saveProfile}
-                  className="rounded-md bg-accent px-3 py-2 font-medium text-crust disabled:opacity-40"
-                >
+                <button disabled={busy} onClick={saveProfile} className="btn-primary px-3 py-2">
                   Save
                 </button>
                 <button

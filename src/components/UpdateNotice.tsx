@@ -78,7 +78,7 @@ export function UpdateNotice({
           <button
             disabled={opening || download?.state === 'downloading'}
             onClick={() => setShowVersions(true)}
-            className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
+            className="btn-secondary px-4 py-2"
           >
             Other versions
           </button>
@@ -86,7 +86,7 @@ export function UpdateNotice({
             data-later
             disabled={opening || download?.state === 'downloading'}
             onClick={onLater}
-            className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
+            className="btn-secondary px-4 py-2"
           >
             Later
           </button>
@@ -112,7 +112,7 @@ export function UpdateNotice({
                 setOpening(false);
               }
             }}
-            className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
+            className="btn-primary px-4 py-2"
           >
             {opening ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}{' '}
             {download?.state === 'downloaded'

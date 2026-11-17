@@ -589,7 +589,7 @@ export default function App() {
                 autoFocus
                 disabled={cancellingScan}
                 onClick={cancelFolderScan}
-                className="mt-5 min-h-[44px] rounded-md border border-surface px-5 text-sm hover:bg-surface/60 disabled:opacity-50"
+                className="btn-secondary mt-5 min-h-[44px] px-5"
               >
                 {cancellingScan ? 'Cancelling…' : 'Cancel scan'}
               </button>
@@ -1163,10 +1163,7 @@ export default function App() {
                             {repoPath ? 'No commits yet' : 'Welcome to GITVerse — open a repository to see its history'}
                           </div>
                           {!repoPath && (
-                            <button
-                              className="rounded bg-accent px-4 py-2 font-medium text-crust"
-                              onClick={openAddRepo}
-                            >
+                            <button className="btn-primary px-4 py-2" onClick={openAddRepo}>
                               Add repository
                             </button>
                           )}
@@ -1321,11 +1318,7 @@ export default function App() {
                 placeholder="Group name"
                 className="w-full rounded border border-surface bg-crust px-2 py-1.5 text-sm outline-none focus:border-accent"
               />
-              <button
-                type="submit"
-                disabled={!newGroup.trim()}
-                className="w-full rounded bg-accent px-3 py-1.5 text-sm font-medium text-crust disabled:opacity-40"
-              >
+              <button type="submit" disabled={!newGroup.trim()} className="btn-primary w-full px-3 py-1.5">
                 Create group
               </button>
             </form>

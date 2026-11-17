@@ -104,10 +104,7 @@ export function ApplicationAbout() {
             )}
             {checking ? 'Checking...' : 'Check for Update'}
           </button>
-          <button
-            onClick={() => setShowVersions(true)}
-            className="min-h-[40px] rounded-md border border-surface px-4 py-2 text-sm hover:bg-surface/60"
-          >
+          <button onClick={() => setShowVersions(true)} className="btn-secondary min-h-[40px] px-4 py-2">
             Download another version
           </button>
         </div>
@@ -148,7 +145,7 @@ export function ApplicationAbout() {
                 type="button"
                 onClick={() => void openNotice(kind)}
                 disabled={openingNotice !== null}
-                className="flex min-h-[40px] items-center gap-2 rounded-md border border-surface px-4 py-2 text-sm hover:bg-surface/60 disabled:opacity-50"
+                className="btn-secondary flex min-h-[40px] items-center gap-2 px-4 py-2"
               >
                 <FileText size={16} aria-hidden />
                 {openingNotice === kind ? 'Opening…' : label}

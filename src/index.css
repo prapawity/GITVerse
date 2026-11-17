@@ -350,3 +350,29 @@ select option {
   background: rgb(var(--crust));
   color: rgb(var(--text));
 }
+
+/* three button styles for the whole app, plus one segmented control */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-crust hover:brightness-110 disabled:hover:brightness-100;
+  }
+  .btn-secondary {
+    @apply btn border border-surface text-text hover:bg-surface/60 disabled:hover:bg-transparent;
+  }
+  .btn-ghost {
+    @apply btn text-sub hover:bg-surface/60 hover:text-text disabled:hover:bg-transparent;
+  }
+  .seg {
+    @apply inline-flex items-center gap-0.5 rounded-md border border-surface p-0.5;
+  }
+  .seg-item {
+    @apply min-h-[26px] rounded px-2.5 text-xs text-sub hover:text-text;
+  }
+  .seg-item[aria-pressed='true'],
+  .seg-item[aria-checked='true'] {
+    @apply bg-surface text-text;
+  }
+}

@@ -205,7 +205,7 @@ function SecretField({
           await onSave(v);
           setV('');
         }}
-        className="min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
+        className="btn-primary min-h-[38px] px-4"
       >
         Save
       </button>
@@ -279,7 +279,7 @@ function ModelPick({
             </option>
           ))}
         </select>
-        <button onClick={load} className="min-h-[38px] rounded-md border border-surface px-3 hover:bg-surface/60">
+        <button onClick={load} className="btn-secondary min-h-[38px] px-3">
           Refresh
         </button>
       </div>
@@ -523,10 +523,7 @@ function AiSettings() {
               )}
             </span>
             {signing ? (
-              <button
-                onClick={() => desktopApi().ai.openaiCancel()}
-                className="min-h-[38px] rounded-md border border-surface px-4 hover:bg-surface/60"
-              >
+              <button onClick={() => desktopApi().ai.openaiCancel()} className="btn-secondary min-h-[38px] px-4">
                 Cancel
               </button>
             ) : o?.signedIn ? (
@@ -536,16 +533,12 @@ function AiSettings() {
                   say('openai', { ok: true, text: 'Signed out.' });
                   load();
                 }}
-                className="min-h-[38px] rounded-md border border-surface px-4 hover:bg-surface/60"
+                className="btn-secondary min-h-[38px] px-4"
               >
                 Sign out
               </button>
             ) : (
-              <button
-                disabled={!ai}
-                onClick={signIn}
-                className="min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
-              >
+              <button disabled={!ai} onClick={signIn} className="btn-primary min-h-[38px] px-4">
                 Sign in with ChatGPT
               </button>
             )}
@@ -636,7 +629,7 @@ function AiSettings() {
                   copLoginActive.current = false;
                   void desktopApi().ai.copilotCancelLogin();
                 }}
-                className="min-h-[38px] rounded-md border border-surface px-3 hover:bg-surface/60"
+                className="btn-secondary min-h-[38px] px-3"
               >
                 Cancel
               </button>
@@ -645,16 +638,13 @@ function AiSettings() {
                 <button
                   disabled={!ai || !cop?.available}
                   onClick={signInCopilot}
-                  className="min-h-[38px] rounded-md bg-accent px-4 font-medium text-crust disabled:opacity-40"
+                  className="btn-primary min-h-[38px] px-4"
                 >
                   Sign in with GitHub
                 </button>
               )
             )}
-            <button
-              onClick={loadCop}
-              className="min-h-[38px] rounded-md border border-surface px-3 hover:bg-surface/60"
-            >
+            <button onClick={loadCop} className="btn-secondary min-h-[38px] px-3">
               Recheck
             </button>
           </div>
@@ -923,7 +913,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                       )
                         st.reset();
                     }}
-                    className="min-h-[36px] rounded-md border border-surface px-4 hover:bg-surface/60"
+                    className="btn-secondary min-h-[36px] px-4"
                   >
                     Restore defaults
                   </button>
@@ -1092,7 +1082,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                 <Row label="Restore defaults">
                   <button
                     onClick={() => st.setFlow(repoPath, FLOW_DEFAULTS)}
-                    className="min-h-[36px] rounded-md border border-surface px-4 hover:bg-surface/60"
+                    className="btn-secondary min-h-[36px] px-4"
                   >
                     Reset Gitflow settings
                   </button>

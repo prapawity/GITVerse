@@ -120,7 +120,7 @@ export function RecoveryPanel({
                       setMessage('Could not copy the commit ID.');
                     }
                   }}
-                  className="flex min-h-[32px] items-center gap-1.5 rounded-md border border-surface px-2 font-mono text-xs hover:bg-surface/60"
+                  className="btn-secondary flex min-h-[32px] items-center gap-1.5 px-2 font-mono text-xs"
                 >
                   <Copy size={13} aria-hidden /> {entry.hash.slice(0, 7)}
                 </button>
@@ -131,7 +131,7 @@ export function RecoveryPanel({
                     if (!found)
                       setMessage('This commit is not in the available graph history. Copy its ID to inspect it.');
                   }}
-                  className="min-h-[32px] rounded-md border border-surface px-2 text-xs hover:bg-surface/60"
+                  className="btn-secondary min-h-[32px] px-2 text-xs"
                 >
                   Show in graph
                 </button>

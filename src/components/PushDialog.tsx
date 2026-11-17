@@ -192,11 +192,7 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
           </div>
         )}
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={pushing}
-            className="rounded-md border border-surface px-3 py-2 hover:bg-surface/60 disabled:opacity-40"
-          >
+          <button onClick={onClose} disabled={pushing} className="btn-secondary px-3 py-2">
             Cancel
           </button>
           <button
@@ -204,7 +200,7 @@ export function PushDialog({ repo, onClose }: { repo: string; onClose: () => voi
             disabled={
               !canPush || pushing || (forcePush && !info?.remoteHash) || (authNeeded && (!login.trim() || !password))
             }
-            className={`flex items-center gap-2 rounded-md px-4 py-2 font-medium text-crust disabled:opacity-40 ${forcePush ? 'bg-danger' : 'bg-accent'}`}
+            className={`btn-primary px-4 py-2 ${forcePush ? '!bg-danger' : ''}`}
           >
             {pushing ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Upload size={16} aria-hidden />}
             {pushing ? 'Pushing…' : forcePush ? 'Confirm force push' : authNeeded ? 'Retry push' : 'Push'}

@@ -131,17 +131,10 @@ function ToolCard({
             </ul>
           )}
           <div className="flex gap-2">
-            <button
-              autoFocus
-              onClick={() => onAnswer(true)}
-              className="min-h-[32px] rounded-md bg-accent px-3 font-medium text-crust"
-            >
+            <button autoFocus onClick={() => onAnswer(true)} className="btn-primary min-h-[32px] px-3">
               Allow
             </button>
-            <button
-              onClick={() => onAnswer(false)}
-              className="min-h-[32px] rounded-md border border-surface px-3 hover:bg-surface/60"
-            >
+            <button onClick={() => onAnswer(false)} className="btn-secondary min-h-[32px] px-3">
               Deny
             </button>
           </div>
@@ -332,7 +325,7 @@ export function AiPanel({ onClose, onOpenSettings }: { onClose: () => void; onOp
               disabled={!text.trim() || !repoPath}
               aria-label="Send"
               title="Send (Enter)"
-              className="flex h-9 w-9 items-center justify-center rounded-md bg-accent text-crust disabled:opacity-40"
+              className="btn-primary flex h-9 w-9 items-center justify-center"
             >
               <SendHorizontal size={17} />
             </button>

@@ -142,11 +142,7 @@ export function DetailsPanel({
     .join('')
     .toUpperCase();
   const seg = (v: 'path' | 'tree', label: string, I: typeof List) => (
-    <button
-      aria-pressed={view === v}
-      onClick={() => setView(v)}
-      className={`flex min-h-[32px] items-center gap-1.5 px-3 text-sm ${view === v ? 'bg-accent/20 text-accent' : 'text-sub hover:text-text'}`}
-    >
+    <button aria-pressed={view === v} onClick={() => setView(v)} className="seg-item flex items-center gap-1.5">
       <I size={14} aria-hidden /> {label}
     </button>
   );
@@ -353,11 +349,7 @@ export function DetailsPanel({
       </div>
       <div className="flex items-center justify-between px-4 py-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-sub">Changed files</span>
-        <div
-          role="group"
-          aria-label="File list layout"
-          className="flex overflow-hidden rounded-md border border-surface"
-        >
+        <div role="group" aria-label="File list layout" className="seg">
           {seg('path', 'Path', List)}
           {seg('tree', 'Tree', ListTree)}
         </div>

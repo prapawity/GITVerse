@@ -180,15 +180,9 @@ export function MediaPreview({
   return (
     <div className="flex flex-col">
       {kind === 'image' && (
-        <div role="group" aria-label="Zoom" className="flex items-center gap-1 self-center pt-4 font-sans text-xs">
+        <div role="group" aria-label="Zoom" className="seg mt-4 self-center font-sans">
           {ZOOMS.map((z) => (
-            <button
-              key={z}
-              type="button"
-              aria-pressed={zoom === z}
-              onClick={() => setZoom(z)}
-              className={`min-h-[28px] rounded-md px-2.5 ${zoom === z ? 'bg-accent/15 text-accent' : 'text-sub hover:bg-surface/60 hover:text-text'}`}
-            >
+            <button key={z} type="button" aria-pressed={zoom === z} onClick={() => setZoom(z)} className="seg-item">
               {z === 'fit' ? 'Fit' : `${z}×`}
             </button>
           ))}

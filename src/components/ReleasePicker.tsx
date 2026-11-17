@@ -90,7 +90,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
               setError(String((reason as Error)?.message ?? reason));
             }
           }}
-          className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
+          className="btn-secondary px-4 py-2"
         >
           View all releases
         </button>
@@ -102,11 +102,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
             Retry
           </button>
         )}
-        <button
-          disabled={opening}
-          onClick={onClose}
-          className="rounded-md border border-surface px-4 py-2 text-sm disabled:opacity-40"
-        >
+        <button disabled={opening} onClick={onClose} className="btn-secondary px-4 py-2">
           Close
         </button>
         <button
@@ -123,7 +119,7 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
               setOpening(false);
             }
           }}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-crust disabled:opacity-40"
+          className="btn-primary px-4 py-2"
         >
           {opening ? 'Opening…' : 'Open downloads'}
         </button>
