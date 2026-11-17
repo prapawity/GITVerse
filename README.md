@@ -16,13 +16,15 @@ A fast, beautiful desktop Git client with an interactive commit graph, painless 
 
 <br />
 
-<img src="./docs/media/demo.gif" alt="GITVerse demo: stage changes, browse the commit graph, inspect a diff" width="900" />
+<img src="./docs/media/demo.gif" alt="GITVerse demo: open a working-tree diff, stage the file, open a commit and compare its diff unified and split" width="900" />
 
-<sub>Stage changes, browse the graph, inspect a diff. Recorded from the UI preview with demo data.</sub>
+<sub>Review a change, stage it, then open a commit and switch its diff to split view. Recorded from the UI preview with demo data.</sub>
 
 </div>
 
 > **Status: experimental.** Back up important work before using operations that change history or the working tree. Cross-platform packaging is configured but every platform must be smoke-tested before publication.
+>
+> **Moving to Tauri.** GITVerse is being ported from Electron to [Tauri 2](https://tauri.app) with a Rust backend. Published releases are still the Electron build; the Tauri build is available as a [preview](#tauri-preview-build). See the [migration plan](./docs/rust-migration/migration-plan.md).
 
 ## Why GITVerse?
 
@@ -33,11 +35,11 @@ A fast, beautiful desktop Git client with an interactive commit graph, painless 
 | 🧩 **Conflicts without the dread**               | A dedicated merge/conflict workflow with a built-in merge tool.                                                        |
 | 🤖 **AI when you want it, never when you don't** | Bring your own Claude, OpenAI, or GitHub Copilot account for commit messages, conflict help, and chat. Off by default. |
 | 🧑‍💻 **Built for real-world setups**               | Repository tabs and groups, multiple commit identities, per-repo push auth, Git Flow support, integrated terminal.     |
-| 🔒 **Private by design**                         | No repo content leaves your machine unless you use an AI feature. Secrets use Electron `safeStorage`.                  |
+| 🔒 **Private by design**                         | No repo content leaves your machine unless you use an AI feature. Secrets stay in your OS's secure storage.            |
 
 <p align="center">
-  <img src="./docs/media/screenshot-graph.png" alt="Commit graph with branches, tags and working changes" width="49%" />
-  <img src="./docs/media/screenshot-diff.png" alt="Commit details with a file diff" width="49%" />
+  <img src="./docs/media/screenshot-graph.png" alt="Commit graph with branch and tag labels, author and time columns, and two unstaged files" width="49%" />
+  <img src="./docs/media/screenshot-diff.png" alt="Working-tree diff with Stage hunk and Discard hunk buttons" width="49%" />
 </p>
 <p align="center"><sub>Screenshots use the browser preview with demo data, not a real repository.</sub></p>
 
@@ -68,6 +70,11 @@ The **Orbital Graph** identity separates a solid cyan/teal Git graph from a thin
 - Commit identity profiles and repository-specific push authentication.
 - Optional Claude, OpenAI, and GitHub Copilot integrations.
 - Stable-release checks against GitHub Releases, with in-app download and restart-to-install on supported packaged builds.
+- Four themes (Dark, Midnight, Graphite, Light) built on shared colour tokens and one type scale; secondary text meets 4.5:1 contrast in each.
+
+The toolbar keeps every action on one row from 1024 px: below 1400 px it shows icons only, with the label as a tooltip. Recovery, Workspace and Ask AI open in the right-hand panel one at a time, and Escape closes them. While a merge, rebase, cherry-pick or revert is in progress, commands that cannot run (Rebase, Reset, Cherry pick, the commit form) are disabled with the reason instead of failing.
+
+In the commit history, author and relative time sit in fixed right-aligned columns, the selected row is highlighted in its lane colour, and long branch names are shortened in the middle so both the prefix and the distinguishing end stay visible. Image diffs offer Fit, 1×, 2×, 4× and 8× zoom on a checkerboard background, with before and after side by side.
 
 Dropping folders searches for repositories without a folder-count or depth limit. The scan shows live progress and can be cancelled. Hidden folders, dependency/build directories, and directory symlinks are skipped. Unreadable folders or invalid repositories are reported; cancelling discards the interrupted folder's results and keeps already completed dropped folders.
 
@@ -102,6 +109,23 @@ Initial releases are unsigned and not notarized. macOS Gatekeeper and Windows Sm
 
 Git must be installed separately and available to the app through `PATH`. Quit GITVerse before replacing/upgrading an installation.
 
+### Tauri preview build
+
+The Tauri build has the same interface on a Rust backend and uses the system web view instead of a bundled Chromium. It is not attached to releases yet. To try it, open [Actions → Release (Tauri preview)](https://github.com/prapawity/GITVerse/actions/workflows/release-tauri.yml), pick the latest successful run, and download the artifact for your platform:
+
+| Artifact                     | Contents                          |
+| ---------------------------- | --------------------------------- |
+| `gitverse-tauri-windows-x64` | NSIS `.exe` and `.msi` installers |
+| `gitverse-tauri-macos-arm64` | `.dmg` for Apple Silicon          |
+| `gitverse-tauri-macos-x64`   | `.dmg` for Intel Macs             |
+| `gitverse-tauri-linux-x64`   | `.AppImage` and `.deb`            |
+
+- The installers include Node.js and the GitHub Copilot runtime, so Copilot works without a separate Node install. Git is still required.
+- On first start, the Tauri build imports API keys, the ChatGPT sign-in, the Copilot token, and push tokens saved by the Electron build. It never overwrites values already in the keychain.
+- macOS builds are ad-hoc signed, not notarized. Gatekeeper warns on first open: right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/GITVerse.app`.
+- Windows needs the WebView2 runtime, which Windows 10 and 11 normally include. Windows builds are not code-signed, so SmartScreen may warn.
+- Updates use signed bundles and a `latest.json` feed on GitHub Releases, published by the release workflow on version tags. See [Tauri updater](./docs/rust-migration/updater.md).
+
 ## Development
 
 Requirements:
@@ -125,6 +149,19 @@ npm run test:electron  # Build, then test desktop startup, reload, and restored 
 npm run dist     # Build installers for the current host
 ```
 
+### Tauri build
+
+Additional requirements: the stable [Rust toolchain](https://rustup.rs) and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS (WebView2 on Windows; `libwebkit2gtk-4.1-dev`, `libgtk-3-dev` and `librsvg2-dev` on Debian/Ubuntu).
+
+```bash
+npm run dev:tauri      # Build the Copilot sidecar, then run the Tauri app with hot reload
+npm run test:rust      # cargo test for the Rust workspace (src-tauri and its core crate)
+npm run build:tauri    # Local Tauri installers for the current host
+npm run release:tauri  # Release bundles: notices, staged Node + Copilot, release config
+```
+
+The React UI is shared. `src/platform/tauri.ts` maps the same `PlatformApi` the Electron preload exposes onto Tauri commands, so UI code does not branch on the runtime.
+
 ### Code quality and dependency security
 
 ```bash
@@ -137,7 +174,7 @@ npm run security:audit  # Audit all dependencies, failing on high/critical advis
 
 CI checks lint, formatting, tests, builds, and Electron startup/reload smoke tests. A separate dependency-security job runs the audit without auto-fixing or suppressing advisories. Dependabot proposes weekly npm and GitHub Actions updates against `develop`.
 
-Electron 45 and Vite 7 replace older vulnerable releases. Security overrides use patched Zod 4 for the Copilot SDK and minimatch 11 for affected build/lint dependencies; keep these overrides until upstream dependency ranges include the fixes. A clean install currently passes the audit, but rerun it before releases because advisories change.
+Electron 45 and Vite 8 replace older vulnerable releases. Security overrides use patched Zod 4 for the Copilot SDK and minimatch 11 for affected build/lint dependencies; keep these overrides until upstream dependency ranges include the fixes. A clean install currently passes the audit, but rerun it before releases because advisories change.
 
 If a development reload reports a missing desktop connection, stop and restart `npm run dev`. Main and preload builds use separate output directories so rebuilding main cannot delete preload. The app shows a startup error instead of loading an empty session when the bridge is unavailable; saved repository tabs are not cleared.
 
@@ -167,13 +204,14 @@ AI is optional and requires your own account, subscription, or API key. Provider
 - AI commit-message generation sends staged diff content.
 - AI conflict resolution sends conflicted content and surrounding context.
 
-Do not use AI on repositories whose policies prohibit sending that content to an external provider. Credentials are handled in the Electron main process; saved secrets use Electron `safeStorage`. OS secure-storage availability and protection vary by platform.
+Do not use AI on repositories whose policies prohibit sending that content to an external provider. Credentials are handled in the backend process, never in the web view. The Electron build stores secrets with Electron `safeStorage`; the Tauri build stores them in the OS keychain (Windows Credential Manager, macOS Keychain, Secret Service on Linux). OS secure-storage availability and protection vary by platform.
 
 Update checks contact the public GitHub API and send the usual network request metadata, but no repository files or AI credentials. Settings and remembered tabs are stored locally in the application's user-data directory.
 
 ## Project documentation
 
 - [Architecture](./ARCHITECTURE.md)
+- [Electron → Tauri migration plan](./docs/rust-migration/migration-plan.md) and [ADR-001](./docs/rust-migration/ADR-001-electron-to-tauri.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Release process](./RELEASING.md)
 - [Security reporting](./SECURITY.md)
@@ -186,5 +224,6 @@ Update checks contact the public GitHub API and send the usual network request m
 - System Git, shell, Python, credential helpers, and provider access are not bundled.
 - Platform-specific Git credentials, packaging, terminal behavior, and app launch need testing.
 - Screenshots and the GIF come from the browser preview with demo data; a dedicated packaged application icon is still to be added.
+- The Tauri build is a preview: its installers still need hands-on testing on every platform, the release workflow still publishes Electron, and Windows/Apple signing certificates are not set up yet.
 
 Issues and feature requests are welcome at [GitHub Issues](https://github.com/prapawity/GITVerse/issues). Do not include private repository content, credentials, or personal account details.

@@ -6,6 +6,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint supports TypeScript < 6.1 only; TypeScript 7 (the native compiler) has no
+      # JS API for it yet. Remove once typescript-eslint lists TypeScript 7 in its peer range.
+      - dependency-name: typescript
+        versions: ['>=6.1.0']
   - package-ecosystem: github-actions
     directory: /
     target-branch: develop
