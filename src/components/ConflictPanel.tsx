@@ -144,7 +144,7 @@ export function ConflictPanel() {
       </div>
       <div role="status" className="mx-4 mt-3 rounded-lg border border-surface bg-crust/50 px-3 py-2 text-sm">
         <div className="font-medium">
-          {left ? `${left} file${left === 1 ? '' : 's'} still need resolution` : 'All conflicts resolved'}
+          {left ? `${left} file${left === 1 ? ' still needs' : 's still need'} resolution` : 'All conflicts resolved'}
         </div>
         <p className="mt-1 text-xs leading-relaxed text-sub">
           {left

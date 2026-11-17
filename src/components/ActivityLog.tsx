@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, ClipboardList, Info, Trash2, X } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { version } from '../../package.json';
@@ -8,6 +8,14 @@ export function ActivityLog() {
   const activity = useRepo((s) => s.activity);
   const clear = useRepo((s) => s.clearActivity);
   const current = useRepo((s) => s.repoPath);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
   return (
     <footer className="relative flex h-8 shrink-0 items-center border-t border-surface bg-crust px-3 text-xs text-sub">
       <span className="max-w-[40%] min-w-0 truncate" title={current ?? undefined}>

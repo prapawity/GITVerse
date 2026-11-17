@@ -110,7 +110,10 @@ function Side({
                     onChange={() => onToggle(idx)}
                     aria-label={`Use ${side.toUpperCase()} for conflict ${idx + 1}`}
                   />
-                  Conflict {idx + 1} — use {side.toUpperCase()} <span className="text-sub">({state})</span>
+                  Conflict {idx + 1} — use {side.toUpperCase()}{' '}
+                  <span className="text-sub">
+                    ({state === 'undecided' || state === 'selection unknown' ? state : `result: ${state}`})
+                  </span>
                 </label>
                 {(body === '' ? [''] : body.split('\n')).map((l, j) => (
                   <div key={j} className="whitespace-pre px-3">

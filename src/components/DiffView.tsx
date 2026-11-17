@@ -411,7 +411,7 @@ export function DiffView({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {mode === 'diff' && (
+          {mode === 'diff' && !(canPreviewMedia && parsed?.binary) && (
             <button
               type="button"
               aria-pressed={showWhitespace}
@@ -422,7 +422,7 @@ export function DiffView({
               Highlight changes
             </button>
           )}
-          {mode === 'diff' && (
+          {mode === 'diff' && !(canPreviewMedia && parsed?.binary) && (
             <div role="group" aria-label="Layout" className={grp}>
               <button aria-pressed={!split} className={seg(!split)} onClick={() => setSplit(false)}>
                 <Rows2 size={14} aria-hidden /> Unified

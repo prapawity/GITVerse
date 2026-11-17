@@ -378,13 +378,15 @@ export function WorkingChangesPanel({
           {collapsed[area] ? <ChevronRight size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
           {label} · {files.length}
         </button>
-        <button
-          disabled={!files.length || busy}
-          onClick={() => changeStage(area === 'staged' ? 'unstage' : 'stage', files)}
-          className="rounded border border-[#a6e3a1]/50 px-2 py-1 text-[11px] normal-case tracking-normal text-[#a6e3a1] hover:bg-[#a6e3a1]/10 disabled:opacity-40"
-        >
-          {area === 'staged' ? 'Unstage all' : 'Stage all'}
-        </button>
+        {files.length > 0 && (
+          <button
+            disabled={busy}
+            onClick={() => changeStage(area === 'staged' ? 'unstage' : 'stage', files)}
+            className="rounded border border-[#a6e3a1]/50 px-2 py-1 text-[11px] normal-case tracking-normal text-[#a6e3a1] hover:bg-[#a6e3a1]/10 disabled:opacity-40"
+          >
+            {area === 'staged' ? 'Unstage all' : 'Stage all'}
+          </button>
+        )}
       </div>
       {!collapsed[area] && selection?.repo === repoPath && selection.area === area && selectedPaths.length > 1 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-[#4cc2ff]/20 bg-[#4cc2ff]/10 px-4 py-2 text-xs">
@@ -650,77 +652,82 @@ export function WorkingChangesPanel({
         {!operation && conflict.length > 0 && (
           <p className="text-xs text-[#f9e2af]">Resolve conflicts before committing.</p>
         )}
-        <label className="flex items-center gap-2 text-sm text-sub">
-          <input
-            type="checkbox"
-            checked={amend}
-            disabled={busy}
-            onChange={(e) => void changeAmend(e.target.checked)}
-            className="accent-[#4cc2ff]"
-          />{' '}
-          Amend previous commit
-        </label>
-        <button
-          type="button"
-          onClick={() => void generate()}
-          disabled={busy || !staged.length || !!operation || conflict.length > 0}
-          title={`Send staged changes to ${providerLabel(provider)} and review the result before committing`}
-          className="flex min-h-[36px] w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-[#9333ea] to-[#6366f1] px-3 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-40"
-        >
-          {generating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}{' '}
-          {generating ? 'Generating…' : 'Generate commit message with AI'}
-        </button>
-        <p className="text-xs text-sub">
-          Sends staged changes to {providerLabel(provider)}. Review the message before committing.
-        </p>
-        <label className="sr-only" htmlFor="commit-summary">
-          Commit summary
-        </label>
-        <div className="relative">
-          <input
-            id="commit-summary"
-            value={summary}
-            disabled={busy}
-            onChange={(e) => updateDraft({ summary: e.target.value })}
-            placeholder={amend ? 'Commit summary (optional)' : 'Commit summary'}
-            className="w-full rounded-md border border-surface bg-crust px-3 py-2 pr-12 outline-none focus:border-[#4cc2ff]"
-          />
-          <span className="absolute right-3 top-2.5 text-xs text-sub" title="Recommended summary length">
-            {summary.length}/72
-          </span>
-        </div>
-        <details open={descriptionOpen} onToggle={(event) => setDescriptionOpen(event.currentTarget.open)}>
-          <summary className="cursor-pointer rounded py-1 text-sm text-sub hover:text-text">
-            Description (optional)
-          </summary>
-          <label className="sr-only" htmlFor="commit-description">
-            Commit description
-          </label>
-          <textarea
-            id="commit-description"
-            value={description}
-            disabled={busy}
-            onChange={(e) => updateDraft({ description: e.target.value })}
-            placeholder="Add more context…"
-            rows={3}
-            className="mt-2 w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
-          />
-        </details>
-        <button
-          type="submit"
-          disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}
-          className="min-h-[40px] w-full rounded-md border border-[#a6e3a1]/60 bg-[#a6e3a1]/15 px-3 py-2 font-medium text-[#a6e3a1] hover:bg-[#a6e3a1]/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
-        >
-          {generating
-            ? 'Generating message…'
-            : pending
-              ? 'Working…'
-              : amend
-                ? 'Amend commit'
-                : staged.length
-                  ? `Commit ${staged.length} staged file${staged.length === 1 ? '' : 's'}`
-                  : 'Stage changes to commit'}
-        </button>
+        {/* while a merge/rebase is in progress the commit happens in the conflict panel */}
+        {!operation && (
+          <>
+            <label className="flex items-center gap-2 text-sm text-sub">
+              <input
+                type="checkbox"
+                checked={amend}
+                disabled={busy}
+                onChange={(e) => void changeAmend(e.target.checked)}
+                className="accent-[#4cc2ff]"
+              />{' '}
+              Amend previous commit
+            </label>
+            <button
+              type="button"
+              onClick={() => void generate()}
+              disabled={busy || !staged.length || !!operation || conflict.length > 0}
+              title={`Send staged changes to ${providerLabel(provider)} and review the result before committing`}
+              className="flex min-h-[36px] w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-[#9333ea] to-[#6366f1] px-3 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:opacity-40"
+            >
+              {generating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}{' '}
+              {generating ? 'Generating…' : 'Generate commit message with AI'}
+            </button>
+            <p className="text-xs text-sub">
+              Sends staged changes to {providerLabel(provider)}. Review the message before committing.
+            </p>
+            <label className="sr-only" htmlFor="commit-summary">
+              Commit summary
+            </label>
+            <div className="relative">
+              <input
+                id="commit-summary"
+                value={summary}
+                disabled={busy}
+                onChange={(e) => updateDraft({ summary: e.target.value })}
+                placeholder={amend ? 'Commit summary (optional)' : 'Commit summary'}
+                className="w-full rounded-md border border-surface bg-crust px-3 py-2 pr-12 outline-none focus:border-[#4cc2ff]"
+              />
+              <span className="absolute right-3 top-2.5 text-xs text-sub" title="Recommended summary length">
+                {summary.length}/72
+              </span>
+            </div>
+            <details open={descriptionOpen} onToggle={(event) => setDescriptionOpen(event.currentTarget.open)}>
+              <summary className="cursor-pointer rounded py-1 text-sm text-sub hover:text-text">
+                Description (optional)
+              </summary>
+              <label className="sr-only" htmlFor="commit-description">
+                Commit description
+              </label>
+              <textarea
+                id="commit-description"
+                value={description}
+                disabled={busy}
+                onChange={(e) => updateDraft({ description: e.target.value })}
+                placeholder="Add more context…"
+                rows={3}
+                className="mt-2 w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
+              />
+            </details>
+            <button
+              type="submit"
+              disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}
+              className="min-h-[40px] w-full rounded-md border border-[#a6e3a1]/60 bg-[#a6e3a1]/15 px-3 py-2 font-medium text-[#a6e3a1] hover:bg-[#a6e3a1]/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
+            >
+              {generating
+                ? 'Generating message…'
+                : pending
+                  ? 'Working…'
+                  : amend
+                    ? 'Amend commit'
+                    : staged.length
+                      ? `Commit ${staged.length} staged file${staged.length === 1 ? '' : 's'}`
+                      : 'Stage changes to commit'}
+            </button>
+          </>
+        )}
       </form>
     </div>
   );

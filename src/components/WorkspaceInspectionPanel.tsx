@@ -15,6 +15,10 @@ type Inspection = {
   }[];
 };
 
+/** git prints worktree paths with forward slashes; show them the way the OS writes them. */
+const displayPath = (p: string) =>
+  /^[A-Za-z]:\//.test(p) && /Win/.test(navigator.platform) ? p.replace(/\//g, '\\') : p;
+
 export function WorkspaceInspectionPanel({ repoPath, onClose }: { repoPath: string; onClose: () => void }) {
   const [result, setResult] = useState<Inspection | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,7 +135,16 @@ export function WorkspaceInspectionPanel({ repoPath, onClose }: { repoPath: stri
               {result.worktrees.length ? (
                 result.worktrees.map((worktree) => (
                   <article key={worktree.path} className="glass-detail-card mt-3 rounded-lg border border-surface p-3">
-                    <h4 className="break-all text-sm font-medium">{worktree.path}</h4>
+                    <h4 className="text-sm font-medium [overflow-wrap:anywhere]" title={displayPath(worktree.path)}>
+                      {displayPath(worktree.path)
+                        .split(/(?<=[\\/])/)
+                        .map((part, index) => (
+                          <span key={index}>
+                            {part}
+                            <wbr />
+                          </span>
+                        ))}
+                    </h4>
                     <p className="mt-1 break-all text-xs text-sub">
                       {worktree.bare
                         ? 'Bare repository'

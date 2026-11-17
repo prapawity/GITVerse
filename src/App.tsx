@@ -135,6 +135,17 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [workspaceInspectionOpen, setWorkspaceInspectionOpen] = useState(false);
+  // Esc closes the Recovery / Workspace side panel, unless a dialog or menu handled it first
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return;
+      setRecoveryOpen(false);
+      setWorkspaceInspectionOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [rebasePreviewOpen, setRebasePreviewOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('general');
   const [aiOpen, setAiOpen] = useState(false);
@@ -872,7 +883,10 @@ export default function App() {
             </div>
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface lg:block" aria-hidden />
             <button
-              onClick={() => setRecoveryOpen((value) => !value)}
+              onClick={() => {
+                setWorkspaceInspectionOpen(false);
+                setRecoveryOpen((value) => !value);
+              }}
               aria-pressed={recoveryOpen}
               title="Recovery history"
               className={`flex min-h-[52px] w-[68px] flex-col items-center justify-center gap-1 rounded-md text-[12px] ${recoveryOpen ? 'bg-[#4cc2ff]/15 text-[#4cc2ff]' : 'hover:bg-surface/60'}`}
@@ -881,7 +895,10 @@ export default function App() {
               Recovery
             </button>
             <button
-              onClick={() => setWorkspaceInspectionOpen((value) => !value)}
+              onClick={() => {
+                setRecoveryOpen(false);
+                setWorkspaceInspectionOpen((value) => !value);
+              }}
               aria-pressed={workspaceInspectionOpen}
               title="Remotes and worktrees"
               className={`flex min-h-[52px] w-[68px] flex-col items-center justify-center gap-1 rounded-md text-[12px] ${workspaceInspectionOpen ? 'bg-[#4cc2ff]/15 text-[#4cc2ff]' : 'hover:bg-surface/60'}`}
@@ -891,7 +908,7 @@ export default function App() {
             </button>
             <ToolBtn
               icon={<History size={21} />}
-              label="Rebase plan"
+              label="Rebase"
               disabled={dis || !selectedHash || !!operation}
               onClick={() => setRebasePreviewOpen(true)}
             />
@@ -922,7 +939,7 @@ export default function App() {
                 aria-label="Search commits"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search hash, message, author"
+                placeholder="Search commits"
                 className="w-full rounded-md border border-transparent bg-surface py-2 pl-8 pr-16 outline-none placeholder:text-sub focus:border-[#4cc2ff] focus-visible:ring-2 focus-visible:ring-[#4cc2ff]"
               />
               {search ? (
