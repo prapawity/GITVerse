@@ -6,6 +6,7 @@ import { LaunchScreen } from './LaunchScreen';
 import { UpdateNotice } from './UpdateNotice';
 import { ReleasePicker } from './ReleasePicker';
 import { useSettings } from '../store/settingsStore';
+import { platformApi, desktopApi } from '../platform/api';
 
 export function AppLaunch({ children }: { children: React.ReactNode }) {
   const [result, setResult] = useState<AppUpdateCheck | null>(null);
@@ -21,7 +22,7 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
     const timer = setTimeout(() => {
       if (active) setElapsed(true);
     }, delay);
-    const updates = (window as any).gitApi?.updates;
+    const updates = platformApi()?.updates;
     const check: Promise<AppUpdateCheck> = !useSettings.getState().autoCheckUpdates
       ? Promise.resolve({ kind: 'current', currentVersion: version })
       : updates?.startup
@@ -57,7 +58,7 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
   const retry = async () => {
     setResult(null);
     try {
-      setResult(await (window as any).gitApi.updates.check());
+      setResult(await desktopApi().updates.check());
     } catch (error) {
       setResult({ kind: 'error', currentVersion: version, message: String((error as Error)?.message ?? error) });
     }

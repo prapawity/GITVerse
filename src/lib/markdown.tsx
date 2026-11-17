@@ -17,7 +17,7 @@ function inline(t: string, key = ''): ReactNode[] {
     else if (m[2] != null) out.push(<strong key={key + i}>{m[2]}</strong>);
     else
       out.push(
-        <a key={key + i} href={m[4]} target="_blank" rel="noreferrer noopener" className="text-[#4cc2ff] underline">
+        <a key={key + i} href={m[4]} target="_blank" rel="noreferrer noopener" className="text-accent underline">
           {m[3]}
         </a>,
       );
@@ -36,7 +36,7 @@ export function Markdown({ text }: { text: string }) {
       const code: string[] = [];
       for (i++; i < lines.length && !lines[i].startsWith('```'); i++) code.push(lines[i]);
       out.push(
-        <pre key={i} className="my-3 overflow-auto rounded-md bg-black/30 p-3 font-mono text-[13px]">
+        <pre key={i} className="my-3 overflow-auto rounded-md bg-black/30 p-3 font-mono text-sm">
           {code.join('\n')}
         </pre>,
       );
@@ -44,9 +44,7 @@ export function Markdown({ text }: { text: string }) {
     }
     const h = /^(#{1,6})\s+(.*)/.exec(l);
     if (h) {
-      const sz = ['text-[28px]', 'text-[22px]', 'text-[18px]', 'text-[16px]', 'text-[15px]', 'text-[14px]'][
-        h[1].length - 1
-      ];
+      const sz = ['text-2xl', 'text-lg', 'text-lg', 'text-base', 'text-base', 'text-sm'][h[1].length - 1];
       out.push(
         <div
           key={i}
@@ -98,5 +96,5 @@ export function Markdown({ text }: { text: string }) {
       </p>,
     );
   }
-  return <div className="px-8 py-4 font-sans text-[15px]">{out}</div>;
+  return <div className="px-8 py-4 font-sans text-base">{out}</div>;
 }

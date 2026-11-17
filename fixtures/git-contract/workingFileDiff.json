@@ -1,0 +1,6 @@
+{
+  "staged": "diff --git a/login.txt b/login.txt\nindex 61f5d07..45b58be 100644\n--- a/login.txt\n+++ b/login.txt\n@@ -1 +1,2 @@\n login form\n+remember me\n",
+  "unstaged": "diff --git a/app.txt b/app.txt\nindex 3021541..c901fc1 100644\n--- a/app.txt\n+++ b/app.txt\n@@ -2,3 +2,4 @@ alpha\n beta changed\n gamma\n delta\n+epsilon\n",
+  "deleted": "diff --git a/README.md b/README.md\ndeleted file mode 100644\nindex f845361..0000000\n--- a/README.md\n+++ /dev/null\n@@ -1,4 +0,0 @@\n-# Demo\n-\n-line one\n-line two\n",
+  "untracked": "diff --git a/notes.md b/notes.md\nnew file mode 100644\nindex 0000000..258cd57\n--- /dev/null\n+++ b/notes.md\n@@ -0,0 +1 @@\n+todo\n"
+}

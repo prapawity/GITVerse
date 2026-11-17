@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
+import { desktopApi } from '../platform/api';
 
-const api = () => (window as any).gitApi;
-const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 text-sm outline-none focus:border-[#4cc2ff]';
+const api = () => desktopApi();
+const field = 'w-full rounded-md border border-surface bg-crust px-3 py-2 text-sm outline-none focus:border-accent';
 
 export function CloneDialog({ onClose }: { onClose: () => void }) {
   const [url, setUrl] = useState('');
@@ -84,10 +85,10 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
         </h2>
         {completed ? (
           <div role="status" className="mt-4">
-            <p className="font-medium text-[#a6e3a1]">Repository cloned successfully</p>
+            <p className="font-medium text-success">Repository cloned successfully</p>
             <p className="mt-2 break-all text-sm text-sub">{completed}</p>
             <div className="mt-5 flex justify-end gap-2">
-              <button onClick={onClose} className="rounded-md border border-surface px-3 py-2">
+              <button onClick={onClose} className="btn-secondary px-3 py-2">
                 Close
               </button>
               <button
@@ -95,7 +96,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                   onClose();
                   void useRepo.getState().openRepo(completed);
                 }}
-                className="rounded-md bg-[#4cc2ff] px-4 py-2 font-medium text-crust"
+                className="btn-primary px-4 py-2"
               >
                 Open repository
               </button>
@@ -134,7 +135,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={browse}
                   disabled={running}
-                  className="flex shrink-0 items-center gap-1 rounded-md border border-surface px-3 hover:bg-surface/60"
+                  className="btn-secondary flex shrink-0 items-center gap-1 px-3"
                 >
                   <FolderOpen size={16} /> Browse
                 </button>
@@ -153,7 +154,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
             {error && (
               <div
                 role="alert"
-                className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-[#f38ba8]/40 bg-[#f38ba8]/10 p-3 text-sm text-[#f38ba8]"
+                className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger"
               >
                 {error}
                 {/authentication failed|could not read (username|password)|permission denied|terminal prompts disabled/i.test(
@@ -166,18 +167,13 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={running}
-                className="rounded-md border border-surface px-3 py-2 disabled:opacity-40"
-              >
+              <button type="button" onClick={onClose} disabled={running} className="btn-secondary px-3 py-2">
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={running || !url.trim() || !destination.trim()}
-                className="rounded-md bg-[#4cc2ff] px-4 py-2 font-medium text-crust disabled:opacity-40"
+                className="btn-primary px-4 py-2"
               >
                 {running ? 'Cloning…' : 'Clone'}
               </button>

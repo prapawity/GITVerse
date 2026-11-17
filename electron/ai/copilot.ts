@@ -7,8 +7,7 @@ import {
 } from '@github/copilot-sdk';
 import { AI_SYSTEM, AI_TOOLS, CONFLICT_SYSTEM } from '../../src/shared/aiTools';
 import type { AiErr, NMsg, ResolveResult, TurnResult } from '../../src/shared/aiTypes';
-import { canEncrypt, err, errText, Hooks, readSecret, writeSecret } from './common';
-import { parseResolution } from './openai';
+import { err, errText, type Hooks, parseResolution } from './parse';
 
 /**
  * GitHub Copilot through the official Copilot SDK (technical preview), which drives the Copilot runtime bundled with
@@ -17,24 +16,55 @@ import { parseResolution } from './openai';
  * Safety: the runtime is a coding agent with shell and file tools. Here it is locked to the app's own git tools —
  * every built-in/MCP tool is excluded, and the permission handler rejects anything that is not one of ours.
  */
-const TOKEN = 'ai.copilot.token';
+/** Where the saved GitHub token lives: the Electron keychain store, or the Tauri backend (sidecar). */
+export interface CopilotStore {
+  readToken(): string | null;
+  writeToken(token: string | null): void;
+  canEncrypt(): boolean;
+}
+let store: CopilotStore = { readToken: () => null, writeToken: () => {}, canEncrypt: () => false };
+export function configureCopilot(s: CopilotStore) {
+  store = s;
+}
 let cached: { token: string | null; client: CopilotClient } | null = null;
+let starting: { token: string | null; promise: Promise<CopilotClient> } | null = null;
 let login: { session: CopilotSession; flowId: string } | null = null;
 const sessions = new Map<number, { session: CopilotSession; hooks: Hooks | null; model?: string }>();
 
 async function getClient(): Promise<CopilotClient> {
-  const token = readSecret(TOKEN);
+  const token = store.readToken();
   if (cached && cached.token !== token) {
     await stopAll();
   }
+  if (starting) {
+    if (starting.token === token) return starting.promise;
+    await starting.promise.catch(() => {});
+    await stopAll();
+    return getClient();
+  }
   if (!cached) {
     const client = new CopilotClient({ ...(token ? { gitHubToken: token } : {}), logLevel: 'error' });
-    await client.start();
-    cached = { token, client };
+    const promise = client.start().then(() => {
+      cached = { token, client };
+      return client;
+    });
+    starting = { token, promise };
+    try {
+      await promise;
+    } catch (error) {
+      await client.stop().catch(() => {});
+      throw error;
+    } finally {
+      if (starting?.promise === promise) starting = null;
+    }
   }
+  if (!cached) throw new Error('Copilot runtime startup did not produce a client.');
   return cached.client;
 }
 async function stopAll() {
+  const pending = starting?.promise;
+  starting = null;
+  await pending?.catch(() => {});
   for (const s of sessions.values()) await s.session.disconnect().catch(() => {});
   sessions.clear();
   await cached?.client.stop().catch(() => {});
@@ -47,7 +77,7 @@ export async function copilotShutdown() {
 
 export async function copilotBeginLogin() {
   if (login) throw new Error('A GitHub sign-in is already in progress.');
-  if (readSecret(TOKEN)) throw new Error('Remove the saved GitHub token before signing in with an account.');
+  if (store.readToken()) throw new Error('Remove the saved GitHub token before signing in with an account.');
   const client = await getClient();
   const session = await client.createSession({ onPermissionRequest: () => ({ kind: 'reject' }) });
   try {
@@ -77,12 +107,12 @@ export async function copilotCancelLogin() {
 }
 
 export function copilotSetToken(token: string | null) {
-  writeSecret(TOKEN, token?.trim() || null);
+  store.writeToken(token?.trim() || null);
   return stopAll(); // the client is rebuilt with the new credentials on next use
 }
 
 export async function copilotStatus() {
-  const base = { hasToken: !!readSecret(TOKEN), canEncrypt: canEncrypt() };
+  const base = { hasToken: !!store.readToken(), canEncrypt: store.canEncrypt() };
   try {
     const s = await (await getClient()).getAuthStatus();
     return {
@@ -221,12 +251,19 @@ export async function copilotTurn(
 ): Promise<TurnResult> {
   const last = [...msgs].reverse().find((m) => m.role === 'user');
   if (!last || last.role !== 'user') return { ok: false, error: err('other', 'Nothing to send.') };
+  let holder: Awaited<ReturnType<typeof ensureSession>> | null = null;
   try {
-    const holder = await ensureSession(convId, model);
+    holder = await ensureSession(convId, model);
     const r = await run(holder, last.text, h);
     if ('aborted' in r) return { ok: false, aborted: true };
     return { ok: true, text: r.text, calls: [], stop: 'end', model }; // tools already ran inside the runtime
   } catch (e) {
+    // A failed stream (including "write after a stream was destroyed") leaves
+    // the SDK session unusable. Drop it so the next turn gets a fresh session.
+    if (!h.signal.aborted && holder && sessions.get(convId) === holder) {
+      sessions.delete(convId);
+      await holder.session.disconnect().catch(() => {});
+    }
     return h.signal.aborted ? { ok: false, aborted: true } : { ok: false, error: describe(e) };
   }
 }

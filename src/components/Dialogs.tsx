@@ -31,7 +31,7 @@ const makeFlow = (c: FlowConfig) => [
   { id: '', prefix: '', hint: 'No prefix', color: '#4cc2ff' },
 ];
 
-const btn = 'rounded px-4 py-2 min-h-[36px] font-medium';
+const btn = 'px-4 py-2 min-h-[36px]';
 
 function Shell({ title, onCancel, children }: { title: string; onCancel: () => void; children: React.ReactNode }) {
   useEffect(() => {
@@ -48,7 +48,7 @@ function Shell({ title, onCancel, children }: { title: string; onCancel: () => v
         className="w-[460px] max-w-[92vw] rounded-lg border border-surface bg-mantle p-5 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-3 text-[16px] font-semibold">{title}</h2>
+        <h2 className="mb-3 text-base font-semibold">{title}</h2>
         {children}
       </div>
     </div>
@@ -86,16 +86,16 @@ function FlowDialog({
             role="radio"
             aria-checked={type === t}
             onClick={() => setType(t)}
-            className={`rounded border px-2 py-2 text-left ${type === t ? 'border-[#4cc2ff] bg-[#4cc2ff]/15' : 'border-surface hover:bg-surface/50'}`}
+            className={`rounded border px-2 py-2 text-left ${type === t ? 'border-accent bg-accent/15' : 'border-surface hover:bg-surface/50'}`}
           >
             <div className="font-medium" style={{ color: t.color }}>
               {t.id || 'plain'}
             </div>
-            <div className="text-[12px] text-sub">{t.hint}</div>
+            <div className="text-xs text-sub">{t.hint}</div>
           </button>
         ))}
       </div>
-      <label className="mb-1 block text-[12px] text-sub" htmlFor="bn">
+      <label className="mb-1 block text-xs text-sub" htmlFor="bn">
         Name
       </label>
       <input
@@ -107,23 +107,19 @@ function FlowDialog({
         placeholder="e.g. DEMO-18562-demo-ui"
         aria-invalid={!!err && !!name}
         aria-describedby="bn-err"
-        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
+        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-accent"
       />
-      <div id="bn-err" className="mt-1 min-h-[18px] text-[12px] text-[#f38ba8]">
+      <div id="bn-err" className="mt-1 min-h-[18px] text-xs text-danger">
         {name && err}
       </div>
-      <p className="mt-2 text-[13px] text-sub">
+      <p className="mt-2 text-sm text-sub">
         New branch will start at <span className="break-all font-medium text-text">{source}</span>.
       </p>
       <div className="mt-4 flex justify-end gap-2">
-        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>
+        <button className={`btn-ghost ${btn}`} onClick={() => done(null)}>
           Cancel
         </button>
-        <button
-          disabled={!!err}
-          className={`${btn} bg-[#4cc2ff] text-crust disabled:opacity-40`}
-          onClick={() => done(full)}
-        >
+        <button disabled={!!err} className={`btn-primary ${btn}`} onClick={() => done(full)}>
           Create branch
         </button>
       </div>
@@ -148,14 +144,14 @@ export function DialogHost() {
     };
     return (
       <Shell title={req.title} onCancel={() => done(false)}>
-        <p className="mb-4 text-sub">{req.message}</p>
+        <p className="mb-4 whitespace-pre-wrap break-words text-sub">{req.message}</p>
         <div className="flex justify-end gap-2">
-          <button className={`${btn} hover:bg-surface/60`} onClick={() => done(false)}>
+          <button className={`btn-ghost ${btn}`} onClick={() => done(false)}>
             Cancel
           </button>
           <button
             ref={ref}
-            className={`${btn} ${req.danger ? 'bg-[#f38ba8]' : 'bg-[#4cc2ff]'} text-crust`}
+            className={`btn-primary ${btn} ${req.danger ? '!bg-danger' : ''}`}
             onClick={() => done(true)}
           >
             {req.label ?? 'Confirm'}
@@ -177,17 +173,13 @@ export function DialogHost() {
         aria-label={req.title}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && text.trim() && done(text.trim())}
-        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-[#4cc2ff]"
+        className="w-full rounded border border-surface bg-crust px-3 py-2 outline-none focus:border-accent"
       />
       <div className="mt-4 flex justify-end gap-2">
-        <button className={`${btn} hover:bg-surface/60`} onClick={() => done(null)}>
+        <button className={`btn-ghost ${btn}`} onClick={() => done(null)}>
           Cancel
         </button>
-        <button
-          disabled={!text.trim()}
-          className={`${btn} bg-[#4cc2ff] text-crust disabled:opacity-40`}
-          onClick={() => done(text.trim())}
-        >
+        <button disabled={!text.trim()} className={`btn-primary ${btn}`} onClick={() => done(text.trim())}>
           OK
         </button>
       </div>

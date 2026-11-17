@@ -5,7 +5,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { promisify } from 'node:util';
-import { discardWorkingFiles, discardWorkingHunk, fileChangeCounts, workingFileDiff } from './git';
+import {
+  discardWorkingFiles,
+  discardWorkingHunk,
+  fileChangeCounts,
+  workingFileDiff,
+  stageWorkingHunk,
+  moveIndexHistory,
+} from './git';
 
 const run = promisify(execFile);
 const original = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n') + '\n';
@@ -63,6 +70,37 @@ test('discard a single hunk retains other hunks and the index', async (t) => {
   const remaining = await workingFileDiff(cwd, 'one.txt', 'unstaged');
   await discardWorkingHunk(cwd, 'one.txt', remaining, 0);
   assert.equal(await readFile(path.join(cwd, 'one.txt'), 'utf8'), original);
+});
+
+test('stage and unstage individual hunks preserve other changes and support undo', async (t) => {
+  const { cwd, command } = await fixture(t);
+  const first = original.replace('line 2\n', 'first change\n');
+  const both = first.replace('line 35\n', 'second change\n');
+  await writeFile(path.join(cwd, 'one.txt'), both);
+  const unstaged = await workingFileDiff(cwd, 'one.txt', 'unstaged');
+  await stageWorkingHunk(cwd, 'one.txt', 'unstaged', unstaged, 0);
+  assert.equal(await command('show', ':one.txt'), first);
+  assert.equal(await readFile(path.join(cwd, 'one.txt'), 'utf8'), both);
+  await assert.rejects(stageWorkingHunk(cwd, 'one.txt', 'unstaged', unstaged, 0), /changed since/);
+  const staged = await workingFileDiff(cwd, 'one.txt', 'staged');
+  await stageWorkingHunk(cwd, 'one.txt', 'staged', staged, 0);
+  assert.equal(await command('show', ':one.txt'), original);
+  await moveIndexHistory(cwd, 'undo');
+  assert.equal(await command('show', ':one.txt'), first);
+  assert.equal(await readFile(path.join(cwd, 'one.txt'), 'utf8'), both);
+});
+
+test('partial staging rejects changed snapshots and file mode changes without modifying the index', async (t) => {
+  const { cwd, command } = await fixture(t);
+  await writeFile(path.join(cwd, 'one.txt'), original.replace('line 2\n', 'first\n'));
+  const old = await workingFileDiff(cwd, 'one.txt', 'unstaged');
+  await writeFile(path.join(cwd, 'one.txt'), original.replace('line 2\n', 'newer\n'));
+  await assert.rejects(stageWorkingHunk(cwd, 'one.txt', 'unstaged', old, 0), /changed since/);
+  assert.equal(await command('show', ':one.txt'), original);
+  await command('update-index', '--chmod=+x', 'one.txt');
+  const staged = await workingFileDiff(cwd, 'one.txt', 'staged');
+  await assert.rejects(stageWorkingHunk(cwd, 'one.txt', 'staged', staged, 0), /whole file/);
+  assert.match(await command('diff', '--cached', '--summary'), /mode change/);
 });
 
 test('stale snapshots and invalid selections do not discard any files', async (t) => {

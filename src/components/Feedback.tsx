@@ -48,26 +48,26 @@ function ToastCard({ t }: { t: Toast }) {
         <Icon size={20} className="mt-0.5 shrink-0" style={{ color }} aria-hidden />
         <div className="min-w-0 flex-1">
           <div className="font-semibold leading-snug">{t.title}</div>
-          {detail && !long && <div className="mt-1 break-words text-[13px] text-sub">{detail}</div>}
+          {detail && !long && <div className="mt-1 break-words text-sm text-sub">{detail}</div>}
           {detail && long && (
             <>
               <button
                 onClick={() => setOpen(!open)}
                 aria-expanded={open}
-                className="mt-1 flex items-center gap-1 text-[13px] text-sub hover:text-text"
+                className="mt-1 flex items-center gap-1 text-sm text-sub hover:text-text"
               >
                 {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}{' '}
                 {open ? 'Hide details' : 'Show details'}
               </button>
               {open && (
-                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-crust p-2 font-mono text-[12px] text-sub">
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-crust p-2 font-mono text-xs text-sub">
                   {detail}
                 </pre>
               )}
             </>
           )}
           {t.kind === 'error' && detail && (
-            <button onClick={copy} className="mt-2 flex items-center gap-1.5 text-[13px] text-sub hover:text-text">
+            <button onClick={copy} className="mt-2 flex items-center gap-1.5 text-sm text-sub hover:text-text">
               <Copy size={13} aria-hidden /> {copied ? 'Copied' : 'Copy details'}
             </button>
           )}
@@ -128,10 +128,10 @@ export function BusyOverlay() {
       className="fade-in fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-[2px]"
     >
       <div className="flex w-[340px] flex-col items-center gap-4 rounded-xl border border-surface bg-[#262b36] px-8 py-8 shadow-2xl">
-        <Spinner size={42} className="text-[#4cc2ff]" />
+        <Spinner size={42} className="text-accent" />
         <div className="text-center">
-          <div className="text-[17px] font-semibold">{working ?? last.current}</div>
-          <div className="mt-1 text-[13px] text-sub">
+          <div className="text-lg font-semibold">{working ?? last.current}</div>
+          <div className="mt-1 text-sm text-sub">
             Please wait — the repository is being updated. Don't close the app.
           </div>
         </div>

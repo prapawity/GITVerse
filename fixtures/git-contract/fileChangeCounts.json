@@ -1,0 +1,22 @@
+[
+  {
+    "path": "README.md",
+    "staged": 0,
+    "unstaged": 4
+  },
+  {
+    "path": "app.txt",
+    "staged": 0,
+    "unstaged": 1
+  },
+  {
+    "path": "login.txt",
+    "staged": 1,
+    "unstaged": 0
+  },
+  {
+    "path": "notes.md",
+    "staged": 0,
+    "unstaged": 1
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "index": " ",
+    "worktree": "D",
+    "path": "README.md"
+  },
+  {
+    "index": " ",
+    "worktree": "M",
+    "path": "app.txt"
+  },
+  {
+    "index": "M",
+    "worktree": " ",
+    "path": "login.txt"
+  },
+  {
+    "index": "?",
+    "worktree": "?",
+    "path": "notes.md"
+  }
+]
