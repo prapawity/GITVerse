@@ -8,7 +8,12 @@ import type { Commit, FileChangeCount, FileStatus, RefLabel, StashDetail, StashR
 
 const run = promisify(execFile);
 
-export async function clone(url: string, destination: string, progress: (message: string) => void): Promise<void> {
+export async function clone(
+  url: string,
+  destination: string,
+  progress: (message: string) => void,
+  credentials?: { username: string; password: string },
+): Promise<void> {
   if (typeof url !== 'string' || /[\s\0]/.test(url) || !url || url.startsWith('-'))
     throw new Error('Enter a valid HTTPS or SSH repository URL.');
   // A Windows drive path (C:\repo, C:/repo) also looks like `host:path`; it is a local path, not SSH.
@@ -47,31 +52,58 @@ export async function clone(url: string, destination: string, progress: (message
   await access(path.dirname(destination)).catch(() => {
     throw new Error('The destination parent folder does not exist or cannot be accessed.');
   });
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn('git', ['clone', '--progress', '--', url, destination], {
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: '0',
-        GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes',
-      },
-      stdio: ['ignore', 'ignore', 'pipe'],
+  let authDir: string | undefined;
+  try {
+    const env = {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes',
+    };
+    if (credentials) {
+      if (!url.startsWith('https://') || !credentials.username || !credentials.password)
+        throw new Error('Enter HTTPS credentials.');
+      if (process.platform === 'win32') throw new Error('Use the system credential manager on Windows.');
+      authDir = await mkdtemp(path.join(tmpdir(), 'gitverse-auth-'));
+      const askpass = path.join(authDir, 'askpass');
+      await writeFile(
+        askpass,
+        '#!/bin/sh\ncase "$1" in *sername*) printf "%s\\n" "$GITVERSE_PUSH_USER" ;; *) printf "%s\\n" "$GITVERSE_PUSH_TOKEN" ;; esac\n',
+        { mode: 0o700 },
+      );
+      Object.assign(env, {
+        GIT_ASKPASS: askpass,
+        GITVERSE_PUSH_USER: credentials.username,
+        GITVERSE_PUSH_TOKEN: credentials.password,
+      });
+    }
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        'git',
+        [...(credentials ? ['-c', 'credential.helper='] : []), 'clone', '--progress', '--', url, destination],
+        {
+          env,
+          stdio: ['ignore', 'ignore', 'pipe'],
+        },
+      );
+      let output = '';
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk: string) => {
+        output = (output + chunk).slice(-16000);
+        const line = chunk
+          .split(/[\r\n]+/)
+          .filter(Boolean)
+          .pop();
+        if (line) progress(line);
+      });
+      child.on('error', (error) => reject(new Error(`Could not start Git: ${error.message}`)));
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(output.trim() || `Git clone failed (exit ${code ?? 'unknown'}).`));
+      });
     });
-    let output = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
-      output = (output + chunk).slice(-16000);
-      const line = chunk
-        .split(/[\r\n]+/)
-        .filter(Boolean)
-        .pop();
-      if (line) progress(line);
-    });
-    child.on('error', (error) => reject(new Error(`Could not start Git: ${error.message}`)));
-    child.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(output.trim() || `Git clone failed (exit ${code ?? 'unknown'}).`));
-    });
-  });
+  } finally {
+    if (authDir) await rm(authDir, { recursive: true, force: true });
+  }
 }
 let activeIdentity: { name: string; email: string } | null = null;
 export function setActiveIdentity(identity: { name: string; email: string } | null) {
@@ -139,7 +171,12 @@ function parseRefs(decoration: string): RefLabel[] {
 const F = '\x1f';
 const R = '\x1e';
 
-export async function log(cwd: string, limit = 400, skip = 0): Promise<Commit[]> {
+const historyOrder = (sort: string) => {
+  if (!['topo', 'date', 'author-date'].includes(sort)) throw new Error('Invalid history order.');
+  return `--${sort}-order`;
+};
+
+export async function log(cwd: string, limit = 400, skip = 0, sort = 'topo'): Promise<Commit[]> {
   const fmt = ['%H', '%P', '%D', '%an', '%ae', '%aI', '%s', '%b'].join('%x1f') + '%x1e';
   const bases = (await stashEntries(cwd)).map((stash) => stash.baseHash).filter((hash): hash is string => !!hash);
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
@@ -151,7 +188,7 @@ export async function log(cwd: string, limit = 400, skip = 0): Promise<Commit[]>
     '--branches',
     '--remotes',
     '--tags',
-    '--topo-order',
+    historyOrder(sort),
     '--decorate=full',
     `--skip=${skip}`,
     `-n${limit}`,
@@ -651,7 +688,7 @@ export async function agentCheckpoints(cwd: string) {
     });
 }
 
-export async function historyPosition(cwd: string, hash: string) {
+export async function historyPosition(cwd: string, hash: string, sort = 'topo') {
   if (!/^[0-9a-f]{40,64}$/i.test(hash)) throw new Error('Invalid commit ID.');
   const bases = (await stashEntries(cwd)).map((stash) => stash.baseHash).filter((base): base is string => !!base);
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
@@ -663,7 +700,7 @@ export async function historyPosition(cwd: string, hash: string) {
     '--branches',
     '--remotes',
     '--tags',
-    '--topo-order',
+    historyOrder(sort),
     ...(hasHead ? ['HEAD'] : []),
     ...bases,
   ]);

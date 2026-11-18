@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Laptop } from 'lucide-react';
+import { Laptop, Settings2 } from 'lucide-react';
 import type { GraphLayout, GraphRow, RefLabel, Segment } from '../shared/types';
 import { groupRefs } from '../lib/refGroups';
 import { Spinner } from './Loading';
-import { useSettings } from '../store/settingsStore';
+import { DEFAULTS, useSettings } from '../store/settingsStore';
+import { useRepo } from '../store/repoStore';
 
 const ROW_H = 28;
 const LANE_W = 16;
@@ -88,9 +89,6 @@ const initials = (n: string) =>
     .join('')
     .toUpperCase() || '?';
 
-const META_AUTHOR_W = 110;
-const META_TIME_W = 88;
-
 /** Shortens from the middle so both the prefix (codex/) and the distinguishing end of a branch name stay visible. */
 function fitMiddle(ctx: CanvasRenderingContext2D, text: string, max: number) {
   if (ctx.measureText(text).width <= max) return text;
@@ -103,18 +101,6 @@ function fitMiddle(ctx: CanvasRenderingContext2D, text: string, max: number) {
     else hi = m - 1;
   }
   return cut(lo);
-}
-
-function fit(ctx: CanvasRenderingContext2D, text: string, max: number) {
-  if (ctx.measureText(text).width <= max) return text;
-  let lo = 0,
-    hi = text.length;
-  while (lo < hi) {
-    const m = (lo + hi + 1) >> 1;
-    if (ctx.measureText(text.slice(0, m) + '…').width <= max) lo = m;
-    else hi = m - 1;
-  }
-  return text.slice(0, lo) + '…';
 }
 
 function segmentPath(segment: Segment, x1: number, x2: number, top: number) {
@@ -161,6 +147,26 @@ export function CommitGraph({
   upstream,
 }: Props) {
   const light = useSettings((s) => s.theme === 'light');
+  const columns = useSettings((s) => s.graphColumns);
+  const sort = useSettings((s) => s.graphSort);
+  const setSettings = useSettings((s) => s.set);
+  const [columnMenu, setColumnMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!columnMenu) return;
+    const close = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setColumnMenu(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setColumnMenu(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [columnMenu]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigated = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -187,17 +193,22 @@ export function CommitGraph({
   const [colW, setColW] = useState<number | null>(null);
   const [gScroll, setGScroll] = useState(0);
   const naturalW = PAD * 2 + Math.max(2, layout.maxLanes) * LANE_W + wipOffset;
-  const graphW = colW ?? Math.max(GRAPH_MIN, Math.min(naturalW, Math.max(GRAPH_MIN, size.w - REF_W - 240)));
-  const maxGScroll = Math.max(0, naturalW - graphW);
+  const desiredRefW = columns.branch ? REF_W : 0;
+  const desiredGraphW = columns.graph
+    ? (colW ?? Math.max(GRAPH_MIN, Math.min(naturalW, Math.max(GRAPH_MIN, size.w - desiredRefW - 240))))
+    : 0;
+  const fixedW = desiredRefW + desiredGraphW;
+  const scale = fixedW ? Math.min(1, Math.max(0, size.w - 32 - 80) / fixedW) : 1;
+  const refW = desiredRefW * scale;
+  const graphW = desiredGraphW * scale;
+  const maxGScroll = columns.graph ? Math.max(0, naturalW - graphW) : 0;
   const gs = Math.min(gScroll, maxGScroll);
-  const gx = (lane: number) => REF_W + PAD + wipOffset + lane * LANE_W + LANE_W / 2 - gs;
-  const gL = REF_W,
-    gR = REF_W + graphW;
+  const gx = (lane: number) => refW + PAD + wipOffset + lane * LANE_W + LANE_W / 2 - gs;
+  const gL = refW,
+    gR = refW + graphW;
   const clampX = (x: number) => Math.max(gL, Math.min(gR, x));
-  const msgX = REF_W + graphW + 10;
-  // fixed author + time column on the right, dropped when the message area gets too narrow
-  const metaW = size.w - msgX > 400 ? META_AUTHOR_W + META_TIME_W + 24 : 0;
-  const availMsg = Math.max(0, size.w - msgX - 12 - metaW);
+  const msgX = refW + graphW + 10;
+  const availMsg = Math.max(0, size.w - msgX - 32);
   const maxMsgScroll = Math.max(0, maxMsgW.current - availMsg + 16);
   const ms = Math.min(msgScroll, maxMsgScroll);
 
@@ -250,7 +261,7 @@ export function CommitGraph({
 
     if (wipRows && scrollTop < ROW_H) {
       const top = -scrollTop;
-      const x = clampX(REF_W + PAD + LANE_W / 2 - gs);
+      const x = clampX(refW + PAD + LANE_W / 2 - gs);
       if (wipSelected || hover === -1) {
         ctx.fillStyle = wipSelected ? 'rgba(79,193,233,0.14)' : 'rgba(255,255,255,0.04)';
         ctx.fillRect(0, top, size.w, ROW_H);
@@ -260,12 +271,17 @@ export function CommitGraph({
       glow.addColorStop(1, 'rgba(76,194,255,0.03)');
       ctx.fillStyle = glow;
       ctx.fillRect(x, top + 3, msgX - 6 - x, ROW_H - 6);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(msgX, top, availMsg, ROW_H);
+      ctx.clip();
       ctx.fillStyle = light ? '#006a89' : '#80efff';
       ctx.font = '600 13px Inter, system-ui, sans-serif';
       ctx.fillText('// WIP', msgX, top + ROW_H / 2);
       ctx.font = FONT;
       ctx.fillStyle = light ? '#9b5a00' : '#e3ad62';
       ctx.fillText(`${changeCount} changed · ${stagedCount} staged`, msgX + 64, top + ROW_H / 2);
+      ctx.restore();
       if (graphFocused && keyboardRow === -1) {
         ctx.strokeStyle = light ? '#006f9e' : '#8fe8ff';
         ctx.lineWidth = 2;
@@ -293,11 +309,13 @@ export function CommitGraph({
         ctx.lineWidth = 2;
         ctx.strokeRect(1, top + 1, Math.max(0, size.w - 2), ROW_H - 2);
       }
-      // band from the node across to the message column, ending in a lane-coloured bar
-      // only the selected row gets the band; other rows keep just the lane bar so the list stays calm
+      // Fade each lane's color toward its commit message.
       const bx = clampX(cx);
-      if (selected) {
-        ctx.fillStyle = lane + '33';
+      if (graphW > 0 && msgX - 6 > bx) {
+        const band = ctx.createLinearGradient(bx, 0, msgX - 6, 0);
+        band.addColorStop(0, lane + (selected ? '55' : '22'));
+        band.addColorStop(1, lane + (selected ? '18' : '05'));
+        ctx.fillStyle = band;
         ctx.fillRect(bx, top + 3, msgX - 6 - bx, ROW_H - 6);
       }
       ctx.fillStyle = lane;
@@ -316,7 +334,7 @@ export function CommitGraph({
     ctx.clip();
     if (showLines) {
       if (wipRows) {
-        const x = REF_W + PAD + LANE_W / 2 - gs;
+        const x = refW + PAD + LANE_W / 2 - gs;
         const start = ROW_H / 2 - scrollTop;
         ctx.save();
         ctx.strokeStyle = light ? '#0089b3' : '#70efff';
@@ -383,11 +401,15 @@ export function CommitGraph({
       const cx = gx(showLines ? row.col : 0);
       const lane = col(row.color, light);
 
-      if (c.stashId) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, top, refW, ROW_H);
+      ctx.clip();
+      if (columns.branch && c.stashId) {
         ctx.font = FONT;
         const prefix = '[Stash]';
         const label = c.stashBranch
-          ? `: ${fitMiddle(ctx, c.stashBranch, REF_W - 35 - ctx.measureText(prefix).width)}`
+          ? `: ${fitMiddle(ctx, c.stashBranch, Math.max(0, refW - 35 - ctx.measureText(prefix).width))}`
           : '';
         const width = ctx.measureText(prefix + label).width + 16;
         ctx.fillStyle = light ? '#f5f0e7' : '#292c2e';
@@ -403,7 +425,7 @@ export function CommitGraph({
         ctx.fillText(prefix + label, 16, mid + 0.5);
       }
 
-      if (c.refs.length) {
+      if (columns.branch && c.refs.length) {
         const groups = groupRefs(c.refs);
         const group = groups.find((x) => x.ref.current) ?? groups[0];
         const ref = group.ref;
@@ -413,7 +435,11 @@ export function CommitGraph({
         const hasRemote = ref.kind === 'remote' || group.remotes.length > 0;
         const iconW = (hasLocal ? 17 : 0) + (hasRemote || ref.kind === 'tag' ? 18 : 0);
         const extraW = extra ? ctx.measureText(extra).width + 8 : 0;
-        const name = fitMiddle(ctx, ref.kind === 'head' ? 'Detached HEAD' : ref.name, REF_W - 30 - iconW - extraW);
+        const name = fitMiddle(
+          ctx,
+          ref.kind === 'head' ? 'Detached HEAD' : ref.name,
+          Math.max(0, refW - 30 - iconW - extraW),
+        );
         const w = ctx.measureText(name).width + 16 + iconW + extraW;
         const dim = !ref.current && c.hash !== selectedHash;
         ctx.globalAlpha = dim ? 0.75 : 1;
@@ -477,6 +503,8 @@ export function CommitGraph({
         ctx.font = FONT;
       }
 
+      ctx.restore();
+
       // node (clipped to the graph column)
       ctx.save();
       ctx.beginPath();
@@ -523,42 +551,34 @@ export function CommitGraph({
         ctx.restore();
       }
 
-      // message: subject, then dim body preview
+      // Message and optional details share one horizontal scrolling area.
       ctx.font = FONT;
-      const subjW = ctx.measureText(c.subject).width;
-      // when the window is too narrow for the fixed author/time column, they follow the subject and scroll with it
-      const inlineMeta = metaW ? '' : `${c.author} · ${commitTime(c.date)}`;
-      const inlineW = inlineMeta ? ctx.measureText(inlineMeta).width + 20 : 0;
-      const total = subjW + (c.hash === headHash ? 44 : 0) + inlineW;
+      const subject = columns.message ? c.subject : '';
+      const prefix = columns.message && c.hash === headHash ? 'HEAD  ' : '';
+      const details = [
+        columns.author && c.author,
+        columns.date && commitTime(c.date),
+        columns.sha && c.hash.slice(0, 7),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const subjectW = ctx.measureText(prefix + subject).width;
+      const total = subjectW + (details ? (subject ? 20 : 0) + ctx.measureText(details).width : 0);
       if (total > maxMsgW.current + 1) {
         maxMsgW.current = total;
         grew = true;
       }
       ctx.save();
       ctx.beginPath();
-      ctx.rect(msgX, top, availMsg, ROW_H); // clip so scrolled text never bleeds into the graph or the meta column
+      ctx.rect(msgX, top, availMsg, ROW_H);
       ctx.clip();
       ctx.fillStyle = light ? '#1d2939' : '#e8eef6';
-      const prefix = c.hash === headHash ? 'HEAD  ' : '';
-      if (prefix) {
-        ctx.fillStyle = light ? '#006b91' : '#8fe8ff';
-        ctx.fillText(prefix, msgX - ms, mid + 0.5);
-        ctx.fillStyle = light ? '#1d2939' : '#e8eef6';
-      }
-      const prefixW = ctx.measureText(prefix).width;
-      ctx.fillText(c.subject, msgX - ms + prefixW, mid + 0.5);
-      if (inlineMeta) {
+      ctx.fillText(prefix + subject, msgX - ms, mid + 0.5);
+      if (details) {
         ctx.fillStyle = light ? '#586b81' : '#a2afbf';
-        ctx.fillText(inlineMeta, msgX - ms + prefixW + subjW + 20, mid + 0.5);
+        ctx.fillText(details, msgX - ms + subjectW + (subject ? 20 : 0), mid + 0.5);
       }
       ctx.restore();
-      if (metaW) {
-        const metaX = size.w - 12 - metaW + 12;
-        ctx.fillStyle = light ? '#586b81' : '#a2afbf';
-        ctx.fillText(fit(ctx, c.author, META_AUTHOR_W), metaX, mid + 0.5);
-        const when = commitTime(c.date);
-        ctx.fillText(when, size.w - 14 - ctx.measureText(when).width, mid + 0.5);
-      }
     }
     if (grew) setMsgVer((v) => v + 1);
   }, [
@@ -582,6 +602,9 @@ export function CommitGraph({
     headIndex,
     light,
     highlightedLane,
+    columns,
+    refW,
+    availMsg,
   ]);
 
   useEffect(() => {
@@ -618,38 +641,43 @@ export function CommitGraph({
     return lane ?? null;
   };
 
-  const headCls = 'px-3 text-2xs font-mono uppercase tracking-wider text-sub flex items-center';
+  const headCls =
+    'overflow-hidden whitespace-nowrap px-3 text-2xs font-mono uppercase tracking-wider text-sub flex items-center';
   return (
-    <div className="relative flex h-full w-full flex-col bg-[var(--graph)]">
+    <div className="relative flex h-full w-full min-w-0 flex-col bg-[var(--graph)]">
       <div className="flex shrink-0 border-b border-surface bg-[var(--graph)]" style={{ height: HEAD_H }}>
-        <div className={headCls} style={{ width: REF_W }}>
-          Branch / Tag
-        </div>
-        <div className={headCls + ' relative'} style={{ width: graphW }}>
-          Graph
-          <div
-            role="separator"
-            aria-label="Resize graph column"
-            aria-orientation="vertical"
-            className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/60"
-            onMouseDown={(e) => {
-              const x0 = e.clientX,
-                w0 = graphW;
-              const move = (ev: MouseEvent) =>
-                setColW(Math.max(GRAPH_MIN, Math.min(size.w - REF_W - 200, w0 + ev.clientX - x0)));
-              const up = () => {
-                window.removeEventListener('mousemove', move);
-                window.removeEventListener('mouseup', up);
-              };
-              window.addEventListener('mousemove', move);
-              window.addEventListener('mouseup', up);
-            }}
-            onDoubleClick={() => setColW(Math.max(GRAPH_MIN, Math.min(naturalW, size.w - REF_W - 200)))}
-            title="Drag to resize · double-click to fit all lanes"
-          />
-        </div>
+        {columns.branch && (
+          <div className={headCls + ' shrink-0'} style={{ width: refW }}>
+            Branch / Tag
+          </div>
+        )}
+        {columns.graph && (
+          <div className={headCls + ' relative shrink-0'} style={{ width: graphW }}>
+            Graph
+            <div
+              role="separator"
+              aria-label="Resize graph column"
+              aria-orientation="vertical"
+              className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/60"
+              onMouseDown={(e) => {
+                const x0 = e.clientX,
+                  w0 = graphW;
+                const move = (ev: MouseEvent) =>
+                  setColW(Math.max(GRAPH_MIN, Math.min(size.w - refW - 200, w0 + ev.clientX - x0)));
+                const up = () => {
+                  window.removeEventListener('mousemove', move);
+                  window.removeEventListener('mouseup', up);
+                };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+              }}
+              onDoubleClick={() => setColW(Math.max(GRAPH_MIN, Math.min(naturalW, size.w - refW - 200)))}
+              title="Drag to resize · double-click to fit all lanes"
+            />
+          </div>
+        )}
         <div className={headCls + ' min-w-0 flex-1 justify-between gap-2'}>
-          <span className="shrink-0 whitespace-nowrap">Commit message</span>
+          {columns.message && <span className="truncate whitespace-nowrap">Commit message</span>}
           {upstream && (
             <span
               className="truncate normal-case tracking-normal"
@@ -661,6 +689,113 @@ export function CommitGraph({
             >
               {upstream.gone ? `${upstream.name} · gone` : `${upstream.name}  ↑${upstream.ahead} ↓${upstream.behind}`}
             </span>
+          )}
+        </div>
+        <div ref={menuRef} className="relative z-40 shrink-0">
+          <button
+            type="button"
+            aria-label="Column settings"
+            aria-expanded={columnMenu}
+            onClick={() => setColumnMenu(!columnMenu)}
+            className="flex h-7 w-8 items-center justify-center text-sub hover:text-text"
+          >
+            <Settings2 size={15} />
+          </button>
+          {columnMenu && (
+            <div
+              role="group"
+              aria-label="Column settings"
+              className="absolute right-0 top-full w-64 rounded-lg border border-surface bg-mantle py-1 shadow-2xl"
+            >
+              {(
+                [
+                  ['branch', 'Branch / Tag'],
+                  ['graph', 'Graph'],
+                  ['message', 'Commit message'],
+                  ['author', 'Author'],
+                  ['date', 'Date / Time'],
+                  ['sha', 'SHA'],
+                ] as const
+              ).map(([key, label]) => (
+                <label
+                  key={key}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-1.5 text-sm hover:bg-accent/10"
+                >
+                  <input
+                    type="checkbox"
+                    checked={columns[key]}
+                    onChange={(e) => {
+                      maxMsgW.current = 0;
+                      setMsgScroll(0);
+                      setSettings('graphColumns', { ...columns, [key]: e.target.checked });
+                    }}
+                    className="accent-accent"
+                  />
+                  {label}
+                </label>
+              ))}
+              <div className="my-1 border-t border-surface" />
+              <label className="block px-3 py-2 text-sm">
+                Sort history
+                <select
+                  value={sort}
+                  onChange={(e) => {
+                    setSettings('graphSort', e.target.value as 'topo' | 'date' | 'author-date');
+                    scrollRef.current?.scrollTo({ top: 0 });
+                    void useRepo.getState().refresh();
+                  }}
+                  className="mt-1 w-full rounded border border-surface bg-crust p-1.5 text-text"
+                >
+                  <option value="topo">Branch topology</option>
+                  <option value="date">Commit date</option>
+                  <option value="author-date">Author date</option>
+                </select>
+              </label>
+              <div className="my-1 border-t border-surface" />
+              <button
+                type="button"
+                onClick={() => {
+                  setColW(GRAPH_MIN);
+                  setGScroll(0);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent/10"
+              >
+                Compact graph width (keeps selected columns)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettings('graphColumns', DEFAULTS.graphColumns);
+                  maxMsgW.current = 0;
+                  setMsgScroll(0);
+                  setGScroll(0);
+                  setColW(null);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent/10"
+              >
+                Reset columns to default layout
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettings('graphColumns', {
+                    branch: true,
+                    graph: true,
+                    message: true,
+                    author: false,
+                    date: false,
+                    sha: false,
+                  });
+                  maxMsgW.current = 0;
+                  setMsgScroll(0);
+                  setGScroll(0);
+                  setColW(GRAPH_MIN);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent/10"
+              >
+                Reset columns to compact layout
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -798,7 +933,7 @@ export function CommitGraph({
         }}
         onDoubleClick={(e) => {
           const i = rowAt(e);
-          if (e.clientX - e.currentTarget.getBoundingClientRect().left >= REF_W || i === null || i < 0) return;
+          if (e.clientX - e.currentTarget.getBoundingClientRect().left >= refW || i === null || i < 0) return;
           const groups = groupRefs(rows[i].commit.refs);
           const ref = (groups.find((g) => g.ref.current) ?? groups[0])?.ref;
           if (ref) onDoubleClick?.(ref);
@@ -925,7 +1060,7 @@ export function CommitGraph({
           <div className="pointer-events-none sticky z-10 h-0" style={{ bottom: 8 }}>
             <div
               className="absolute h-1.5 rounded-full bg-white/25"
-              style={{ left: REF_W + (gs / naturalW) * graphW, width: (graphW / naturalW) * graphW }}
+              style={{ left: refW + (gs / naturalW) * graphW, width: (graphW / naturalW) * graphW }}
             />
           </div>
         )}
@@ -961,7 +1096,7 @@ export function CommitGraph({
         )}
       {/* hovering the branch/tag column of any commit that has refs lists all of them with their full names */}
       {hover !== null &&
-        hoverX < REF_W &&
+        hoverX < refW &&
         rows[hover]?.commit.refs.length > 0 &&
         (() => {
           const shown = rows[hover].commit.refs;

@@ -74,6 +74,8 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 body {
   /* app chrome is not selectable; content (inputs, code, diffs, messages, paths) opts back in */

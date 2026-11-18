@@ -365,3 +365,33 @@ test(
     assert.equal(await command('write-tree'), originalIndex);
   },
 );
+
+test('history ordering and navigation use the same Git order', async (t) => {
+  const cwd = await mkdtemp(path.join(tmpdir(), 'gitverse-order-'));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const command = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+  await command('init', '--quiet');
+  await command('config', 'user.name', 'Test');
+  await command('config', 'user.email', 'test@example.com');
+  await command('commit', '--allow-empty', '--no-gpg-sign', '-m', 'base');
+  await command('branch', 'other');
+  await command('commit', '--allow-empty', '--no-gpg-sign', '-m', 'first');
+  await command('checkout', 'other');
+  await command('commit', '--allow-empty', '--no-gpg-sign', '-m', 'second');
+  for (const sort of ['topo', 'date', 'author-date']) {
+    const expected = (await command('rev-list', '--branches', '--remotes', '--tags', `--${sort}-order`, 'HEAD')).split(
+      '\n',
+    );
+    const commits = await log(cwd, 400, 0, sort);
+    assert.deepEqual(
+      commits.map((commit) => commit.hash),
+      expected,
+    );
+    assert.deepEqual(
+      (await log(cwd, 1, 1, sort)).map((commit) => commit.hash),
+      expected.slice(1, 2),
+    );
+    assert.equal(await historyPosition(cwd, expected[1], sort), 1);
+  }
+  await assert.rejects(log(cwd, 400, 0, 'invalid'), /Invalid history order/);
+});

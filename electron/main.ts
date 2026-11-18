@@ -173,10 +173,17 @@ ipcMain.handle('repo:findRepositories', async (event, folder: string, id: string
   }
 });
 
-ipcMain.handle('repo:clone', (event, url: string, destination: string) =>
-  git.clone(url, destination, (message) => {
-    if (!event.sender.isDestroyed()) event.sender.send('repo:cloneProgress', message);
-  }),
+ipcMain.handle(
+  'repo:clone',
+  (event, url: string, destination: string, credentials?: { username: string; password: string }) =>
+    git.clone(
+      url,
+      destination,
+      (message) => {
+        if (!event.sender.isDestroyed()) event.sender.send('repo:cloneProgress', message);
+      },
+      credentials,
+    ),
 );
 
 const pushTokenKey = (repo: string, id: string) =>

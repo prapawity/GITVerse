@@ -63,6 +63,15 @@ pub fn validate_clone_url(url: &str) -> Result<()> {
 }
 
 pub async fn clone(url: &str, destination: &str, mut progress: impl FnMut(&str)) -> Result<()> {
+    clone_with_credentials(url, destination, None, &mut progress).await
+}
+
+pub async fn clone_with_credentials(
+    url: &str,
+    destination: &str,
+    credentials: Option<(&str, &str)>,
+    mut progress: impl FnMut(&str),
+) -> Result<()> {
     validate_clone_url(url)?;
     let dest = Path::new(destination);
     if !dest.is_absolute() || destination.contains('\0') || dest.parent().is_none() {
@@ -77,6 +86,30 @@ pub async fn clone(url: &str, destination: &str, mut progress: impl FnMut(&str))
         invalid("The destination parent folder does not exist or cannot be accessed.")
     })?;
     let mut cmd = Command::new("git");
+    let mut _auth_dir = None;
+    if let Some((username, password)) = credentials {
+        if !url.starts_with("https://") || username.is_empty() || password.is_empty() {
+            return Err(invalid("Enter HTTPS credentials."));
+        }
+        if cfg!(windows) {
+            return Err(invalid("Use the system credential manager on Windows."));
+        }
+        let dir = tempfile::Builder::new()
+            .prefix("gitverse-auth-")
+            .tempdir()?;
+        let askpass = dir.path().join("askpass");
+        std::fs::write(&askpass, "#!/bin/sh\ncase \"$1\" in *sername*) printf \"%s\\n\" \"$GITVERSE_PUSH_USER\" ;; *) printf \"%s\\n\" \"$GITVERSE_PUSH_TOKEN\" ;; esac\n")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&askpass, std::fs::Permissions::from_mode(0o700))?;
+        }
+        cmd.args(["-c", "credential.helper="])
+            .env("GIT_ASKPASS", askpass)
+            .env("GITVERSE_PUSH_USER", username)
+            .env("GITVERSE_PUSH_TOKEN", password);
+        _auth_dir = Some(dir);
+    }
     cmd.args(["clone", "--progress", "--", url, destination])
         .current_dir(parent)
         .env("GIT_TERMINAL_PROMPT", "0")

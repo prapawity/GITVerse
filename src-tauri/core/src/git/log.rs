@@ -119,7 +119,27 @@ pub fn parse_log(out: &str) -> Vec<Commit> {
         .collect()
 }
 
+fn history_order(sort: &str) -> Result<&'static str> {
+    match sort {
+        "topo" => Ok("--topo-order"),
+        "date" => Ok("--date-order"),
+        "author-date" => Ok("--author-date-order"),
+        _ => Err(AppError::Invalid("Invalid history order.".into())),
+    }
+}
+
 pub async fn log(git: &GitRunner, cwd: &Path, limit: u64, skip: u64) -> Result<Vec<Commit>> {
+    log_sorted(git, cwd, limit, skip, "topo").await
+}
+
+pub async fn log_sorted(
+    git: &GitRunner,
+    cwd: &Path,
+    limit: u64,
+    skip: u64,
+    sort: &str,
+) -> Result<Vec<Commit>> {
+    let order = history_order(sort)?;
     let stashes = super::refs::stash_entries(git, cwd).await?;
     let fmt = format!(
         "{}%x1e",
@@ -136,7 +156,7 @@ pub async fn log(git: &GitRunner, cwd: &Path, limit: u64, skip: u64) -> Result<V
         "--branches",
         "--remotes",
         "--tags",
-        "--topo-order",
+        order,
         "--decorate=full",
         &skip,
         &limit,
@@ -160,18 +180,22 @@ pub(crate) fn is_object_id(s: &str) -> bool {
 
 /// Index of `hash` in the same topo-ordered history the graph shows (for jumping to a commit).
 pub async fn history_position(git: &GitRunner, cwd: &Path, hash: &str) -> Result<usize> {
+    history_position_sorted(git, cwd, hash, "topo").await
+}
+
+pub async fn history_position_sorted(
+    git: &GitRunner,
+    cwd: &Path,
+    hash: &str,
+    sort: &str,
+) -> Result<usize> {
+    let order = history_order(sort)?;
     if !is_object_id(hash) {
         return Err(AppError::Invalid("Invalid commit ID.".into()));
     }
     let stashes = super::refs::stash_entries(git, cwd).await?;
     let has_head = git.succeeds(cwd, &["rev-parse", "--verify", "HEAD"]).await;
-    let mut args = vec![
-        "rev-list",
-        "--branches",
-        "--remotes",
-        "--tags",
-        "--topo-order",
-    ];
+    let mut args = vec!["rev-list", "--branches", "--remotes", "--tags", order];
     if has_head {
         args.push("HEAD");
     }
@@ -194,6 +218,14 @@ pub async fn history_position(git: &GitRunner, cwd: &Path, hash: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validates_history_order() {
+        assert_eq!(history_order("topo").unwrap(), "--topo-order");
+        assert_eq!(history_order("date").unwrap(), "--date-order");
+        assert_eq!(history_order("author-date").unwrap(), "--author-date-order");
+        assert!(history_order("invalid").is_err());
+    }
 
     #[test]
     fn parses_decorations() {

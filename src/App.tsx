@@ -178,8 +178,8 @@ export default function App() {
   const scanRequest = useRef<{ id: string; cancelled: boolean } | null>(null);
   const dragDepth = useRef(0);
   const draggedTab = useRef<string | null>(null);
-  const draggedTabWidth = useRef(0);
-  const [dropTab, setDropTab] = useState<string | null>(null);
+  const [dropTab, setDropTab] = useState<{ target: string; after: boolean } | null>(null);
+  const suppressTabClick = useRef(false);
   const [groupMenu, setGroupMenu] = useState<{ repo: string; x: number; y: number } | null>(null);
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [pushRepo, setPushRepo] = useState<string | null>(null);
@@ -501,6 +501,7 @@ export default function App() {
   useEffect(
     () =>
       platformApi()?.onFileDrop?.((event) => {
+        if (draggedTab.current) return;
         if (event.type === 'enter') setDraggingFolders(true);
         else {
           dragDepth.current = 0;
@@ -548,14 +549,14 @@ export default function App() {
         setGroupMenu(null);
       }}
       onDragEnter={(e) => {
-        if (e.dataTransfer.types.includes('Files')) {
+        if (!draggedTab.current && e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
           dragDepth.current++;
           setDraggingFolders(true);
         }
       }}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('Files')) {
+        if (!draggedTab.current && e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
         }
@@ -567,7 +568,9 @@ export default function App() {
           setDraggingFolders(false);
         }
       }}
-      onDrop={(e) => void dropFolders(e)}
+      onDrop={(e) => {
+        if (!draggedTab.current && e.dataTransfer.types.includes('Files')) void dropFolders(e);
+      }}
     >
       {(draggingFolders || scanningFolders) && (
         <div
@@ -624,63 +627,86 @@ export default function App() {
           >
             <Plus size={17} />
           </button>
-          <div
-            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTab(null);
-            }}
-          >
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {recentRepos.map((r, index) => {
               const group = repoGroups[r] || '';
               if (group && recentRepos.findIndex((path) => repoGroups[path] === group) !== index) return null;
               const repos = group ? recentRepos.filter((path) => repoGroups[path] === group) : [r];
-              const preview = dropTab === r && draggedTab.current && (
-                <div
-                  aria-hidden="true"
-                  style={{ width: draggedTabWidth.current }}
-                  className="mx-1 flex h-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-accent bg-accent/20 px-2 text-sm text-accent"
-                >
-                  <span className="truncate">
-                    {repoGroups[draggedTab.current] || draggedTab.current.split(/[\\/]/).filter(Boolean).pop()}
-                  </span>
-                </div>
-              );
-              const previewAfter = draggedTab.current && recentRepos.indexOf(draggedTab.current) < index;
               return (
                 <div
                   key={group || r}
-                  className={`flex shrink-0 items-center ${draggedTab.current === r ? 'opacity-40' : ''}`}
-                  draggable
-                  onDragStart={(e) => {
-                    draggedTab.current = r;
-                    draggedTabWidth.current = e.currentTarget.getBoundingClientRect().width;
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', r);
-                  }}
-                  onDragEnd={() => {
-                    draggedTab.current = null;
-                    setDropTab(null);
-                  }}
-                  onDragOver={(e) => {
-                    if (draggedTab.current) {
+                  data-repo-tab={r}
+                  className={`relative flex shrink-0 items-center ${draggedTab.current === r ? 'opacity-40' : ''}`}
+                  onDragStart={(e) => e.preventDefault()}
+                  onClickCapture={(e) => {
+                    if (suppressTabClick.current) {
                       e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                      setDropTab(draggedTab.current === r ? null : r);
+                      e.stopPropagation();
+                      suppressTabClick.current = false;
                     }
                   }}
-                  onDrop={(e) => {
-                    if (!draggedTab.current) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const source = draggedTab.current;
-                    draggedTab.current = null;
-                    setDropTab(null);
-                    useRepo.setState((state) => ({
-                      recentRepos: reorderRepoTabs(state.recentRepos, repoGroups, source, r),
-                    }));
+                  onPointerDown={(e) => {
+                    if (e.button !== 0 || (e.target as HTMLElement).closest('[aria-label^="Close "]')) return;
+                    const x = e.clientX,
+                      y = e.clientY,
+                      source = r;
+                    let active = false;
+                    let target: { target: string; after: boolean } | null = null;
+                    const move = (event: PointerEvent) => {
+                      if (!active && Math.hypot(event.clientX - x, event.clientY - y) < 5) return;
+                      if (!active) {
+                        active = true;
+                        draggedTab.current = source;
+                        setDraggingFolders(false);
+                      }
+                      const node = document
+                        .elementFromPoint(event.clientX, event.clientY)
+                        ?.closest<HTMLElement>('[data-repo-tab]');
+                      if (node && node.dataset.repoTab !== source) {
+                        const bounds = node.getBoundingClientRect();
+                        target = {
+                          target: node.dataset.repoTab!,
+                          after: event.clientX >= bounds.left + bounds.width / 2,
+                        };
+                      } else target = null;
+                      setDropTab(target);
+                    };
+                    const end = (event: PointerEvent) => {
+                      window.removeEventListener('pointermove', move);
+                      window.removeEventListener('pointerup', end);
+                      window.removeEventListener('pointercancel', end);
+                      if (active) {
+                        suppressTabClick.current = true;
+                        setTimeout(() => {
+                          suppressTabClick.current = false;
+                        }, 0);
+                        if (target && event.type !== 'pointercancel') {
+                          const destination = target;
+                          useRepo.setState((state) => ({
+                            recentRepos: reorderRepoTabs(
+                              state.recentRepos,
+                              useSettings.getState().repoGroups,
+                              source,
+                              destination.target,
+                              destination.after,
+                            ),
+                          }));
+                        }
+                      }
+                      draggedTab.current = null;
+                      setDropTab(null);
+                    };
+                    window.addEventListener('pointermove', move);
+                    window.addEventListener('pointerup', end);
+                    window.addEventListener('pointercancel', end);
                   }}
                 >
-                  {!previewAfter && preview}
+                  {dropTab?.target === r && !dropTab.after && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -left-0.5 top-1 z-10 h-8 w-1 rounded-full bg-accent"
+                    />
+                  )}
                   {group ? (
                     <RepoGroup
                       name={group}
@@ -743,7 +769,12 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  {previewAfter && preview}
+                  {dropTab?.target === r && dropTab.after && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -right-0.5 top-1 z-10 h-8 w-1 rounded-full bg-accent"
+                    />
+                  )}
                 </div>
               );
             })}
