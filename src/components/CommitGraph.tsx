@@ -189,6 +189,7 @@ export function CommitGraph({
   const wipRows = changeCount > 0 && showLines ? 1 : 0;
   const wipOffset = wipRows * LANE_W;
   const totalRows = rows.length + wipRows;
+  const scrollHeight = totalRows * ROW_H + Math.max(0, (size.h - ROW_H) / 2);
   // GitKraken keeps the graph column a fixed (user-resizable) width and lets wide histories scroll sideways
   const [colW, setColW] = useState<number | null>(null);
   const [gScroll, setGScroll] = useState(0);
@@ -300,7 +301,9 @@ export function CommitGraph({
         ctx.fillStyle = selected
           ? 'rgba(79,193,233,0.18)'
           : row.commit.hash === headHash
-            ? 'rgba(79,193,233,0.09)'
+            ? light
+              ? 'rgba(0,111,174,0.16)'
+              : 'rgba(79,193,233,0.22)'
             : 'rgba(255,255,255,0.04)';
         ctx.fillRect(0, top, size.w, ROW_H);
       }
@@ -961,7 +964,7 @@ export function CommitGraph({
               ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${commitTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, stash ${rows[keyboardRow].commit.stashBranch ?? ''}` : ''}`
               : ''}
         </div>
-        <div style={{ height: totalRows * ROW_H }} />
+        <div style={{ height: scrollHeight }} />
         {rows.map(
           (row, index) =>
             row.commit.stashId && (
@@ -1071,7 +1074,7 @@ export function CommitGraph({
             top: 0,
             width: size.w,
             height: size.h,
-            marginTop: -totalRows * ROW_H,
+            marginTop: -scrollHeight,
             pointerEvents: 'none',
           }}
         />

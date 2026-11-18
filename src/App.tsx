@@ -132,7 +132,7 @@ export default function App() {
   const [workingRevision, setWorkingRevision] = useState(0);
   const [navigation, setNavigation] = useState<{ hash: string; id: number } | null>(null);
   const navigationSeq = useRef(0);
-  const attemptedHead = useRef('');
+  const openedHead = useRef<string | null>(null);
   const [termOpen, setTermOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -312,23 +312,6 @@ export default function App() {
     branch ?? (operation?.head && operation.head !== 'HEAD' ? operation.head : detached ? 'Detached HEAD' : '—');
   const dis = !repoPath;
 
-  useEffect(() => {
-    if (
-      !repoPath ||
-      !headHash ||
-      !status.length ||
-      loading ||
-      loadingMore ||
-      !graph.rows.length ||
-      graph.rows.some((r) => r.commit.hash === headHash)
-    )
-      return;
-    const key = `${repoPath}\0${headHash}`;
-    if (attemptedHead.current === key) return;
-    attemptedHead.current = key;
-    void ensureCommitVisible(headHash);
-  }, [repoPath, headHash, status.length, loading, loadingMore, graph.rows, ensureCommitVisible]);
-
   const navigateToHash = async (hash: string) => {
     const stash = useRepo.getState().refs.stashes.find((entry) => entry.hash === hash);
     if (stash) {
@@ -350,6 +333,21 @@ export default function App() {
     setNavigation({ hash, id });
     return true;
   };
+  useEffect(() => {
+    openedHead.current = null;
+  }, [repoPath]);
+
+  useEffect(() => {
+    if (!repoPath) return;
+    if (loading || loadingMore || !headHash || !graph.rows.length || openedHead.current === repoPath) return;
+    openedHead.current = repoPath;
+    const id = ++navigationSeq.current;
+    void ensureCommitVisible(headHash).then((found) => {
+      if (found && id === navigationSeq.current && useRepo.getState().repoPath === repoPath)
+        setNavigation({ hash: headHash, id });
+    });
+  }, [repoPath, loading, loadingMore, headHash, graph.rows, ensureCommitVisible]);
+
   const navigateBranch = (kind: 'local' | 'remote', name: string) => {
     const ref = refs[kind].find((item) => item.name === name);
     const hash =
