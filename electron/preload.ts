@@ -6,7 +6,8 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   openRepoDialog: () => ipcRenderer.invoke('repo:open'),
   openThirdPartyNotices: () => ipcRenderer.invoke('app:openThirdPartyNotices'),
   openRuntimeNotice: (kind: unknown) => ipcRenderer.invoke('app:openRuntimeNotice', kind),
-  cloneRepo: (url: unknown, destination: unknown) => ipcRenderer.invoke('repo:clone', url, destination),
+  cloneRepo: (url: unknown, destination: unknown, credentials?: unknown) =>
+    ipcRenderer.invoke('repo:clone', url, destination, credentials),
   openFile: (...a) => ipcRenderer.invoke('repo:openFile', ...a),
 };
 (gitApi as any).onCloneProgress = (cb: (message: string) => void) => {

@@ -554,13 +554,14 @@ export const useRepo = create<RepoState>((set, get) => {
           if (!silent) set({ loading: true });
           try {
             const limit = Math.max(pageSize(), silent ? get().commits.length : 0);
+            const sort = useSettings.getState().graphSort;
             const [commits, status, refs, operation] = await Promise.all([
-              api().log(cwd, limit, 0),
+              api().log(cwd, limit, 0, sort),
               api().status(cwd),
               api().refs(cwd),
               api().opState(cwd),
             ]);
-            if (get().repoPath !== cwd) return; // switched repos while waiting
+            if (get().repoPath !== cwd || useSettings.getState().graphSort !== sort) return; // history request became stale
             const was = get().operation;
             // entering a conflicted state brings the conflict workflow forward; leaving it tidies up
             const extra =
@@ -594,11 +595,12 @@ export const useRepo = create<RepoState>((set, get) => {
     loadMore: async () => {
       const { repoPath: cwd, hasMore, loadingMore, commits } = get();
       if (!cwd || !hasMore || loadingMore) return;
+      const sort = useSettings.getState().graphSort;
       set({ loadingMore: true });
       try {
-        const next: Commit[] = await api().log(cwd, pageSize(), commits.length);
+        const next: Commit[] = await api().log(cwd, pageSize(), commits.length, sort);
         // ignore the result if the repo was switched or refreshed while we were waiting
-        if (get().repoPath !== cwd || get().commits.length !== commits.length) return;
+        if (get().repoPath !== cwd || get().commits !== commits || useSettings.getState().graphSort !== sort) return;
         const all = [...commits, ...next];
         set({
           commits: all,
@@ -623,9 +625,10 @@ export const useRepo = create<RepoState>((set, get) => {
       }
       set({ loadingMore: true });
       try {
-        const index: number = await api().historyPosition(cwd, hash);
-        const loaded: Commit[] = await api().log(cwd, Math.max(index + 1, commits.length), 0);
-        if (get().repoPath !== cwd) return false;
+        const sort = useSettings.getState().graphSort;
+        const index: number = await api().historyPosition(cwd, hash, sort);
+        const loaded: Commit[] = await api().log(cwd, Math.max(index + 1, commits.length), 0, sort);
+        if (get().repoPath !== cwd || useSettings.getState().graphSort !== sort) return false;
         if (get().commits !== commits) {
           if (get().commits.some((c) => c.hash === hash)) return true;
           throw new Error('History changed while loading. Try again.');

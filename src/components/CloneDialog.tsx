@@ -14,6 +14,9 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
   const [completed, setCompleted] = useState('');
+  const [authNeeded, setAuthNeeded] = useState(false);
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => api().onCloneProgress((message: string) => setProgress(message)), []);
   useEffect(() => {
@@ -50,16 +53,30 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (running || !url.trim() || !destination.trim()) return;
+    if (running || !url.trim() || !destination.trim() || (authNeeded && (!login.trim() || !password))) return;
     setError('');
     setProgress('Starting clone…');
     setRunning(true);
     try {
-      await api().cloneRepo(url.trim(), destination.trim());
+      await api().cloneRepo(
+        url.trim(),
+        destination.trim(),
+        authNeeded ? { username: login.trim(), password } : undefined,
+      );
+      setPassword('');
       useRepo.getState().recordActivity('success', 'Repository cloned', destination.trim(), destination.trim());
       setCompleted(destination.trim());
     } catch (e: any) {
-      setError(String(e?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, ''));
+      const message = String(e?.message ?? e).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+      setError(message);
+      if (
+        /^https:\/\//i.test(url.trim()) &&
+        /authentication failed|http basic: access denied|could not read (username|password)|invalid (username|password|credentials)|\b401\b/i.test(
+          message,
+        )
+      )
+        setAuthNeeded(true);
+      setPassword('');
       useRepo.getState().recordActivity('error', 'Clone failed', undefined, null);
     } finally {
       setRunning(false);
@@ -111,6 +128,8 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
                 value={url}
                 onChange={(e) => {
                   setUrl(e.target.value);
+                  setAuthNeeded(false);
+                  setPassword('');
                   if (parentFolder) setDestination(destinationIn(parentFolder, e.target.value));
                 }}
                 disabled={running}
@@ -145,6 +164,35 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
               Choose a parent folder or enter the full path for the new repository folder. HTTPS and SSH use your system
               Git credentials or SSH agent.
             </p>
+            {authNeeded && (
+              <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
+                <p className="text-sm text-warning">
+                  Enter HTTPS credentials to retry. Your server may require an access token.
+                </p>
+                <label className="block text-sm">
+                  Username
+                  <input
+                    autoComplete="username"
+                    value={login}
+                    disabled={running}
+                    onChange={(e) => setLogin(e.target.value)}
+                    className={`${field} mt-1`}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Password or access token
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={password}
+                    disabled={running}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`${field} mt-1`}
+                  />
+                </label>
+                <p className="text-xs text-sub">Used for this retry and not saved.</p>
+              </div>
+            )}
             {running && (
               <div role="status" aria-live="polite" className="space-y-2">
                 <div className="progress-bar" />
@@ -172,7 +220,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 type="submit"
-                disabled={running || !url.trim() || !destination.trim()}
+                disabled={running || !url.trim() || !destination.trim() || (authNeeded && (!login.trim() || !password))}
                 className="btn-primary px-4 py-2"
               >
                 {running ? 'Cloning…' : 'Clone'}

@@ -59,7 +59,8 @@ export async function createTauriApi(): Promise<PlatformApi> {
     openRepoDialog: () => call<string | null>('repo_open'),
     openThirdPartyNotices: () => call('app_open_third_party_notices'),
     openRuntimeNotice: (kind: string) => call('app_open_runtime_notice', { kind }),
-    cloneRepo: (url: string, destination: string) => call('repo_clone', { url, destination }),
+    cloneRepo: (url: string, destination: string, credentials?: { username: string; password: string }) =>
+      call('repo_clone', { url, destination, credentials }),
     openFile: (cwd: string, rel: string) => call('repo_open_file', { cwd, rel }),
     onCloneProgress: (cb) => subscribe<string>('repo:cloneProgress', cb),
     // Tauri exposes dropped files' paths through its own drag-drop event, not on File objects.
