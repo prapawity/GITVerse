@@ -56,12 +56,12 @@ export function UpdateNotice({
           Update available
         </h2>
         <p className="mt-3 text-sm text-sub">
-          GITVerse {update.version} is available. Current version: {update.currentVersion}.
+          GITVerse by PRAPAWITY {update.version} is available. Current version: {update.currentVersion}.
         </p>
         <p className="mt-2 text-sm text-sub">
           {manualInstall
-            ? 'Download the installer, then quit GITVerse and drag the new app to Applications.'
-            : 'Download and install the update here. GITVerse will restart when it is ready.'}
+            ? 'Download the installer, then quit GITVerse by PRAPAWITY and drag the new app to Applications.'
+            : 'Download and install the update here. GITVerse by PRAPAWITY will restart when it is ready.'}
         </p>
         {download?.state === 'downloading' && (
           <p role="status" className="mt-3 text-sm text-sub">

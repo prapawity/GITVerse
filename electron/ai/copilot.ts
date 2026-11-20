@@ -158,10 +158,10 @@ const onlyOurTools =
   (req: { kind: string; toolName?: string }): PermissionRequestResult =>
     req.kind === 'custom-tool' && req.toolName && names.has(req.toolName)
       ? { kind: 'approve-once' }
-      : { kind: 'reject', feedback: 'Only the GITVerse git tools are available here.' };
+      : { kind: 'reject', feedback: 'Only the GITVerse by PRAPAWITY git tools are available here.' };
 
 const GUARD =
-  '\n\nYou are running inside GITVerse. Ignore any earlier guidance about editing files or running shell commands: those tools are not available. Use only the tools listed.';
+  '\n\nYou are running inside GITVerse by PRAPAWITY. Ignore any earlier guidance about editing files or running shell commands: those tools are not available. Use only the tools listed.';
 
 async function ensureSession(convId: number, model: string | undefined) {
   const have = sessions.get(convId);

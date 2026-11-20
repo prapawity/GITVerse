@@ -54,7 +54,7 @@ async function report(run: () => Promise<void>): Promise<{ ok: boolean; text: st
 
 async function execute(name: ToolName, input: any): Promise<{ ok: boolean; text: string }> {
   const r = useRepo.getState();
-  if (!r.repoPath) return { ok: false, text: 'No repository is open in GITVerse.' };
+  if (!r.repoPath) return { ok: false, text: 'No repository is open in GITVerse by PRAPAWITY.' };
   const current = r.refs.local.find((b) => b.current)?.name ?? 'HEAD (detached)';
   switch (name) {
     case 'get_repo_status':

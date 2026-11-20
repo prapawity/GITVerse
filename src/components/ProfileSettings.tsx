@@ -35,7 +35,7 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
     try {
       await api().setActiveIdentity({ name: p.authorName, email: p.email });
       store.setActiveIdentityProfile(p.id);
-      setMessage(`“${p.name}” is active in GITVerse.`);
+      setMessage(`“${p.name}” is active in GITVerse by PRAPAWITY.`);
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -157,7 +157,8 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
       <div>
         <h1 className="text-2xl font-semibold">Profiles</h1>
         <p className="mt-2 text-sm leading-relaxed text-sub">
-          Manage the name and email used for future commits in GITVerse, and switch profiles from the top bar.
+          Manage the name and email used for future commits in GITVerse by PRAPAWITY, and switch profiles from the top
+          bar.
         </p>
       </div>
       {error && (
@@ -183,8 +184,8 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
         <div className="rounded-lg border border-surface bg-mantle px-5 py-4">
           <h2 className="text-lg font-semibold">My profiles</h2>
           <p className="mt-1 text-sm leading-relaxed text-sub">
-            The selected profile applies to Git commands run by GITVerse across repositories. Existing commits keep
-            their original author.
+            The selected profile applies to Git commands run by GITVerse by PRAPAWITY across repositories. Existing
+            commits keep their original author.
           </p>
         </div>
         <button

@@ -75,17 +75,20 @@ export function ApplicationAbout() {
   };
   return (
     <section className="max-w-[720px]" aria-label="Application and About">
-      <h1 className="text-2xl font-semibold">About GITVerse</h1>
+      <h1 className="text-2xl font-semibold">
+        About GITVerse <span className="text-sm font-normal text-sub">by PRAPAWITY</span>
+      </h1>
       <p className="mt-1 text-sm text-sub">Version information and application updates.</p>
       <div className="mt-7 flex items-center gap-4 rounded-xl border border-surface bg-mantle/60 p-5">
         <img src={new URL('../assets/gitverse-mark.svg', import.meta.url).href} width={48} height={48} alt="" />
         <div>
-          <h2 className="text-lg font-semibold">GITVerse</h2>
+          <h2 className="text-lg font-semibold">
+            GITVerse <span className="text-sm font-normal text-sub">by PRAPAWITY</span>
+          </h2>
           <p className="mt-1 text-sm text-sub">
             Version {environment?.enabled ? environment.currentVersion : version}
             {environment && !environment.enabled ? ' (development build)' : ''}
           </p>
-          <p className="mt-0.5 text-xs text-sub">Crafted by Prapawity</p>
         </div>
       </div>
       <div className="py-7">
@@ -126,8 +129,8 @@ export function ApplicationAbout() {
         <h2 className="text-lg font-semibold">Open source licenses</h2>
         <p className="mb-4 mt-1 text-sm text-sub">
           {tauriBuild
-            ? 'GITVerse is licensed under MIT. Notices for the npm packages and Rust crates it uses are included with this application.'
-            : 'GITVerse is licensed under MIT. Third-party, Electron, and Chromium notices are included with this application.'}
+            ? 'GITVerse by PRAPAWITY is licensed under MIT. Notices for the npm packages and Rust crates it uses are included with this application.'
+            : 'GITVerse by PRAPAWITY is licensed under MIT. Third-party, Electron, and Chromium notices are included with this application.'}
         </p>
         <div className="flex flex-wrap gap-2">
           {(

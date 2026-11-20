@@ -7,7 +7,7 @@ const root = document.getElementById('root')!;
 
 function showStartupError(message: string) {
   const heading = document.createElement('h1');
-  heading.textContent = 'GITVerse could not start';
+  heading.textContent = 'GITVerse by PRAPAWITY could not start';
   const detail = document.createElement('p');
   detail.textContent = message;
   root.append(heading, detail);
@@ -18,7 +18,7 @@ function showStartupError(message: string) {
 if (navigator.userAgent.includes('Electron/') && platformApi()?.stateStorage == null) {
   console.error('[startup] Electron preload bridge is unavailable; saved repositories were not changed.');
   showStartupError(
-    'The desktop connection did not load. Your saved repositories have not been changed. Restart GITVerse. In development, stop and restart npm run dev.',
+    'The desktop connection did not load. Your saved repositories have not been changed. Restart GITVerse by PRAPAWITY. In development, stop and restart npm run dev.',
   );
 } else {
   void (async () => {

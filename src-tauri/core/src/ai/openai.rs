@@ -187,7 +187,7 @@ fn map_http(status: u16, code: Option<&str>, message: &str, kind: Kind) -> AiErr
     if code_s == "subscription_sharing_usage_limit_exceeded"
         || (status == 429 && kind == Kind::Plan && usage_hint.to_lowercase().contains("usage"))
     {
-        return err(ErrKind::Usage, "The ChatGPT plan allowance for GITVerse is used up (an app limit may apply). Check ChatGPT settings → Usage, or use your own API key.");
+        return err(ErrKind::Usage, "The ChatGPT plan allowance for GITVerse by PRAPAWITY is used up (an app limit may apply). Check ChatGPT settings → Usage, or use your own API key.");
     }
     if code_s == "subscription_sharing_user_not_eligible" {
         return err(
@@ -449,7 +449,7 @@ impl OpenAi {
             .append_pair("code_challenge_method", "S256")
             .append_pair("ext_agent_host_id", &self.host_id());
             if saved.is_none() {
-                q.append_pair("agent_name_hint", "GITVerse");
+                q.append_pair("agent_name_hint", "GITVerse by PRAPAWITY");
             }
             format!("{}/authorize?{}", self.auth_base, q.finish())
         };
@@ -1007,7 +1007,7 @@ async fn wait_callback(
         } else if let Some(code) = get("code") {
             (
                 200,
-                "Signed in to GITVerse",
+                "Signed in to GITVerse by PRAPAWITY",
                 "You can close this tab and return to the app.".to_owned(),
                 Ok((code, get("client_id"))),
             )
@@ -1395,7 +1395,7 @@ mod tests {
                 let cb = format!("{}?state={}&code=abc", q("redirect_uri"), q("state"));
                 tokio::spawn(async move {
                     let res = reqwest::get(cb).await.unwrap();
-                    assert!(res.text().await.unwrap().contains("Signed in to GITVerse"));
+                    assert!(res.text().await.unwrap().contains("Signed in to GITVerse by PRAPAWITY"));
                 });
             })
             .await

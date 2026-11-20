@@ -27,7 +27,7 @@ test('downloads only the matching Mac installer and verifies its contents', asyn
     if (calls.length === 1)
       return Response.json({
         ...release('v2.0.0'),
-        assets: [{ name: 'GITVerse-2.0.0-mac-arm64.dmg', size: bytes.length, digest }],
+        assets: [{ name: 'GITVerse-by-PRAPAWITY-2.0.0-mac-arm64.dmg', size: bytes.length, digest }],
       });
     if (calls.length === 2)
       return new Response(null, {
@@ -40,7 +40,26 @@ test('downloads only the matching Mac installer and verifies its contents', asyn
   const file = await downloadMacUpdate('2.0.0', 'arm64', dir, (percent) => percentages.push(percent), fetchRelease);
   assert.deepEqual(await readFile(file), bytes);
   assert.equal(percentages.at(-1), 100);
-  assert.match(calls[1], /GITVerse-2\.0\.0-mac-arm64\.dmg$/);
+  assert.match(calls[1], /GITVerse-by-PRAPAWITY-2\.0\.0-mac-arm64\.dmg$/);
+});
+
+test('downloads a verified legacy installer from before the application rename', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-update-test-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const bytes = Buffer.from('legacy installer');
+  const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  let calls = 0;
+  const fetchRelease: typeof fetch = async (url) => {
+    if (++calls === 1)
+      return Response.json({
+        ...release('v2.0.0'),
+        assets: [{ name: 'GITVerse-2.0.0-mac-arm64.dmg', size: bytes.length, digest }],
+      });
+    assert.match(String(url), /GITVerse-2\.0\.0-mac-arm64\.dmg$/);
+    return new Response(bytes);
+  };
+  const file = await downloadMacUpdate('2.0.0', 'arm64', dir, () => {}, fetchRelease);
+  assert.deepEqual(await readFile(file), bytes);
 });
 
 test('rejects a corrupt installer and removes the partial download', async (t) => {
@@ -51,7 +70,7 @@ test('rejects a corrupt installer and removes the partial download', async (t) =
     if (++calls === 1)
       return Response.json({
         ...release('v2.0.0'),
-        assets: [{ name: 'GITVerse-2.0.0-mac-x64.dmg', size: 3, digest: `sha256:${'0'.repeat(64)}` }],
+        assets: [{ name: 'GITVerse-by-PRAPAWITY-2.0.0-mac-x64.dmg', size: 3, digest: `sha256:${'0'.repeat(64)}` }],
       });
     return new Response('bad');
   };
@@ -70,7 +89,7 @@ test('rejects installer redirects to other hosts', async (t) => {
     if (++calls === 1)
       return Response.json({
         ...release('v2.0.0'),
-        assets: [{ name: 'GITVerse-2.0.0-mac-x64.dmg', size: 3, digest: `sha256:${'0'.repeat(64)}` }],
+        assets: [{ name: 'GITVerse-by-PRAPAWITY-2.0.0-mac-x64.dmg', size: 3, digest: `sha256:${'0'.repeat(64)}` }],
       });
     return new Response(null, { status: 302, headers: { location: 'https://example.com/file' } });
   };
@@ -117,14 +136,14 @@ test('only opens valid release-version URLs for the configured repository', () =
     `${RELEASES_URL}/tag/latest`,
     `${RELEASES_URL}/tag/v2.0.0?redirect=1`,
     `${RELEASES_URL}/tag/v2.0.0/extra`,
-    'https://user@github.com/prapawity/GITVerse/releases/tag/v2.0.0',
+    'https://user@github.com/prapawity/GITVerse-by-PRAPAWITY/releases/tag/v2.0.0',
   ])
     assert.equal(isReleaseDownloadUrl(url), false);
 });
 
 test('requests only the configured repository with a timeout and no redirects', async () => {
   const mock: typeof fetch = async (url, options) => {
-    assert.equal(url, 'https://api.github.com/repos/prapawity/GITVerse/releases/latest');
+    assert.equal(url, 'https://api.github.com/repos/prapawity/GITVerse-by-PRAPAWITY/releases/latest');
     assert.equal(options?.redirect, 'error');
     assert.ok(options?.signal);
     return Response.json(release('v2.0.0'));
@@ -138,7 +157,7 @@ test('handles a repository without releases', async () => {
 
 test('lists stable versions in order and constructs trusted download links', async () => {
   const versions = await listReleases(async (url, options) => {
-    assert.equal(url, 'https://api.github.com/repos/prapawity/GITVerse/releases?per_page=100&page=1');
+    assert.equal(url, 'https://api.github.com/repos/prapawity/GITVerse-by-PRAPAWITY/releases?per_page=100&page=1');
     assert.equal(options?.redirect, 'error');
     return Response.json([
       { ...release('v1.2.0'), html_url: 'https://example.com' },

@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-pub const RELEASES_URL: &str = "https://github.com/prapawity/GITVerse/releases";
-const API: &str = "https://api.github.com/repos/prapawity/GITVerse/releases";
+pub const RELEASES_URL: &str = "https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases";
+const API: &str = "https://api.github.com/repos/prapawity/GITVerse-by-PRAPAWITY/releases";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReleaseUpdate {
@@ -67,7 +67,7 @@ pub async fn list_releases() -> Result<Vec<ReleaseUpdate>, String> {
     let http = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("GITVerse")
+        .user_agent("GITVerse by PRAPAWITY")
         .build()
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
@@ -104,7 +104,7 @@ pub fn is_release_page(value: &str) -> bool {
     let Ok(u) = url::Url::parse(value) else {
         return false;
     };
-    const PREFIX: &str = "/prapawity/GITVerse/releases/tag/";
+    const PREFIX: &str = "/prapawity/GITVerse-by-PRAPAWITY/releases/tag/";
     u.scheme() == "https"
         && u.host_str() == Some("github.com")
         && u.port().is_none()
@@ -151,16 +151,16 @@ mod tests {
     #[test]
     fn release_page_urls() {
         assert!(is_release_page(
-            "https://github.com/prapawity/GITVerse/releases/tag/v1.2.3"
+            "https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases/tag/v1.2.3"
         ));
         for bad in [
-            "http://github.com/prapawity/GITVerse/releases/tag/v1.2.3",
-            "https://github.com/prapawity/GITVerse/releases/tag/v1.2.3?x=1",
-            "https://github.com/prapawity/GITVerse/releases/tag/v1.2.3#a",
-            "https://user@github.com/prapawity/GITVerse/releases/tag/v1.2.3",
+            "http://github.com/prapawity/GITVerse-by-PRAPAWITY/releases/tag/v1.2.3",
+            "https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases/tag/v1.2.3?x=1",
+            "https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases/tag/v1.2.3#a",
+            "https://user@github.com/prapawity/GITVerse-by-PRAPAWITY/releases/tag/v1.2.3",
             "https://github.com/someone/else/releases/tag/v1.2.3",
-            "https://github.com/prapawity/GITVerse/releases/tag/nightly",
-            "https://evil.example/prapawity/GITVerse/releases/tag/v1.2.3",
+            "https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases/tag/nightly",
+            "https://evil.example/prapawity/GITVerse-by-PRAPAWITY/releases/tag/v1.2.3",
         ] {
             assert!(!is_release_page(bad), "{bad}");
         }

@@ -1,4 +1,4 @@
-# GITVerse Git workflow roadmap
+# GITVerse by PRAPAWITY Git workflow roadmap
 
 Priorities are based on protecting repository state, frequency of use, and dependencies between workflows. “Done” means the workflow exists in the source tree and its relevant automated check passed; packaged-app behavior remains separate.
 

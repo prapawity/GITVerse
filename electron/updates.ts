@@ -5,8 +5,8 @@ import { mkdtemp, open, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { AppUpdateCheck, ReleaseUpdate } from '../src/shared/updates';
 
-export const RELEASES_URL = 'https://github.com/prapawity/GITVerse/releases';
-const RELEASE_API = 'https://api.github.com/repos/prapawity/GITVerse/releases/latest';
+export const RELEASES_URL = 'https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases';
+const RELEASE_API = 'https://api.github.com/repos/prapawity/GITVerse-by-PRAPAWITY/releases/latest';
 const releaseSchema = z.object({
   tag_name: z.string(),
   draft: z.boolean(),
@@ -23,7 +23,11 @@ export async function downloadMacUpdate(
   if (valid(version) !== version || prerelease(version) || !['arm64', 'x64'].includes(arch))
     throw new Error('Invalid update version or architecture.');
   const response = await fetchRelease(RELEASE_API, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'GITVerse', 'X-GitHub-Api-Version': '2022-11-28' },
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'GITVerse by PRAPAWITY',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
     signal: AbortSignal.timeout(10_000),
     redirect: 'error',
   });
@@ -35,10 +39,11 @@ export async function downloadMacUpdate(
     .parse(await response.json());
   if (release.draft || release.prerelease || valid(release.tag_name) !== version)
     throw new Error('The latest release has changed. Check for updates again.');
-  const name = `GITVerse-${version}-mac-${arch}.dmg`;
-  const asset = release.assets.find((item) => item.name === name);
+  const names = [`GITVerse-by-PRAPAWITY-${version}-mac-${arch}.dmg`, `GITVerse-${version}-mac-${arch}.dmg`];
+  const asset = names.map((name) => release.assets.find((item) => item.name === name)).find(Boolean);
   if (!asset || !asset.digest || !/^sha256:[a-f0-9]{64}$/i.test(asset.digest) || asset.size > 1024 ** 3)
     throw new Error('A verified installer for this Mac is not available.');
+  const name = asset.name;
   let url = `${RELEASES_URL}/download/${encodeURIComponent(release.tag_name)}/${name}`;
   let download: Response | undefined;
   const signal = AbortSignal.timeout(10 * 60_000);
@@ -61,7 +66,7 @@ export async function downloadMacUpdate(
     download = undefined;
   }
   if (!download?.ok || !download.body) throw new Error('Could not download the installer.');
-  const directory = await mkdtemp(path.join(downloads, 'GITVerse-update-'));
+  const directory = await mkdtemp(path.join(downloads, 'GITVerse-by-PRAPAWITY-update-'));
   const file = path.join(directory, name);
   try {
     const handle = await open(file, 'wx');
@@ -98,11 +103,11 @@ export async function listReleases(fetchRelease: typeof fetch = fetch): Promise<
   const releases: ReleaseUpdate[] = [];
   for (let page = 1; page <= 10; page++) {
     const response = await fetchRelease(
-      `https://api.github.com/repos/prapawity/GITVerse/releases?per_page=100&page=${page}`,
+      `https://api.github.com/repos/prapawity/GITVerse-by-PRAPAWITY/releases?per_page=100&page=${page}`,
       {
         headers: {
           Accept: 'application/vnd.github+json',
-          'User-Agent': 'GITVerse',
+          'User-Agent': 'GITVerse by PRAPAWITY',
           'X-GitHub-Api-Version': '2022-11-28',
         },
         signal: AbortSignal.timeout(10_000),
@@ -126,7 +131,7 @@ export function isReleaseDownloadUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
     const url = new URL(value);
-    const prefix = '/prapawity/GITVerse/releases/tag/';
+    const prefix = '/prapawity/GITVerse-by-PRAPAWITY/releases/tag/';
     return (
       url.origin === 'https://github.com' &&
       !url.username &&
@@ -155,7 +160,11 @@ export async function checkForRelease(
   fetchRelease: typeof fetch = fetch,
 ): Promise<ReleaseUpdate | null> {
   const response = await fetchRelease(RELEASE_API, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'GITVerse', 'X-GitHub-Api-Version': '2022-11-28' },
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'GITVerse by PRAPAWITY',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
     signal: AbortSignal.timeout(10_000),
     redirect: 'error',
   });

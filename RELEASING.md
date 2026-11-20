@@ -1,6 +1,6 @@
 # Releases and updates
 
-Repository: <https://github.com/prapawity/GITVerse>.
+Repository: <https://github.com/prapawity/GITVerse-by-PRAPAWITY>.
 
 ## Current distribution model
 
@@ -11,6 +11,8 @@ The release workflow builds each target on its native OS/architecture, signs upd
 Packaging generates `THIRD_PARTY_NOTICES.txt` from the installed packages on each build machine and includes it in the application resources. It includes build dependencies conservatively, because their code may be bundled. Review every missing license text flagged in that file against the corresponding upstream package and check the final application for Electron/Chromium notices and any separately bundled binaries before distribution. The generated inventory is a starting point, not a license clearance.
 
 Updater signatures use the Tauri signing key described in [updater.md](docs/rust-migration/updater.md). Apple Developer ID signing, notarization and Windows code signing are not configured; unsigned installers can trigger OS warnings. Never put signing secrets in source.
+
+Local Electron macOS builds use an ad-hoc signature, not a Developer ID signature or notarization. Verify a test bundle with `codesign --verify --deep --strict --verbose=2 "path/to/GITVerse by PRAPAWITY.app"` and launch that packaged app before handing it off. Its `CFBundleName` must match the packaged helper prefix; keeping the old bundle name after renaming helpers causes Electron to exit with `Unable to find helper app`. Development bundles retain their executable/helper name while `CFBundleDisplayName` provides the public branding.
 
 ## Before the first public push
 
@@ -36,6 +38,10 @@ No repository initialization, remote changes, tags, or pushes are performed by t
 GitHub's latest-release API only sees published releases. Do not mark the release as a prerelease if it should be offered to installed users.
 
 ## Automatic updates
+
+The public application name is **GITVerse by PRAPAWITY** and the repository is `prapawity/GITVerse-by-PRAPAWITY`. New Electron artifacts use the `GITVerse-by-PRAPAWITY-` prefix; signed Tauri updater artifacts use `GITVerse-by-PRAPAWITY_`. Existing published Electron installers keep their original names and remain supported by the downloader. Application identifiers, the Electron runtime name (`app.setName`), data directories, storage keys, and legacy Keychain migration service names stay unchanged. The packaged macOS bundle name follows the public product/helper name so native startup can find its helper apps.
+
+Older installed builds that reject GitHub redirects may no longer complete update checks after the repository rename. Install the new build manually from the renamed repository's Releases page in that case.
 
 - A Tauri release app checks the signed updater feed during the animated launch screen. Settings > Application / About supports manual checks. Development builds disable update controls.
 - Semantic versions are compared, ignoring draft/prerelease releases and build metadata.

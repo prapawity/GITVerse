@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, ChevronRight, Folder, GitBranch, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Folder, GitBranch, RefreshCw, Search, Trash2, X } from 'lucide-react';
 
 type GroupNode = { name: string; path: string; repo?: string; children: GroupNode[] };
 const parts = (path: string) => path.replace(/\\/g, '/').split('/').filter(Boolean);
@@ -14,6 +14,8 @@ export function RepoGroup({
   onCloseRepo,
   onContext,
   onDelete,
+  onSync,
+  syncing = false,
 }: {
   name: string;
   repos: string[];
@@ -23,6 +25,8 @@ export function RepoGroup({
   onCloseRepo: (path: string) => void;
   onContext: (path: string, x: number, y: number) => void;
   onDelete: () => void;
+  onSync?: (manual: boolean) => void;
+  syncing?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -159,15 +163,21 @@ export function RepoGroup({
             top: rect.bottom + 8,
           });
           setOpen(!open);
+          if (!open && root) onSync?.(false);
         }}
         aria-expanded={open}
         aria-haspopup="true"
+        aria-busy={syncing}
         className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${repos.includes(current ?? '') ? 'border-accent/50 bg-accent/10 text-accent' : 'border-surface text-sub hover:bg-surface/50'}`}
       >
         <Folder size={16} />
         <span className="max-w-[120px] truncate">{name}</span>
         <span className="rounded-full bg-surface px-1.5 text-2xs">{repos.length}</span>
-        <ChevronDown size={14} />
+        {syncing ? (
+          <RefreshCw size={14} className="animate-spin motion-reduce:animate-none" />
+        ) : (
+          <ChevronDown size={14} />
+        )}
       </button>
       {open &&
         createPortal(
@@ -177,8 +187,27 @@ export function RepoGroup({
             onClick={(e) => e.stopPropagation()}
             className="fixed z-50 w-[320px] max-w-[80vw] rounded-lg border border-surface bg-mantle p-2 shadow-2xl"
           >
-            <div className="px-2 pb-2 text-xs font-semibold uppercase text-sub">
-              {name} · {repos.length} repositories
+            <div className="flex items-center justify-between gap-2 px-2 pb-2">
+              <div className="min-w-0 break-words text-xs font-semibold uppercase text-sub">
+                {name} · {repos.length} repositories
+              </div>
+              <button
+                type="button"
+                aria-label={`Sync ${name}`}
+                aria-busy={syncing}
+                disabled={!root || syncing}
+                title={
+                  !root
+                    ? 'This group has no source folder'
+                    : syncing
+                      ? 'Scanning for repositories'
+                      : 'Sync repositories from folder'
+                }
+                onClick={() => onSync?.(true)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-sub hover:bg-surface/50 hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw size={15} className={syncing ? 'animate-spin motion-reduce:animate-none' : ''} />
+              </button>
             </div>
             <div className="relative mb-2">
               <Search size={15} className="absolute left-3 top-2.5 text-sub" aria-hidden />

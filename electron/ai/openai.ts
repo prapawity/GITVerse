@@ -142,7 +142,7 @@ export async function openaiSignIn(openUrl: (url: string) => void): Promise<{ ac
       fail(new Error('No authorization code was returned.'));
       return;
     }
-    reply('Signed in to GITVerse', 'You can close this tab and return to the app.');
+    reply('Signed in to GITVerse by PRAPAWITY', 'You can close this tab and return to the app.');
     finish({ code, clientId: u.searchParams.get('client_id') ?? undefined });
   });
 
@@ -180,7 +180,7 @@ export async function openaiSignIn(openUrl: (url: string) => void): Promise<{ ac
       code_challenge: challenge,
       code_challenge_method: 'S256',
       ext_agent_host_id: hostId(),
-      ...(firstTime ? { agent_name_hint: 'GITVerse' } : {}),
+      ...(firstTime ? { agent_name_hint: 'GITVerse by PRAPAWITY' } : {}),
     });
     openUrl(`${AUTH_BASE()}/authorize?${q}`);
     const { code, clientId: issued } = await result;
@@ -392,7 +392,7 @@ export function mapHttp(status: number, code: string | undefined, message: strin
   )
     return err(
       'usage',
-      'The ChatGPT plan allowance for GITVerse is used up (an app limit may apply). Check ChatGPT settings → Usage, or use your own API key.',
+      'The ChatGPT plan allowance for GITVerse by PRAPAWITY is used up (an app limit may apply). Check ChatGPT settings → Usage, or use your own API key.',
     );
   if (code === 'subscription_sharing_user_not_eligible')
     return err('auth', 'Your ChatGPT plan is not eligible to use this app.');

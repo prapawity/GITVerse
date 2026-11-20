@@ -110,7 +110,7 @@ jobs:
           version=$(node -p "require('./package.json').version")
           dmg=(src-tauri/target/release/bundle/dmg/*.dmg)
           test "${#dmg[@]}" -eq 1 && test -f "${dmg[0]}"
-          cp "${dmg[0]}" "updater-out/GITVerse_${version}_${{ matrix.updater }}.dmg"
+          cp "${dmg[0]}" "updater-out/GITVerse-by-PRAPAWITY_${version}_${{ matrix.updater }}.dmg"
       - uses: actions/upload-artifact@v7
         if: env.SIGNED_UPDATES == '1'
         with:
@@ -152,4 +152,4 @@ jobs:
             test -f "updater-out/$platform.json"
           done
           node scripts/updater-manifest.mjs updater-out "$RELEASE_TAG"
-          gh release create "$RELEASE_TAG" updater-out/latest.json updater-out/GITVerse_* --verify-tag --draft --generate-notes --title "GITVerse $RELEASE_TAG"
+          gh release create "$RELEASE_TAG" updater-out/latest.json updater-out/GITVerse-by-PRAPAWITY_* --verify-tag --draft --generate-notes --title "GITVerse by PRAPAWITY $RELEASE_TAG"

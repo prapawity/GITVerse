@@ -1,11 +1,11 @@
-# GITVerse System Design
+# GITVerse by PRAPAWITY System Design
 
 **Status:** Working design, aligned with the current application source.
 **Audience:** Product, UI, desktop, and QA contributors.
 
 ## 1. Product purpose
 
-GITVerse is a Windows-first desktop Git client for developers managing repositories, branches, commit history, diffs, stashes, conflicts, and a local terminal. The commit graph is the main workspace. Each action should make its target and its effect on the index, working tree, current branch, and remote visible.
+GITVerse by PRAPAWITY is a Windows-first desktop Git client for developers managing repositories, branches, commit history, diffs, stashes, conflicts, and a local terminal. The commit graph is the main workspace. Each action should make its target and its effect on the index, working tree, current branch, and remote visible.
 
 ## 2. Design principles
 

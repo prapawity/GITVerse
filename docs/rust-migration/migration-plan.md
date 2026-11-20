@@ -158,5 +158,5 @@
 
 - `core/src/migrate.rs`: on first start the Tauri build imports the API keys, ChatGPT sign-in, Copilot token and push tokens the Electron build saved (Chromium os_crypt: DPAPI + AES-GCM on Windows, Keychain password + AES-CBC on macOS, `v10` on Linux; `v11` on Linux is not imported). Existing keychain values are never overwritten; it runs once.
 - `scripts/rust-notices.mjs`: the license texts of the 300+ Rust crates in the build are appended to `THIRD_PARTY_NOTICES.txt` (part of `npm run release:tauri`).
-- macOS: bundles are ad-hoc signed (`signingIdentity: "-"`) so Apple Silicon runs them without a Developer ID. Gatekeeper still warns on first open (right-click → Open, or `xattr -dr com.apple.quarantine /Applications/GITVerse.app`).
-- Still open: hands-on testing of the installers, the release workflow switching from Electron to Tauri, removing the Electron code, Windows/Apple signing certificates.
+- macOS: bundles are ad-hoc signed (`signingIdentity: "-"`), not Developer ID signed or notarized. For trusted builds, use macOS's Open confirmation if Gatekeeper warns; do not disable system-wide protections.
+- The tagged-release workflow targets Tauri. Still open: hands-on testing of the installers on every platform, any future switch of default Electron development commands, removal of Electron code, and Windows/Apple distribution signing certificates.

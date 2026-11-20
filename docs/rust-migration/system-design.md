@@ -1,4 +1,4 @@
-# GITVerse Tauri — Backend System Design
+# GITVerse by PRAPAWITY Tauri — Backend System Design
 
 ## 1. Requirements
 

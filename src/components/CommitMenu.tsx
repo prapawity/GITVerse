@@ -85,7 +85,7 @@ export function CommitMenu({
     if (
       !(await askConfirm(
         'Delete local branch',
-        `Delete local branch ${name}? If Git cannot verify that it was merged, GITVerse will ask before force deleting it.`,
+        `Delete local branch ${name}? If Git cannot verify that it was merged, GITVerse by PRAPAWITY will ask before force deleting it.`,
         { label: 'Delete local', danger: true },
       ))
     )

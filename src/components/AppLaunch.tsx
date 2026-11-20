@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import type { AppUpdateCheck } from '../shared/updates';
 import { useRepo } from '../store/repoStore';
 import { version } from '../../package.json';
@@ -16,6 +16,11 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
   const [finished, setFinished] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const loading = useRepo((state) => state.loading);
+  const theme = useSettings((state) => state.theme);
+  // apply the saved theme before the first paint so the launch screen never flashes the default palette
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   useEffect(() => {
     let active = true;
     const delay = 2500;
@@ -78,12 +83,12 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
                 ? 'Opening workspace...'
                 : result.kind === 'error'
                   ? 'Could not check for updates'
-                  : 'Opening GITVerse...'
+                  : 'Opening GITVerse by PRAPAWITY...'
           }
         >
           {elapsed && result?.kind === 'error' && !accepted && (
             <>
-              <p role="alert" className="w-full text-xs text-[#f9c5ce]">
+              <p role="alert" className="w-full text-xs text-danger">
                 {result.message}
               </p>
               <button onClick={() => void retry()}>Retry</button>

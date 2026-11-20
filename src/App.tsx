@@ -187,13 +187,37 @@ export default function App() {
   const fetchMode = useSettings((s) => s.fetchMode);
   const { indexUndo, indexRedo, moveIndexHistory } = useRepo();
   const theme = useSettings((s) => s.theme);
+  const fontSize = useSettings((s) => s.fontSize);
   const repoGroups = useSettings((s) => s.repoGroups);
+  const syncingGroups = useRepo((s) => s.syncingGroups);
   const repoGroupRoots = useSettings((s) => s.repoGroupRoots);
   const setRepoGroupRoot = useSettings((s) => s.setRepoGroupRoot);
   const setRepoGroup = useSettings((s) => s.setRepoGroup);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ui-font-scale', String(fontSize / 14));
+  }, [fontSize]);
+  useEffect(() => {
+    const syncGroups = async () => {
+      if (document.hidden) return;
+      const settings = useSettings.getState();
+      const groups = new Set(
+        useRepo
+          .getState()
+          .recentRepos.map((repo) => settings.repoGroups[repo])
+          .filter(Boolean),
+      );
+      for (const group of groups) await useRepo.getState().syncRepoGroup(group, false);
+    };
+    window.addEventListener('focus', syncGroups);
+    document.addEventListener('visibilitychange', syncGroups);
+    return () => {
+      window.removeEventListener('focus', syncGroups);
+      document.removeEventListener('visibilitychange', syncGroups);
+    };
+  }, []);
 
   // reopen last session's tabs, then keep the saved list in sync (via subscribe, so the first render can't overwrite it)
   useEffect(() => {
@@ -528,7 +552,7 @@ export default function App() {
           .notify(
             'error',
             'Desktop connection unavailable',
-            'The folder picker is only available in the installed desktop app. Restart GITVerse; if the problem persists, reinstall it.',
+            'The folder picker is only available in the installed desktop app. Restart GITVerse by PRAPAWITY; if the problem persists, reinstall it.',
           );
         return;
       }
@@ -611,10 +635,14 @@ export default function App() {
           aria-label="Open repositories"
           className="glass-tabs flex min-w-0 items-center gap-1 border-b border-surface bg-crust px-2 py-1"
         >
-          <div className="flex shrink-0 items-center gap-2 px-2 pr-4 text-sm font-bold" aria-label="GITVerse">
+          <div
+            className="flex shrink-0 items-center gap-2 px-2 pr-4 text-sm font-bold"
+            aria-label="GITVerse by PRAPAWITY"
+          >
             <img src={new URL('./assets/gitverse-mark.svg', import.meta.url).href} width={24} height={24} alt="" />
             <span>
-              GIT<span className="font-medium text-[#a78bfa]">Verse</span>
+              GIT<span className="font-medium text-[#a78bfa]">Verse</span>{' '}
+              <small className="block text-2xs font-normal text-sub">by PRAPAWITY</small>
             </span>
           </div>
           <button
@@ -710,6 +738,8 @@ export default function App() {
                       name={group}
                       repos={repos}
                       root={repoGroupRoots[group]}
+                      syncing={syncingGroups.includes(group)}
+                      onSync={(manual) => void useRepo.getState().syncRepoGroup(group, manual)}
                       current={repoPath}
                       onOpen={(path) => void openRepo(path)}
                       onCloseRepo={closeRepo}
@@ -1249,7 +1279,9 @@ export default function App() {
                         <div className="flex h-full flex-col items-center justify-center gap-3 text-sub">
                           <GitBranch size={36} aria-hidden />
                           <div>
-                            {repoPath ? 'No commits yet' : 'Welcome to GITVerse — open a repository to see its history'}
+                            {repoPath
+                              ? 'No commits yet'
+                              : 'Welcome to GITVerse by PRAPAWITY — open a repository to see its history'}
                           </div>
                           {!repoPath && (
                             <button className="btn-primary px-4 py-2" onClick={openAddRepo}>

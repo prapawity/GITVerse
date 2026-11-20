@@ -11,10 +11,15 @@ for (const f of readdirSync(dir).filter((f) => /^[a-z]+-[a-z0-9_]+\.json$/.test(
   const { key, file, signature } = JSON.parse(readFileSync(path.join(dir, f), 'utf8'));
   platforms[key] = {
     signature,
-    url: `https://github.com/prapawity/GITVerse/releases/download/${tag}/${encodeURIComponent(file)}`,
+    url: `https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases/download/${tag}/${encodeURIComponent(file)}`,
   };
 }
 if (!Object.keys(platforms).length) throw new Error(`No updater records in ${dir}`);
-const manifest = { version: tag.slice(1), notes: `GITVerse ${tag}`, pub_date: new Date().toISOString(), platforms };
+const manifest = {
+  version: tag.slice(1),
+  notes: `GITVerse by PRAPAWITY ${tag}`,
+  pub_date: new Date().toISOString(),
+  platforms,
+};
 writeFileSync(path.join(dir, 'latest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`latest.json: ${Object.keys(platforms).join(', ')}`);

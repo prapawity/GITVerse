@@ -123,7 +123,7 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
     setImmediate(() =>
       send(
         'term:data',
-        `[GITVerse] ${ptyError ? `PTY unavailable: ${ptyError}\r\n` : ''}Basic terminal mode: input is visible; interactive and password prompts are not supported.\r\n`,
+        `[GITVerse by PRAPAWITY] ${ptyError ? `PTY unavailable: ${ptyError}\r\n` : ''}Basic terminal mode: input is visible; interactive and password prompts are not supported.\r\n`,
       ),
     );
     p.stdout.on('data', (d: Buffer) => send('term:data', d.toString('utf8')));
@@ -169,7 +169,7 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
     send('term:exit', code ?? 0);
   });
   p.on('error', (e) =>
-    send('term:data', `\r\n[GITVerse] could not start terminal (python3 is required): ${e.message}\r\n`),
+    send('term:data', `\r\n[GITVerse by PRAPAWITY] could not start terminal (python3 is required): ${e.message}\r\n`),
   );
   terms.set(id, {
     write: (d) => p.stdin.write(d),

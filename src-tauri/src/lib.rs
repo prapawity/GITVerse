@@ -1,4 +1,4 @@
-//! Tauri shell for GITVerse. Commands here are thin: argument decoding + calls into gitverse-core.
+//! Tauri shell for GITVerse by PRAPAWITY. Commands here are thin: argument decoding + calls into gitverse-core.
 //! The TS side is src/platform/tauri.ts; method names match the Electron `git:<name>` channels.
 mod ai_commands;
 mod app_commands;
@@ -144,7 +144,7 @@ pub fn run() {
             ai_commands::push_set_token,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building GITVerse")
+        .expect("error while building GITVerse by PRAPAWITY")
         .run(|handle, event| {
             // No orphaned shells: end every terminal when the app exits.
             if let tauri::RunEvent::Exit = event {

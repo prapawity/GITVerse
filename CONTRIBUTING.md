@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve GITVerse.
+Thank you for helping improve GITVerse by PRAPAWITY.
 
 1. Open an issue describing the problem or proposed change before large changes.
 2. Fork the repository and create a `feature/<description>` branch from `develop` for one focused change. Target pull requests at `develop`, not `main`.

@@ -1,49 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 456 128" fill="none">
-  <title>GITVerse</title>
-  <style>
-    @keyframes twinkle { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
-    .spark { animation: twinkle 4s ease-in-out infinite; }
-    .spark-slow { animation-duration: 6s; animation-delay: -2s; }
-    .spark-fast { animation-duration: 3s; animation-delay: -1s; }
-    @media (prefers-reduced-motion: reduce) { .spark { animation: none; opacity: 1; } }
-  </style>
-  <defs>
-    <linearGradient id="nebula" x1="10" y1="108" x2="116" y2="18" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7C3AED" stop-opacity=".25" />
-      <stop offset=".45" stop-color="#A855F7" stop-opacity=".45" />
-      <stop offset=".7" stop-color="#E879F9" stop-opacity=".4" />
-      <stop offset="1" stop-color="#6366F1" stop-opacity=".18" />
-    </linearGradient>
-    <filter id="nebula-cloud" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency=".065" numOctaves="3" seed="7" result="dust" />
-      <feDisplacementMap in="SourceGraphic" in2="dust" scale="18" xChannelSelector="R" yChannelSelector="G" />
-      <feGaussianBlur stdDeviation="3" />
-    </filter>
-    <linearGradient id="orbit" x1="16" y1="94" x2="112" y2="30" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7C3AED" />
-      <stop offset="1" stop-color="#C084FC" />
-    </linearGradient>
-    <linearGradient id="graph" x1="44" y1="100" x2="86" y2="24" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0891B2" />
-      <stop offset="1" stop-color="#22D3EE" />
-    </linearGradient>
-  </defs>
-  <g filter="url(#nebula-cloud)" stroke="url(#nebula)" stroke-linecap="round">
-    <path d="M14 88C-2 72 23 36 56 29S113 18 114 43C115 57 80 65 67 79S22 110 16 99" stroke-width="18" />
-    <path d="M29 111C54 110 97 86 108 66S103 40 89 39" stroke-width="11" />
+  <title>GITVerse by PRAPAWITY</title>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#313244"/><stop offset=".45" stop-color="#1E1E2E"/><stop offset="1" stop-color="#11111B"/></linearGradient>
+  <radialGradient id="planet" cx=".35" cy=".3" r=".85"><stop stop-color="#F9E2AF"/><stop offset=".4" stop-color="#FAB387"/><stop offset=".8" stop-color="#E0785A"/><stop offset="1" stop-color="#9A4A3A"/></radialGradient>
+  <linearGradient id="ringA" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#4CC2FF"/><stop offset="1" stop-color="#7DD3FF"/></linearGradient>
+  <linearGradient id="ringB" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#B48EF0"/><stop offset="1" stop-color="#CBA6F7"/></linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter>
+  <clipPath id="front"><rect x="0" y="256" width="512" height="256"/></clipPath>
+  <clipPath id="back"><rect x="0" y="0" width="512" height="256"/></clipPath>
+</defs>
+<g transform="scale(0.25)"><g id="mark">
+  <g transform="rotate(-18 256 256)">
+    <!-- back halves of rings -->
+    <g clip-path="url(#back)" fill="none" stroke-width="16" stroke-linecap="round">
+      <ellipse cx="256" cy="256" rx="214" ry="62" stroke="url(#ringA)" opacity=".55"/>
+      <ellipse cx="256" cy="256" rx="176" ry="46" stroke="url(#ringB)" opacity=".55"/>
+    </g>
   </g>
-  <g fill="#C084FC">
-    <path class="spark spark-slow" d="M18 13L20 19L26 21L20 23L18 29L16 23L10 21L16 19Z" />
-    <path class="spark spark-fast" d="M111 12L112.5 16.5L117 18L112.5 19.5L111 24L109.5 19.5L105 18L109.5 16.5Z" />
-    <circle class="spark" cx="14" cy="108" r="1.7" />
-    <circle class="spark spark-slow" cx="119" cy="75" r="1.7" />
-    <circle class="spark spark-fast" cx="71" cy="12" r="1.3" />
+  <!-- planet -->
+  <circle cx="256" cy="256" r="128" fill="#FAB387" opacity=".3" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="120" fill="url(#planet)"/>
+  <path d="M150 220Q256 190 362 226" stroke="#FFF7ED" stroke-opacity=".25" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <path d="M146 290Q256 268 368 300" stroke="#7C2D12" stroke-opacity=".3" stroke-width="12" stroke-linecap="round" fill="none"/>
+  <ellipse cx="214" cy="190" rx="34" ry="20" transform="rotate(-30 214 190)" fill="#fff" opacity=".55"/>
+  <g transform="rotate(-18 256 256)">
+    <!-- front halves -->
+    <g clip-path="url(#front)" fill="none" stroke-width="16" stroke-linecap="round">
+      <ellipse cx="256" cy="256" rx="214" ry="62" stroke="url(#ringA)"/>
+      <ellipse cx="256" cy="256" rx="176" ry="46" stroke="url(#ringB)"/>
+    </g>
+    <!-- commit moons on rings -->
+    <circle cx="42" cy="256" r="18" fill="#E8F6FF" stroke="#4CC2FF" stroke-width="9"/>
+    <circle cx="256" cy="318" r="18" fill="#E8F6FF" stroke="#4CC2FF" stroke-width="9"/>
+    <circle cx="432" cy="256" r="16" fill="#FDF4FF" stroke="#CBA6F7" stroke-width="9"/>
   </g>
-  <ellipse cx="64" cy="64" rx="54" ry="26" transform="rotate(-30 64 64)" stroke="url(#orbit)" stroke-width="3.5" />
-  <path d="M44 85V41M44 76C44 57 86 74 86 53" stroke="url(#graph)" stroke-width="9" stroke-linecap="round" />
-  <circle cx="44" cy="30" r="10" fill="#ECFEFF" stroke="#22D3EE" stroke-width="7" />
-  <circle cx="86" cy="42" r="10" fill="#ECFEFF" stroke="#06B6D4" stroke-width="7" />
-  <circle cx="44" cy="96" r="10" fill="#ECFEFF" stroke="#0891B2" stroke-width="7" />
-  <path class="spark" d="M105 86L107.5 93.5L115 96L107.5 98.5L105 106L102.5 98.5L95 96L102.5 93.5Z" fill="#C084FC" />
-  <text x="140" y="84" fill="#0891B2" font-family="Trebuchet MS, sans-serif" font-size="58" font-weight="700">GIT<tspan fill="#A855F7" font-weight="400">Verse</tspan></text>
+  <g fill="#CBA6F7">
+    <path d="M400 70l5 15 15 5-15 5-5 15-5-15-15-5 15-5z"/>
+    <path d="M96 400l4 11 11 4-11 4-4 11-4-11-11-4 11-4z"/>
+    <circle cx="120" cy="110" r="4"/><circle cx="430" cy="400" r="4"/>
+  </g>
+</g>
+</g>
+  <text x="140" y="84" fill="#1E9BE0" font-family="Trebuchet MS, sans-serif" font-size="58" font-weight="700">GIT<tspan fill="#9D6FE0" font-weight="400">Verse</tspan></text>
+  <text x="142" y="110" fill="#8D879B" font-family="Trebuchet MS, sans-serif" font-size="15" font-weight="400">by PRAPAWITY</text>
 </svg>

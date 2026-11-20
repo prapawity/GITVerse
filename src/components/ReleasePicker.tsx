@@ -49,8 +49,8 @@ export function ReleasePicker({ currentVersion, onClose }: { currentVersion: str
         Download a version
       </h2>
       <p className="mt-3 text-sm text-sub">
-        Current version: {currentVersion}. Select a stable release to open its downloads. Quit GITVerse before
-        installing.
+        Current version: {currentVersion}. Select a stable release to open its downloads. Quit GITVerse by PRAPAWITY
+        before installing.
       </p>
       {releases && releases.length > 0 && (
         <label className="mt-4 block text-sm">
