@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { layoutGraph, withStashes } from '../lib/graphLayout';
 import type { Commit, FileStatus, GraphLayout, StashRef } from '../shared/types';
+import type { ScanResult } from '../shared/repositoryScan';
 import { useSettings } from './settingsStore';
 import { desktopApi, type AnyAsync } from '../platform/api';
 
@@ -14,6 +15,8 @@ const pageSize = () => {
 interface RepoState {
   repoPath: string | null;
   recentRepos: string[];
+  syncingGroups: string[];
+  syncRepoGroup: (group: string, manual?: boolean) => Promise<void>;
   commits: Commit[];
   hasMore: boolean;
   loadingMore: boolean;
@@ -244,6 +247,7 @@ export const useRepo = create<RepoState>((set, get) => {
   return {
     repoPath: null,
     recentRepos: [],
+    syncingGroups: [],
     commits: [],
     hasMore: false,
     loadingMore: false,
@@ -342,6 +346,45 @@ export const useRepo = create<RepoState>((set, get) => {
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
     toast: (msg) => {
       get().notify('success', msg);
+    },
+
+    syncRepoGroup: async (group, manual = true) => {
+      const root = useSettings.getState().repoGroupRoots[group];
+      if (!root || get().syncingGroups.includes(group)) return;
+      set((state) => ({ syncingGroups: [...state.syncingGroups, group] }));
+      try {
+        const result: ScanResult = await api().findRepositories(root, crypto.randomUUID());
+        const settings = useSettings.getState();
+        if (result.cancelled || settings.repoGroupRoots[group] !== root) return;
+        const added = [...new Set(result.repos)].filter(
+          (repo) => !Object.hasOwn(settings.repoGroups, repo) && !get().recentRepos.includes(repo),
+        );
+        if (added.length) {
+          useSettings.setState((state) => ({
+            repoGroups: { ...state.repoGroups, ...Object.fromEntries(added.map((repo) => [repo, group])) },
+          }));
+          set((state) => ({ recentRepos: [...new Set([...state.recentRepos, ...added])] }));
+        }
+        if (result.skipped) {
+          const detail = `${result.skipped} folders could not be read or verified as repositories.`;
+          if (manual) get().notify('warning', `Some folders in ${group} could not be scanned`, detail);
+          else get().recordActivity('warning', `Some folders in ${group} could not be scanned`, detail);
+        }
+        if (added.length || (manual && !result.skipped))
+          get().notify(
+            'success',
+            added.length
+              ? `Added ${added.length} new repositor${added.length === 1 ? 'y' : 'ies'} to ${group}`
+              : `${group} is up to date`,
+          );
+      } catch (error) {
+        if (useSettings.getState().repoGroupRoots[group] !== root) return;
+        const detail = String(error instanceof Error ? error.message : error);
+        if (manual) get().notify('error', `Could not sync ${group}`, detail);
+        else get().recordActivity('error', `Could not sync ${group}`, detail);
+      } finally {
+        set((state) => ({ syncingGroups: state.syncingGroups.filter((name) => name !== group) }));
+      }
     },
 
     closeRepo: (path) => {
@@ -501,7 +544,7 @@ export const useRepo = create<RepoState>((set, get) => {
           if (get().repoPath === cwd && JSON.stringify(get().refs) === JSON.stringify(refs)) {
             get().notify(
               'info',
-              'Repository changed outside GITVerse',
+              'Repository changed outside GITVerse by PRAPAWITY',
               'Reloaded history, branch references and working changes.',
             );
           }

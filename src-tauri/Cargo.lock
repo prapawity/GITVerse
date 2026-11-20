@@ -1502,8 +1502,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitverse"
-version = "1.0.3"
+name = "gitverse-by-prapawity"
+version = "1.0.4"
 dependencies = [
  "gitverse-core",
  "hex",

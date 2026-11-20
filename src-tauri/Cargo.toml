@@ -1,8 +1,8 @@
 [package]
-name = "gitverse"
-version = "1.0.3"
+name = "gitverse-by-prapawity"
+version = "1.0.4"
 description = "A desktop Git client with commit graphs, conflict tools, and optional AI assistance."
-authors = ["GITVerse contributors"]
+authors = ["PRAPAWITY"]
 license = "MIT"
 edition = "2021"
 

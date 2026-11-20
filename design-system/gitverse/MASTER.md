@@ -1,6 +1,6 @@
-# GITVerse interface system
+# GITVerse by PRAPAWITY interface system
 
-This file records the visual and interaction rules already used by GITVerse. Treat the repository styles as the source of truth when this guidance and implementation differ. GITVerse is a desktop Git client for developers working across repositories, branches, diffs, and terminals.
+This file records the visual and interaction rules already used by GITVerse by PRAPAWITY. Treat the repository styles as the source of truth when this guidance and implementation differ. GITVerse by PRAPAWITY is a desktop Git client for developers working across repositories, branches, diffs, and terminals.
 
 ## Visual direction
 

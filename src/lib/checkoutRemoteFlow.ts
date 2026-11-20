@@ -49,7 +49,7 @@ export async function checkoutRemoteWithSparseRecovery(ref: string) {
   const more = unsupported.length > 5 ? `\n…and ${unsupported.length - 5} more.` : '';
   const confirmed = await askConfirm(
     'Use sparse checkout for Windows?',
-    `${unsupported.length} paths in ${ref} contain names Windows cannot create:\n${examples}${more}\n\nGITVerse will enable sparse checkout for this working tree, omit these paths from the Windows folder, and align the local branch with the remote. The files remain in the Git history and on the remote.`,
+    `${unsupported.length} paths in ${ref} contain names Windows cannot create:\n${examples}${more}\n\nGITVerse by PRAPAWITY will enable sparse checkout for this working tree, omit these paths from the Windows folder, and align the local branch with the remote. The files remain in the Git history and on the remote.`,
     { label: 'Continue with sparse checkout' },
   );
   if (!confirmed || useRepo.getState().repoPath !== repoPath) return;

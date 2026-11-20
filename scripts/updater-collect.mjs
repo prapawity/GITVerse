@@ -23,7 +23,7 @@ const signature = readFileSync(path.join(dir, `${bundle}.sig`), 'utf8').trim();
 const out = path.join(root, 'updater-out');
 mkdirSync(out, { recursive: true });
 const ext = bundle.match(/(\.app\.tar\.gz|\.[^.]+)$/)[1];
-const file = `GITVerse_${version}_${key}${ext}`;
+const file = `GITVerse-by-PRAPAWITY_${version}_${key}${ext}`;
 copyFileSync(path.join(dir, bundle), path.join(out, file));
 writeFileSync(path.join(out, `${key}.json`), JSON.stringify({ key, file, signature }));
 console.log(`${key}: ${file}`);

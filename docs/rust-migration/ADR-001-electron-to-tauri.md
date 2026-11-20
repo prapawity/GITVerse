@@ -1,12 +1,12 @@
-# ADR-001: ย้าย GITVerse จาก Electron ไป Tauri 2 (Rust backend, React UI เดิม)
+# ADR-001: ย้าย GITVerse by PRAPAWITY จาก Electron ไป Tauri 2 (Rust backend, React UI เดิม)
 
 **Status:** Proposed
 **Date:** 2026-11-16
-**Deciders:** Maintainers GITVerse
+**Deciders:** Maintainers GITVerse by PRAPAWITY
 
 ## Context
 
-GITVerse เป็น Electron 45 + React 19 + TypeScript + Zustand ปัจจุบัน:
+GITVerse by PRAPAWITY เป็น Electron 45 + React 19 + TypeScript + Zustand ปัจจุบัน:
 
 | ส่วน                                                                                        | ไฟล์                             | ขนาด                           |
 | ------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------ |

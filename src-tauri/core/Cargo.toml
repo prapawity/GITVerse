@@ -2,7 +2,7 @@
 name = "gitverse-core"
 version = "0.1.0"
 edition = "2021"
-description = "GITVerse backend logic without any UI runtime: Git runner, parsers, state."
+description = "GITVerse by PRAPAWITY backend logic without any UI runtime: Git runner, parsers, state."
 license = "MIT"
 
 [dependencies]

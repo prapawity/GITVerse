@@ -4,6 +4,7 @@ import { storage } from '../lib/storage';
 
 export interface Settings {
   theme: 'dark' | 'midnight' | 'graphite' | 'light';
+  fontSize: number;
   graphSort: 'topo' | 'date' | 'author-date';
   graphColumns: { branch: boolean; graph: boolean; message: boolean; author: boolean; date: boolean; sha: boolean };
   autoFetchMinutes: number; // 0 disables
@@ -49,8 +50,15 @@ export interface IdentityProfile {
   email: string;
 }
 
+export const FONT_SIZE_PRESETS = [
+  { label: 'Small', value: 12 },
+  { label: 'Medium', value: 14 },
+  { label: 'Large', value: 18 },
+] as const;
+
 export const DEFAULTS: Settings = {
   theme: 'dark',
+  fontSize: 14,
   graphSort: 'topo',
   graphColumns: { branch: true, graph: true, message: true, author: true, date: true, sha: false },
   autoFetchMinutes: 1,
@@ -111,6 +119,14 @@ interface Store extends Settings {
   reset: () => void;
 }
 
+function normalizedFontSize(value: number | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULTS.fontSize;
+  return FONT_SIZE_PRESETS.reduce<number>(
+    (nearest, preset) => (Math.abs(preset.value - value) < Math.abs(nearest - value) ? preset.value : nearest),
+    DEFAULTS.fontSize,
+  );
+}
+
 export const useSettings = create<Store>()(
   persist(
     (set) => ({
@@ -132,7 +148,7 @@ export const useSettings = create<Store>()(
           const { [group]: _removed, ...repoGroupRoots } = s.repoGroupRoots;
           return { repoGroups, repoGroupRoots };
         }),
-      set: (k, v) => set({ [k]: v } as Partial<Store>),
+      set: (k, v) => set({ [k]: k === 'fontSize' ? normalizedFontSize(v as number) : v } as Partial<Store>),
       setFlow: (repo, patch) => set((s) => ({ flow: { ...s.flow, [repo]: { ...s.flow[repo], ...patch } } })),
       setPushProfiles: (repo, profiles) => set((s) => ({ pushProfiles: { ...s.pushProfiles, [repo]: profiles } })),
       selectPushProfile: (repo, id) =>
@@ -152,7 +168,12 @@ export const useSettings = create<Store>()(
         const saved = persisted as Partial<Store> | undefined;
         const legacy = Object.values(saved?.identityProfiles ?? {}).flat();
         const profiles = saved?.sharedIdentityProfiles ?? [...new Map(legacy.map((p) => [p.id, p])).values()];
-        return { ...current, ...saved, sharedIdentityProfiles: profiles };
+        return {
+          ...current,
+          ...saved,
+          fontSize: normalizedFontSize(saved?.fontSize),
+          sharedIdentityProfiles: profiles,
+        };
       },
     },
   ),

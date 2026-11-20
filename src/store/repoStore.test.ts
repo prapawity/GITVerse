@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 import { useRepo } from './repoStore';
+import { useSettings } from './settingsStore';
 import type { Commit } from '../shared/types';
 
 const refs = (hash: string) => ({
@@ -52,7 +53,139 @@ beforeEach(() => {
     loading: false,
     toasts: [],
     activity: [],
+    recentRepos: [],
+    syncingGroups: [],
   });
+});
+
+test('group sync adds only new discoveries without switching repositories or reopening closed entries', async () => {
+  const previous = useSettings.getState();
+  try {
+    useSettings.setState({
+      repoGroupRoots: { Projects: '/projects' },
+      repoGroups: { '/projects/known': 'Projects', '/projects/closed': 'Projects', '/projects/moved': 'Other' },
+    });
+    useRepo.setState({ recentRepos: ['/projects/known', '/projects/open'] });
+    backend.findRepositories = async () => ({
+      root: '/projects',
+      group: 'projects',
+      skipped: 0,
+      cancelled: false,
+      repos: [
+        '/projects/known',
+        '/projects/closed',
+        '/projects/moved',
+        '/projects/open',
+        '/projects/new',
+        '/projects/new',
+      ],
+    });
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.deepEqual(useRepo.getState().recentRepos, ['/projects/known', '/projects/open', '/projects/new']);
+    assert.equal(useRepo.getState().repoPath, '/repo');
+    assert.equal(useSettings.getState().repoGroups['/projects/new'], 'Projects');
+    assert.equal(useSettings.getState().repoGroups['/projects/moved'], 'Other');
+    assert.deepEqual(useRepo.getState().syncingGroups, []);
+  } finally {
+    useSettings.setState(previous);
+  }
+});
+
+test('group sync ignores duplicate requests and results for a deleted group', async () => {
+  const previous = useSettings.getState();
+  try {
+    useSettings.setState({ repoGroupRoots: { Projects: '/projects' }, repoGroups: {} });
+    let finish!: (value: unknown) => void;
+    let scans = 0;
+    backend.findRepositories = async () => {
+      scans++;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    };
+    const pending = useRepo.getState().syncRepoGroup('Projects', false);
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.equal(scans, 1);
+    assert.deepEqual(useRepo.getState().syncingGroups, ['Projects']);
+    useSettings.getState().deleteRepoGroup('Projects');
+    finish({ repos: ['/projects/new'], skipped: 0, cancelled: false });
+    await pending;
+    assert.deepEqual(useRepo.getState().recentRepos, []);
+    assert.deepEqual(useSettings.getState().repoGroups, {});
+    assert.deepEqual(useRepo.getState().syncingGroups, []);
+  } finally {
+    useSettings.setState(previous);
+  }
+});
+
+test('group sync keeps existing entries on cancellation or scan failure and reports manual failures', async () => {
+  const previous = useSettings.getState();
+  try {
+    useSettings.setState({ repoGroupRoots: { Projects: '/projects' }, repoGroups: { '/projects/known': 'Projects' } });
+    useRepo.setState({ recentRepos: ['/projects/known'] });
+    backend.findRepositories = async () => ({ repos: ['/projects/new'], skipped: 0, cancelled: true });
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.deepEqual(useRepo.getState().recentRepos, ['/projects/known']);
+    backend.findRepositories = async () => {
+      throw new Error('Folder is unavailable');
+    };
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.equal(useRepo.getState().toasts.at(-1)?.kind, 'error');
+    assert.deepEqual(useRepo.getState().recentRepos, ['/projects/known']);
+    assert.deepEqual(useRepo.getState().syncingGroups, []);
+  } finally {
+    useSettings.setState(previous);
+  }
+});
+
+test('automatic group sync is silent when unchanged or failing; manual partial scans never claim up to date', async () => {
+  const previous = useSettings.getState();
+  try {
+    useSettings.setState({ repoGroupRoots: { Projects: '/projects' }, repoGroups: {} });
+    backend.findRepositories = async () => ({ repos: [], skipped: 0, cancelled: false });
+    await useRepo.getState().syncRepoGroup('Projects', false);
+    assert.deepEqual(useRepo.getState().toasts, []);
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.equal(useRepo.getState().toasts.at(-1)?.title, 'Projects is up to date');
+    useRepo.setState({ toasts: [] });
+    backend.findRepositories = async () => ({ repos: [], skipped: 2, cancelled: false });
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.deepEqual(
+      useRepo.getState().toasts.map((toast) => toast.kind),
+      ['warning'],
+    );
+    useRepo.setState({ toasts: [] });
+    backend.findRepositories = async () => {
+      throw new Error('Permission denied');
+    };
+    await useRepo.getState().syncRepoGroup('Projects', false);
+    assert.deepEqual(useRepo.getState().toasts, []);
+    assert.equal(useRepo.getState().activity[0].kind, 'error');
+  } finally {
+    useSettings.setState(previous);
+  }
+});
+
+test('group sync requires a saved root and ignores results after the root changes', async () => {
+  const previous = useSettings.getState();
+  try {
+    useSettings.setState({ repoGroupRoots: {}, repoGroups: {} });
+    let scans = 0;
+    backend.findRepositories = async () => {
+      scans++;
+      useSettings.getState().setRepoGroupRoot('Projects', '/other');
+      return { repos: ['/projects/new'], skipped: 0, cancelled: false };
+    };
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.equal(scans, 0);
+    useSettings.getState().setRepoGroupRoot('Projects', '/projects');
+    await useRepo.getState().syncRepoGroup('Projects');
+    assert.equal(scans, 1);
+    assert.deepEqual(useRepo.getState().recentRepos, []);
+    assert.deepEqual(useSettings.getState().repoGroups, {});
+  } finally {
+    useSettings.setState(previous);
+  }
 });
 
 test('amend prefills the HEAD summary and multiline description while retaining signoff', async () => {

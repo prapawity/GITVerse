@@ -3,12 +3,12 @@ module.exports = {
   theme: {
     // one type scale for the whole app: 11 / 12 / 13 / 15 / 18 / 28
     fontSize: {
-      '2xs': ['11px', '16px'],
-      xs: ['12px', '16px'],
-      sm: ['13px', '20px'],
-      base: ['15px', '22px'],
-      lg: ['18px', '26px'],
-      '2xl': ['28px', '34px'],
+      '2xs': ['calc(11px * var(--ui-font-scale, 1))', '1.46'],
+      xs: ['calc(12px * var(--ui-font-scale, 1))', '1.34'],
+      sm: ['calc(13px * var(--ui-font-scale, 1))', '1.54'],
+      base: ['calc(15px * var(--ui-font-scale, 1))', '1.47'],
+      lg: ['calc(18px * var(--ui-font-scale, 1))', '1.45'],
+      '2xl': ['calc(28px * var(--ui-font-scale, 1))', '1.22'],
     },
     extend: {
       colors: {

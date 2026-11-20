@@ -19,6 +19,7 @@ import { askConfirm } from './Dialogs';
 import {
   clamp,
   DEFAULTS,
+  FONT_SIZE_PRESETS,
   FLOW_DEFAULTS,
   flowFor,
   useSettings,
@@ -464,7 +465,7 @@ function AiSettings() {
               {!c
                 ? 'Checking…'
                 : c.storedKey
-                  ? 'Using the key saved in GITVerse.'
+                  ? 'Using the key saved in GITVerse by PRAPAWITY.'
                   : c.envKey
                     ? 'Using ANTHROPIC_API_KEY from your environment.'
                     : 'No key saved.'}{' '}
@@ -815,7 +816,7 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                 <Row
                   label="Check for updates automatically"
                   htmlFor="auto-update"
-                  hint="Check for a new stable release when GITVerse starts."
+                  hint="Check for a new stable release when GITVerse by PRAPAWITY starts."
                 >
                   <Check id="auto-update" checked={st.autoCheckUpdates} onChange={set('autoCheckUpdates')} />
                 </Row>
@@ -924,7 +925,9 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
             {section === 'appearance' && (
               <>
                 <h1 className="mb-2 text-2xl font-semibold">Appearance</h1>
-                <p className="mb-6 text-sm text-sub">Choose a theme for GITVerse. Changes apply immediately.</p>
+                <p className="mb-6 text-sm text-sub">
+                  Choose a theme for GITVerse by PRAPAWITY. Changes apply immediately.
+                </p>
                 <div role="group" aria-label="Theme" className="grid max-w-[700px] grid-cols-1 gap-3 sm:grid-cols-3">
                   {(
                     [
@@ -986,6 +989,25 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                     </button>
                   ))}
                 </div>
+                <Row label="Font size">
+                  <div
+                    role="group"
+                    aria-label="Font size"
+                    className="inline-flex flex-wrap gap-1 rounded-md border border-surface p-1"
+                  >
+                    {FONT_SIZE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        aria-pressed={st.fontSize === preset.value}
+                        onClick={() => st.set('fontSize', preset.value)}
+                        className={`min-h-9 rounded px-4 text-sm ${st.fontSize === preset.value ? 'bg-accent/15 font-semibold text-accent' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </Row>
               </>
             )}
 
@@ -1051,7 +1073,9 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
             {section === 'conflicts' && (
               <>
                 <h1 className="text-2xl font-semibold">Conflicts</h1>
-                <p className="mb-6 mt-1 text-sm text-sub">How GITVerse helps you resolve merge conflicts.</p>
+                <p className="mb-6 mt-1 text-sm text-sub">
+                  How GITVerse by PRAPAWITY helps you resolve merge conflicts.
+                </p>
                 <Row
                   label="Auto-scroll to conflicts"
                   htmlFor="cs"
