@@ -234,8 +234,8 @@ export function DiffView({
     setDiscarding(true);
     setDiscardError('');
     try {
-      useActionHistory.getState().markStaging();
       await api().stageWorkingHunk(repoPath, file.path, area, diff.data, hunk);
+      useActionHistory.getState().markStaging();
       if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
         setDiscardRevision((value) => value + 1);
         await onRefresh?.();

@@ -18,7 +18,9 @@ import {
   type OpenRequest,
 } from '../lib/pullRequests';
 import { useSettings } from '../store/settingsStore';
-import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
+import { locateRef, openRef } from '../lib/refActions';
+import { useRepo } from '../store/repoStore';
+import { ContextMenu } from './ContextMenu';
 import { Chevron, Collapse } from './Motion';
 
 const AUTO_REFRESH_MS = 2 * 60_000;
@@ -67,6 +69,9 @@ export function PullRequestList({
   const [hosted, setHosted] = useState<HostedRepo | null>(null);
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [closed, setClosed] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<{ request: OpenRequest; x: number; y: number } | null>(null);
+  const copy = (text: string, what: string) =>
+    void navigator.clipboard.writeText(text).then(() => useRepo.getState().toast(`${what} copied`));
 
   const loading = useRef(false);
   const lastLoad = useRef(0);
@@ -225,7 +230,11 @@ export function PullRequestList({
                       key={`${group.id}:${r.id}`}
                       type="button"
                       onClick={(e) => e.detail <= 1 && open(r.url)}
-                      onDoubleClick={() => void checkoutRemoteWithSparseRecovery(`origin/${r.head}`)}
+                      onDoubleClick={() => void openRef('remote', `origin/${r.head}`)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        setMenu({ request: r, x: event.clientX, y: event.clientY });
+                      }}
                       title={`${r.title}\n${r.head} → ${r.base} · ${r.author}\nClick to open · double-click to check out ${r.head}`}
                       className="flex w-full items-start gap-2 py-1.5 pl-12 pr-4 text-left hover:bg-surface/50"
                     >
@@ -247,6 +256,32 @@ export function PullRequestList({
             </div>
           );
         })}
+      {menu && (
+        <ContextMenu
+          label={`Actions for ${noun.toLowerCase()} #${menu.request.number}`}
+          x={menu.x}
+          y={menu.y}
+          width={280}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: 'Open in browser', run: () => open(menu.request.url) },
+            {
+              label: `Check out ${menu.request.head}`,
+              run: () => void openRef('remote', `origin/${menu.request.head}`),
+            },
+            { label: 'Show branch in graph', run: () => void locateRef('remote', `origin/${menu.request.head}`) },
+            '-',
+            {
+              label: 'Copy',
+              sub: [
+                { label: 'Link', run: () => copy(menu.request.url, 'Link') },
+                { label: `Branch name (${menu.request.head})`, run: () => copy(menu.request.head, 'Branch name') },
+                { label: `Title`, run: () => copy(menu.request.title, 'Title') },
+              ],
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

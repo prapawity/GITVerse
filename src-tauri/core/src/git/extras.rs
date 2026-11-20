@@ -203,7 +203,14 @@ pub async fn apply_patch(git: &GitRunner, cwd: &Path, patch: &str, mode: &str) -
         stdin: Some(patch.to_owned()),
         ..RunOpts::default()
     };
-    git.run(cwd, args, opts).await
+    match git.run(cwd, args, opts).await {
+        // never leave the repository in the middle of an am the app cannot continue
+        Err(e) if mode == "am" => {
+            let _ = run(git, cwd, &["am", "--abort"]).await;
+            Err(invalid(format!("{e}\nNothing was applied.")))
+        }
+        other => other,
+    }
 }
 
 // ---- combined diff of a commit range ----

@@ -8,6 +8,8 @@ import { providerLabel } from '../shared/aiTypes';
 import { desktopApi } from '../platform/api';
 import { Chevron, Collapse } from './Motion';
 import { IgnoreMenu } from './IgnoreMenu';
+import { useLfs } from '../lib/lfs';
+import { LfsBadge } from './LfsBadge';
 import { entryFor, snapshot, useActionHistory } from '../lib/actionHistory';
 
 export type WorkingFile = { path: string; status: string; area: 'staged' | 'unstaged' | 'untracked' };
@@ -48,9 +50,26 @@ export function WorkingChangesPanel({
   const { summary, description, amend } = draft;
   const openRequestAfterPush = useSettings((state) => state.openRequestAfterPush);
   const [skipHooks, setSkipHooks] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const isLfs = useLfs(repoPath);
   const [ignoreMenu, setIgnoreMenu] = useState<{ path: string; tracked: boolean; x: number; y: number } | null>(null);
   const [coAuthors, setCoAuthors] = useState<string[]>([]);
   const [coAuthorInput, setCoAuthorInput] = useState('');
+  // shown on the collapsed "Commit options" row so nothing active is hidden
+  const activeOptions = [
+    amend && 'Amend',
+    skipHooks && 'skip hooks',
+    coAuthors.length > 0 && `${coAuthors.length} co-author${coAuthors.length === 1 ? '' : 's'}`,
+    openRequestAfterPush && 'PR after push',
+  ]
+    .filter(Boolean)
+    .join(', ');
+  // these choices belong to one commit in one repository
+  useEffect(() => {
+    setSkipHooks(false);
+    setCoAuthors([]);
+    setCoAuthorInput('');
+  }, [repoPath]);
   const commits = useRepo((state) => state.commits);
   // people who already committed here, as "Name <email>" suggestions for co-authors
   const knownPeople = useMemo(
@@ -295,12 +314,12 @@ export function WorkingChangesPanel({
     setPending(true);
     setError('');
     try {
-      useActionHistory.getState().markStaging();
       await api().trackedStage(
         cwd,
         action,
         files.map((f) => f.path),
       );
+      useActionHistory.getState().markStaging();
       useRepo
         .getState()
         .recordActivity(
@@ -491,7 +510,10 @@ export function WorkingChangesPanel({
                   {code}
                 </span>
                 <span className="min-w-0 flex-1 py-1">
-                  <span className="block truncate font-medium">{filename}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate font-medium">{filename}</span>
+                    {isLfs(f.path) && <LfsBadge />}
+                  </span>
                   {directory && <span className="block truncate text-xs text-sub">{directory}/</span>}
                 </span>
                 {byChanges && changeCounts.has(f.path) && (
@@ -704,42 +726,6 @@ export function WorkingChangesPanel({
         {/* while a merge/rebase is in progress the commit happens in the conflict panel */}
         {!operation && (
           <>
-            <label className="flex items-center gap-2 text-sm text-sub">
-              <input
-                type="checkbox"
-                checked={amend}
-                disabled={busy}
-                onChange={(e) => void changeAmend(e.target.checked)}
-                className="accent-accent"
-              />{' '}
-              Amend previous commit
-            </label>
-            <label
-              className="flex items-center gap-2 text-sm text-sub"
-              title="Commit with --no-verify: pre-commit and commit-msg hooks do not run"
-            >
-              <input
-                type="checkbox"
-                checked={skipHooks}
-                disabled={busy}
-                onChange={(e) => setSkipHooks(e.target.checked)}
-                className="accent-accent"
-              />{' '}
-              Skip Git hooks
-            </label>
-            <label
-              className="flex items-center gap-2 text-sm text-sub"
-              title="After a successful push, open the pull / merge request form for the pushed branch"
-            >
-              <input
-                type="checkbox"
-                role="switch"
-                checked={openRequestAfterPush}
-                onChange={(e) => useSettings.getState().set('openRequestAfterPush', e.target.checked)}
-                className="accent-accent"
-              />{' '}
-              Open pull / merge request after push
-            </label>
             <button
               type="button"
               onClick={() => void generate()}
@@ -770,7 +756,8 @@ export function WorkingChangesPanel({
               </span>
             </div>
             <details open={descriptionOpen} onToggle={(event) => setDescriptionOpen(event.currentTarget.open)}>
-              <summary className="cursor-pointer rounded py-1 text-sm text-sub hover:text-text">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded py-1 text-sm text-sub hover:text-text [&::-webkit-details-marker]:hidden">
+                <Chevron open={descriptionOpen} />
                 Description (optional)
               </summary>
               <label className="sr-only" htmlFor="commit-description">
@@ -786,54 +773,110 @@ export function WorkingChangesPanel({
                 className="mt-2 w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent"
               />
             </details>
-            <div className="space-y-1.5">
-              {coAuthors.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {coAuthors.map((person) => (
-                    <span
-                      key={person}
-                      className="pop-in flex items-center gap-1 rounded-full bg-surface/70 py-0.5 pl-2 pr-1 text-xs"
-                      title={`Co-authored-by: ${person}`}
-                    >
-                      {person.replace(/ <.*$/, '')}
-                      <button
-                        type="button"
-                        onClick={() => setCoAuthors((list) => list.filter((p) => p !== person))}
-                        aria-label={`Remove co-author ${person}`}
-                        className="rounded-full p-0.5 hover:bg-surface"
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
-                  ))}
+            <div>
+              <button
+                type="button"
+                aria-expanded={optionsOpen}
+                onClick={() => setOptionsOpen((v) => !v)}
+                className="flex w-full items-center gap-1.5 rounded py-1 text-left text-sm text-sub hover:text-text"
+              >
+                <Chevron open={optionsOpen} />
+                <span>Commit options</span>
+                {!optionsOpen && activeOptions && (
+                  <span className="ml-auto truncate rounded bg-accent/15 px-1.5 text-xs text-accent">
+                    {activeOptions}
+                  </span>
+                )}
+              </button>
+              <Collapse open={optionsOpen}>
+                <div className="space-y-2 pb-1 pl-5 pt-2">
+                  <label className="flex items-center gap-2 text-sm text-sub">
+                    <input
+                      type="checkbox"
+                      checked={amend}
+                      disabled={busy}
+                      onChange={(e) => void changeAmend(e.target.checked)}
+                      className="accent-accent"
+                    />{' '}
+                    Amend previous commit
+                  </label>
+                  <label
+                    className="flex items-center gap-2 text-sm text-sub"
+                    title="Commit with --no-verify: pre-commit and commit-msg hooks do not run"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={skipHooks}
+                      disabled={busy}
+                      onChange={(e) => setSkipHooks(e.target.checked)}
+                      className="accent-accent"
+                    />{' '}
+                    Skip Git hooks
+                  </label>
+                  <label
+                    className="flex items-center gap-2 text-sm text-sub"
+                    title="After a successful push, open the pull / merge request form for the pushed branch"
+                  >
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={openRequestAfterPush}
+                      onChange={(e) => useSettings.getState().set('openRequestAfterPush', e.target.checked)}
+                      className="accent-accent"
+                    />{' '}
+                    Open pull / merge request after push
+                  </label>
+                  <div className="space-y-1.5">
+                    {coAuthors.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {coAuthors.map((person) => (
+                          <span
+                            key={person}
+                            className="pop-in flex items-center gap-1 rounded-full bg-surface/70 py-0.5 pl-2 pr-1 text-xs"
+                            title={`Co-authored-by: ${person}`}
+                          >
+                            {person.replace(/ <.*$/, '')}
+                            <button
+                              type="button"
+                              onClick={() => setCoAuthors((list) => list.filter((p) => p !== person))}
+                              aria-label={`Remove co-author ${person}`}
+                              className="rounded-full p-0.5 hover:bg-surface"
+                            >
+                              <X size={11} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className="shrink-0 text-sub" aria-hidden />
+                      <input
+                        value={coAuthorInput}
+                        disabled={busy}
+                        list="co-author-suggestions"
+                        onChange={(e) => {
+                          setCoAuthorInput(e.target.value);
+                          if (knownPeople.includes(e.target.value)) addCoAuthor(e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && coAuthorInput.trim()) {
+                            e.preventDefault();
+                            if (!addCoAuthor(coAuthorInput)) reportError('Co-author format: Name <email@example.com>');
+                          }
+                        }}
+                        placeholder="Add co-author (Name <email>)"
+                        aria-label="Add co-author"
+                        className="min-w-0 flex-1 rounded-md border border-surface bg-crust px-2 py-1.5 text-sm outline-none focus:border-accent"
+                      />
+                      <datalist id="co-author-suggestions">
+                        {knownPeople.map((person) => (
+                          <option key={person} value={person} />
+                        ))}
+                      </datalist>
+                    </div>
+                  </div>
                 </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Users size={14} className="shrink-0 text-sub" aria-hidden />
-                <input
-                  value={coAuthorInput}
-                  disabled={busy}
-                  list="co-author-suggestions"
-                  onChange={(e) => {
-                    setCoAuthorInput(e.target.value);
-                    if (knownPeople.includes(e.target.value)) addCoAuthor(e.target.value);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && coAuthorInput.trim()) {
-                      e.preventDefault();
-                      if (!addCoAuthor(coAuthorInput)) reportError('Co-author format: Name <email@example.com>');
-                    }
-                  }}
-                  placeholder="Add co-author (Name <email>)"
-                  aria-label="Add co-author"
-                  className="min-w-0 flex-1 rounded-md border border-surface bg-crust px-2 py-1.5 text-sm outline-none focus:border-accent"
-                />
-                <datalist id="co-author-suggestions">
-                  {knownPeople.map((person) => (
-                    <option key={person} value={person} />
-                  ))}
-                </datalist>
-              </div>
+              </Collapse>
             </div>
             <div className="flex gap-2">
               <button

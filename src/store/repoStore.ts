@@ -668,11 +668,14 @@ export const useRepo = create<RepoState>((set, get) => {
           try {
             const limit = Math.max(pageSize(), silent ? get().commits.length : 0);
             const sort = useSettings.getState().graphSort;
-            // refs first: the hide/solo filter only names refs that still exist
-            const refs = await api().refs(cwd);
-            const [commits, status, operation] = await Promise.all([
-              api().log(cwd, limit, 0, sort, historyScope(cwd, refs)),
+            // solo names exact refs, so it waits for fresh refs (a deleted branch would break log);
+            // hiding only excludes names and can run alongside everything else
+            const solo = (useSettings.getState().graphSolo[cwd] ?? []).length > 0;
+            const freshRefs = solo ? await api().refs(cwd) : null;
+            const [commits, status, refs, operation] = await Promise.all([
+              api().log(cwd, limit, 0, sort, historyScope(cwd, freshRefs)),
               api().status(cwd),
+              freshRefs ?? api().refs(cwd),
               api().opState(cwd),
             ]);
             if (get().repoPath !== cwd || useSettings.getState().graphSort !== sort) return; // history request became stale

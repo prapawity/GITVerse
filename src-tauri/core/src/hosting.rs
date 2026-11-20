@@ -353,7 +353,10 @@ async fn candidates(kind: HostKind, host: &str, pushed: Vec<String>) -> Vec<(Str
                     Some(run(&glab, &["config", "get", "token", "--host", host], "").await),
                 );
             }
-            add("GITLAB_TOKEN", std::env::var("GITLAB_TOKEN").ok());
+            // an environment token belongs to gitlab.com; never offer it to another server
+            if host == "gitlab.com" {
+                add("GITLAB_TOKEN", std::env::var("GITLAB_TOKEN").ok());
+            }
         }
         HostKind::Bitbucket => {}
     }

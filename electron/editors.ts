@@ -65,11 +65,19 @@ export function registerEditors() {
       return new Promise<void>((resolve, reject) =>
         execFile('open', ['-a', where.mac!, target], (error) => (error ? reject(error) : resolve())),
       );
-    const child = spawn(where.cli!, [target], {
-      detached: true,
-      stdio: 'ignore',
-      shell: process.platform === 'win32', // .cmd launchers need a shell on Windows
-    });
+    // .cmd launchers need cmd.exe on Windows: quote both paths and refuse characters cmd would interpret
+    const child =
+      process.platform === 'win32'
+        ? (() => {
+            if (/["%^&|<>!\r\n]/.test(target) || /["%^&|<>!]/.test(where.cli!))
+              throw new Error('This path contains characters that cannot be passed to the editor safely.');
+            return spawn('cmd.exe', ['/d', '/s', '/c', `""${where.cli}" "${target}""`], {
+              detached: true,
+              stdio: 'ignore',
+              windowsVerbatimArguments: true,
+            });
+          })()
+        : spawn(where.cli!, [target], { detached: true, stdio: 'ignore' });
     child.on('error', () => {});
     child.unref();
   });

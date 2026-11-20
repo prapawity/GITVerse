@@ -3,6 +3,7 @@ import { Boxes, Code2, FileUp, HardDrive, Loader2, Package, Wrench } from 'lucid
 import { desktopApi } from '../platform/api';
 import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
+import { resetLfsCache } from '../lib/lfs';
 
 type Lfs = { installed: boolean; used: boolean; patterns: string[]; files: string[] };
 type Submodule = {
@@ -56,6 +57,7 @@ export function RepoTools({ repoPath }: { repoPath: string }) {
   }, [repoPath, revision]);
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
+    if (label === 'lfs') resetLfsCache(repoPath);
     setBusy(label);
     setError('');
     setNote('');

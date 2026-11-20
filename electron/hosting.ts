@@ -122,7 +122,8 @@ async function candidates(
   if (kind === 'gitlab') {
     const glab = findTool('glab');
     if (glab) add('GitLab CLI (glab)', await run(glab, ['config', 'get', 'token', '--host', host]));
-    add('GITLAB_TOKEN', process.env.GITLAB_TOKEN);
+    // an environment token belongs to gitlab.com; never offer it to another server
+    if (host === 'gitlab.com') add('GITLAB_TOKEN', process.env.GITLAB_TOKEN);
   }
   return found;
 }

@@ -1,5 +1,13 @@
-import { createPortal } from 'react-dom';
 import { useRepo } from '../store/repoStore';
+import { ContextMenu, type MenuItem } from './ContextMenu';
+
+/** A literal path as a .gitignore pattern: glob characters, a leading # or ! and trailing spaces are escaped. */
+export function escapeGitignore(path: string): string {
+  return path
+    .replace(/[\\*?[\]]/g, (c) => `\\${c}`)
+    .replace(/^[#!]/, (c) => `\\${c}`)
+    .replace(/ +$/, (spaces) => spaces.replace(/ /g, '\\ '));
+}
 
 /**
  * Right-click menu on a changed file: add it, its extension or its folder to the root .gitignore.
@@ -23,52 +31,34 @@ export function IgnoreMenu({
   const dot = name.lastIndexOf('.');
   const extension = dot > 0 ? name.slice(dot) : '';
   const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-  const options: { label: string; pattern: string; untrack?: string }[] = [
-    { label: `Ignore ${name}`, pattern: `/${path}` },
-    ...(extension ? [{ label: `Ignore all *${extension} files`, pattern: `*${extension}` }] : []),
-    ...(folder ? [{ label: `Ignore folder ${folder}/`, pattern: `/${folder}/` }] : []),
+  const exact = `/${escapeGitignore(path)}`;
+  const dir = `/${escapeGitignore(folder)}/`;
+  const ignore = (pattern: string, untrack?: string) => () => void exec('ignorePath', pattern, untrack ?? null);
+  const items: MenuItem[] = [
+    { label: `Ignore ${name}`, hint: `Adds "${exact}" to .gitignore`, run: ignore(exact) },
+    ...(extension
+      ? [
+          {
+            label: `Ignore all *${extension} files`,
+            hint: `Adds "*${escapeGitignore(extension)}"`,
+            run: ignore(`*${escapeGitignore(extension)}`),
+          },
+        ]
+      : []),
+    ...(folder ? [{ label: `Ignore folder ${folder}/`, hint: `Adds "${dir}"`, run: ignore(dir) }] : []),
     ...(tracked
       ? [
-          { label: `Ignore and stop tracking ${name}`, pattern: `/${path}`, untrack: path },
-          ...(folder
-            ? [{ label: `Ignore and stop tracking ${folder}/`, pattern: `/${folder}/`, untrack: folder }]
-            : []),
+          '-' as const,
+          {
+            label: 'Ignore and stop tracking',
+            hint: 'Removes it from Git (git rm --cached) and keeps it on disk',
+            sub: [
+              { label: name, run: ignore(exact, path) },
+              ...(folder ? [{ label: `${folder}/`, run: ignore(dir, folder) }] : []),
+            ],
+          },
         ]
       : []),
   ];
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[100]"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-    >
-      <div
-        role="menu"
-        aria-label={`Actions for ${path}`}
-        className="glass-context-menu fixed z-[101] w-72 rounded-xl border border-white/15 p-1.5 shadow-2xl"
-        style={{ left: Math.min(x, window.innerWidth - 300), top: Math.min(y, window.innerHeight - 240) }}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        {options.map((option) => (
-          <button
-            key={option.label}
-            type="button"
-            role="menuitem"
-            title={`Adds "${option.pattern}" to .gitignore${option.untrack ? ' and keeps the file on disk' : ''}`}
-            onClick={() => {
-              onClose();
-              void exec('ignorePath', option.pattern, option.untrack ?? null);
-            }}
-            className="flex min-h-9 w-full items-center truncate rounded-lg px-3 text-left text-sm text-text hover:bg-white/10"
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>,
-    document.body,
-  );
+  return <ContextMenu items={items} x={x} y={y} label={`Actions for ${path}`} onClose={onClose} width={300} />;
 }

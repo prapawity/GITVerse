@@ -487,7 +487,8 @@ function AiSettings() {
           <Msgline k="claude" />
           {c && !c.canEncrypt && (
             <p className="mt-2 text-sm text-warning">
-              Secure storage is unavailable on this system — set ANTHROPIC_API_KEY instead.
+              The system keychain is not available to this app, so a key entered here is kept only until the app quits
+              (never written to disk). To keep it, allow keychain access or set ANTHROPIC_API_KEY.
             </p>
           )}
         </AiRow>

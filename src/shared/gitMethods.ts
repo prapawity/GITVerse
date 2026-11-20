@@ -95,6 +95,7 @@ export const GIT_METHODS = [
   'externalToolConfig',
   'setExternalToolConfig',
   'maintenance',
+  'commitPeople',
 ] as const;
 
 export type GitMethodName = (typeof GIT_METHODS)[number];

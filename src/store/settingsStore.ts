@@ -8,6 +8,10 @@ export interface Settings {
   /** standard: icons with labels; minimal: labels hidden where the icon is clear (names on hover) */
   uiMode: 'standard' | 'minimal';
   zoom: number; // whole-app zoom, 1 = 100%
+  leftPanelOpen: boolean; // branches / tags sidebar
+  rightPanelOpen: boolean; // details / changes panel
+  leftPanelSize: number; // % of the window, restored when the panel opens
+  rightPanelSize: number;
   graphSort: 'topo' | 'date' | 'author-date';
   graphColumns: { branch: boolean; graph: boolean; message: boolean; author: boolean; date: boolean; sha: boolean };
   autoFetchMinutes: number; // 0 disables
@@ -65,6 +69,10 @@ export const DEFAULTS: Settings = {
   theme: 'dark',
   uiMode: 'standard',
   zoom: 1,
+  leftPanelOpen: true,
+  rightPanelOpen: true,
+  leftPanelSize: 20,
+  rightPanelSize: 25,
   fontSize: 14,
   graphSort: 'topo',
   graphColumns: { branch: true, graph: true, message: true, author: true, date: true, sha: false },

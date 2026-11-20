@@ -42,7 +42,8 @@ pub use reflog::{reflog, ReflogEntry};
 pub use refs::{refs, stash_entries, RefList, StashRef};
 pub use runner::{GitRunner, Identity, RunOpts};
 pub use show::{
-    commit_detail, commit_file_diff, working_file_diff, Area, ChangedFile, CommitDetail,
+    commit_detail, commit_file_diff, commit_people, working_file_diff, Area, ChangedFile,
+    CommitDetail, CommitPeople, Person,
 };
 pub use stash::{
     stash, stash_action, stash_detail, stash_diff, stash_pop, stash_rename, StashDetail, StashOp,

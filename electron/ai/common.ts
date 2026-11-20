@@ -3,7 +3,13 @@ import { loadState, saveKey } from '../state';
 
 /** Secrets are encrypted with the OS keychain (safeStorage) before they touch disk, and never leave the main process. */
 const dir = () => app.getPath('userData');
-export const canEncrypt = () => safeStorage.isEncryptionAvailable();
+/**
+ * On Linux without a keyring, Electron falls back to a fixed built-in password ("basic_text"), which
+ * only obscures the data; treat that as no secure storage so secrets stay in memory instead.
+ */
+export const canEncrypt = () =>
+  safeStorage.isEncryptionAvailable() &&
+  !(process.platform === 'linux' && safeStorage.getSelectedStorageBackend?.() === 'basic_text');
 
 /**
  * When the OS keychain refuses access (e.g. a rebuilt, ad-hoc signed app is not on the keychain item's

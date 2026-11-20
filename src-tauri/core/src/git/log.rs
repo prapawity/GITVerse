@@ -169,10 +169,10 @@ pub async fn log_scoped(
     let mut args = vec!["log"];
     args.extend(revisions.iter().map(String::as_str));
     args.extend([order, "--decorate=full", &skip, &limit, &fmt]);
-    if has_head && !solo {
+    if has_head && !solo && !scope.head_hidden(git, cwd).await {
         args.push("HEAD");
     }
-    if !solo {
+    if !solo && !scope.is_hiding() {
         args.extend(
             stashes
                 .iter()
@@ -219,10 +219,10 @@ pub async fn history_position_scoped(
     let mut args = vec!["rev-list"];
     args.extend(revisions.iter().map(String::as_str));
     args.push(order);
-    if has_head && !solo {
+    if has_head && !solo && !scope.head_hidden(git, cwd).await {
         args.push("HEAD");
     }
-    if !solo {
+    if !solo && !scope.is_hiding() {
         args.extend(
             stashes
                 .iter()

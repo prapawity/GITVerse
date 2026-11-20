@@ -317,12 +317,25 @@ pub fn app_open_in(editor: String, target: String) -> Result<(), AppError> {
             c.arg("-a").arg(app).arg(target_path);
             c
         }
-        Launch::Cli(cli) if cfg!(windows) => {
-            // .cmd launchers need a shell on Windows
-            let mut c = std::process::Command::new("cmd");
-            c.arg("/C").arg(cli).arg(target_path);
+        #[cfg(windows)]
+        Launch::Cli(cli) => {
+            // .cmd launchers need cmd.exe: quote both paths and refuse characters cmd would interpret
+            use std::os::windows::process::CommandExt;
+            let unsafe_chars =
+                |s: &str| s.contains(['"', '%', '^', '&', '|', '<', '>', '!', '\r', '\n']);
+            let cli = cli.to_string_lossy().into_owned();
+            if unsafe_chars(&target) || unsafe_chars(&cli) {
+                return Err(AppError::Invalid(
+                    "This path contains characters that cannot be passed to the editor safely."
+                        .into(),
+                ));
+            }
+            let mut c = std::process::Command::new("cmd.exe");
+            c.args(["/d", "/s", "/c"])
+                .raw_arg(format!("\"\"{cli}\" \"{target}\"\""));
             c
         }
+        #[cfg(not(windows))]
         Launch::Cli(cli) => {
             let mut c = std::process::Command::new(cli);
             c.arg(target_path);

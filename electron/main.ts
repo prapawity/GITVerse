@@ -70,6 +70,7 @@ const handlers = {
   externalToolConfig: git.externalToolConfig,
   setExternalToolConfig: git.setExternalToolConfig,
   maintenance: git.maintenance,
+  commitPeople: git.commitPeople,
   refs: git.refs,
   reflog,
   inspectWorkspace,

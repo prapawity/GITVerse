@@ -11,23 +11,32 @@ const FULL = { local: 'refs/heads/', remote: 'refs/remotes/', tag: 'refs/tags/' 
  */
 export function historyScope(
   repo: string,
-  existing: { local: { name: string }[]; remote: { name: string }[]; tags: { name: string }[] },
+  existing: { local: { name: string }[]; remote: { name: string }[]; tags: { name: string }[] } | null,
 ) {
   const { graphHidden, graphSolo } = useSettings.getState();
-  const names = {
-    local: new Set(existing.local.map((r) => r.name)),
-    remote: new Set(existing.remote.map((r) => r.name)),
-    tag: new Set(existing.tags.map((r) => r.name)),
-  };
   const parse = (key: string) => {
     const at = key.indexOf(':');
     const kind = key.slice(0, at) as keyof typeof FULL;
-    const name = key.slice(at + 1);
-    return kind in FULL && names[kind].has(name) ? { kind, name } : null;
+    return kind in FULL ? { kind, name: key.slice(at + 1) } : null;
   };
-  const solo = (graphSolo[repo] ?? []).map(parse).filter((r) => r !== null);
-  if (solo.length) return { solo: solo.map((r) => FULL[r.kind] + r.name) };
-  const hidden = (graphHidden[repo] ?? []).map(parse).filter((r) => r !== null);
+  // solo needs refs that exist (git log fails on a missing one); without fresh refs, solo is skipped
+  if (existing) {
+    const names = {
+      local: new Set(existing.local.map((r) => r.name)),
+      remote: new Set(existing.remote.map((r) => r.name)),
+      tag: new Set(existing.tags.map((r) => r.name)),
+    };
+    const solo = (graphSolo[repo] ?? []).map(parse).filter((r) => r !== null && names[r.kind].has(r.name)) as {
+      kind: keyof typeof FULL;
+      name: string;
+    }[];
+    if (solo.length) return { solo: solo.map((r) => FULL[r.kind] + r.name) };
+  }
+  // hidden names are only exclusions: a name that no longer exists does no harm
+  const hidden = (graphHidden[repo] ?? []).map(parse).filter((r) => r !== null) as {
+    kind: keyof typeof FULL;
+    name: string;
+  }[];
   if (!hidden.length) return undefined;
   return {
     hide: {

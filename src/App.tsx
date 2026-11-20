@@ -20,8 +20,12 @@ import {
   Upload,
   X,
   ListOrdered,
+  Wrench,
+  Command,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { Panel, Group, Separator } from 'react-resizable-panels';
+import { Panel, Group, Separator, usePanelRef } from 'react-resizable-panels';
 import { CommitGraph } from './components/CommitGraph';
 import { CommitMenu } from './components/CommitMenu';
 import { askConfirm, askFlow, askText, DialogHost } from './components/Dialogs';
@@ -36,7 +40,6 @@ import { TerminalPanel } from './components/TerminalPanel';
 import { useSettings } from './store/settingsStore';
 import { storage } from './lib/storage';
 import { reorderRepoTabs } from './lib/reorderRepoTabs';
-import { checkoutRemoteWithSparseRecovery } from './lib/checkoutRemoteFlow';
 import { ActivityBar, GraphSkeleton, Spinner } from './components/Loading';
 import { FileRail } from './components/FileRail';
 import { Sidebar } from './components/Sidebar';
@@ -44,6 +47,7 @@ import { RepoBranchDropdown } from './components/RepoBranchDropdown';
 import { PushDialog } from './components/PushDialog';
 import { PullRequestDialog } from './components/PullRequestDialog';
 import { GraphFilterBar } from './components/GraphFilterBar';
+import { ToolGroup } from './components/ToolGroup';
 import { CombinedChanges, consecutiveRange } from './components/CombinedChanges';
 import { CommandPalette, ShortcutList, type PaletteCommand } from './components/CommandPalette';
 import { CloneDialog } from './components/CloneDialog';
@@ -56,6 +60,7 @@ import { OPEN_PUSH_DIALOG, OPEN_REQUEST_AFTER_PUSH, useRepo } from './store/repo
 import { useResolvedTheme } from './lib/theme';
 import { stepZoom, useAppZoom } from './lib/zoom';
 import { replay, snapshot, useActionHistory } from './lib/actionHistory';
+import { locateRef, openRef, registerLocator } from './lib/refActions';
 import { AgentCheckpoints } from './components/AgentCheckpoints';
 import { RecoveryPanel } from './components/RecoveryPanel';
 import { RebasePreview } from './components/RebasePreview';
@@ -67,6 +72,35 @@ import { platformApi, desktopApi } from './platform/api';
 let restored = false;
 const shortcutModifier = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const Handle = () => <Separator className="w-px bg-surface transition-colors hover:bg-accent" />;
+
+/**
+ * Divider between a side panel and the graph, with a small tab that shows or hides the panel.
+ * The tab sits on the graph side of the line, appears on hover / keyboard focus, and stays
+ * visible while the panel is closed so it can always be reopened from the screen edge.
+ */
+function EdgeHandle({ side, open, onToggle }: { side: 'left' | 'right'; open: boolean; onToggle: () => void }) {
+  const name = side === 'left' ? 'branches sidebar' : 'details panel';
+  const keys = `${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+'}${side === 'right' ? '⌥' : ''}B`;
+  const pointsLeft = side === 'left' ? open : !open;
+  const Chevron = pointsLeft ? ChevronLeft : ChevronRight;
+  return (
+    <Separator
+      className={`edge-handle relative w-px bg-surface transition-colors hover:bg-accent ${open ? '' : 'is-closed'}`}
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={`${open ? 'Hide' : 'Show'} ${name}`}
+        title={`${open ? 'Hide' : 'Show'} ${name} (${keys})`}
+        className={`edge-tab absolute top-1/2 z-20 flex h-14 w-4 -translate-y-1/2 items-center justify-center border border-surface bg-mantle text-sub hover:bg-accent/15 hover:text-accent focus-visible:opacity-100 ${side === 'left' ? 'left-0 rounded-r-md border-l-0' : 'right-0 rounded-l-md border-r-0'}`}
+      >
+        <Chevron size={12} aria-hidden />
+      </button>
+    </Separator>
+  );
+}
 
 function ToolBtn({
   icon,
@@ -119,7 +153,6 @@ export default function App() {
     closeRepo,
     select,
     setSearch,
-    checkout,
     action,
     exec,
     refreshStatus,
@@ -409,31 +442,15 @@ export default function App() {
     });
   }, [repoPath, loading, loadingMore, headHash, graph.rows, ensureCommitVisible]);
 
-  const navigateBranch = (kind: 'local' | 'remote', name: string) => {
-    const ref = refs[kind].find((item) => item.name === name);
-    const hash =
-      ref?.hash ??
-      graph.rows.find((row) => row.commit.refs.some((item) => item.kind === kind && item.name === name))?.commit.hash;
-    if (hash) void navigateToHash(hash);
-    else useRepo.getState().notify('error', 'Could not locate branch', 'Refresh the repository and try again.');
-  };
-
-  const navigateTag = async (name: string) => {
-    const cwd = repoPath;
-    if (!cwd) return;
-    try {
-      const hash: string = await desktopApi().tagCommit(cwd, name);
-      if (useRepo.getState().repoPath === cwd) await navigateToHash(hash);
-    } catch (error: any) {
-      useRepo
-        .getState()
-        .notify(
-          'error',
-          'Could not locate tag',
-          String(error?.message ?? error).replace(/^Error invoking remote method '[^']*': (Error: )?/, ''),
-        );
-    }
-  };
+  // clicks on branches and tags go through one shared module (sidebar, graph, palette)
+  const navigateBranch = (kind: 'local' | 'remote', name: string) => void locateRef(kind, name);
+  const navigateTag = (name: string) => locateRef('tag', name);
+  const locatorRef = useRef(navigateToHash);
+  locatorRef.current = navigateToHash;
+  useEffect(() => {
+    registerLocator((hash) => locatorRef.current(hash));
+    return () => registerLocator(null);
+  }, []);
 
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -467,6 +484,111 @@ export default function App() {
     if (name) exec('createBranch', name);
   };
 
+  const rightPanelKind = recoveryOpen
+    ? 'recovery'
+    : workspaceInspectionOpen
+      ? 'workspace'
+      : operation && conflictView
+        ? 'conflict'
+        : stashView
+          ? 'stash'
+          : workingView
+            ? 'working'
+            : range
+              ? 'combined'
+              : 'details';
+
+  // ---- show / hide the side panels to give the graph more room (Cmd+B, Cmd+Alt+B) ----
+  const leftOpen = useSettings((s) => s.leftPanelOpen);
+  const rightOpen = useSettings((s) => s.rightPanelOpen);
+  const leftPanel = usePanelRef();
+  const rightPanel = usePanelRef();
+  const leftEl = useRef<HTMLDivElement | null>(null);
+  const rightEl = useRef<HTMLDivElement | null>(null);
+  /**
+   * Only transform and opacity animate (GPU, no re-layout): closing slides the content out, then the
+   * panel collapses once; opening expands once, then slides the content in. The graph resizes a single
+   * time and React state changes only once, so nothing re-renders mid-animation.
+   */
+  useEffect(() => {
+    const persist = () => {
+      savePanelSize('left');
+      savePanelSize('right');
+    };
+    window.addEventListener('beforeunload', persist);
+    return () => window.removeEventListener('beforeunload', persist);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const togglePanel = (side: 'left' | 'right') => {
+    const key = side === 'left' ? 'leftPanelOpen' : 'rightPanelOpen';
+    const el = (side === 'left' ? leftEl : rightEl).current;
+    const open = useSettings.getState()[key];
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const play = (name: string, done?: () => void) => {
+      if (!el || reduced) return done?.();
+      el.classList.remove('panel-enter-left', 'panel-enter-right', 'panel-leave-left', 'panel-leave-right');
+      void el.offsetWidth; // restart the animation if it is toggled again quickly
+      el.classList.add(name);
+      el.addEventListener(
+        'animationend',
+        () => {
+          el.classList.remove(name);
+          done?.();
+        },
+        { once: true },
+      );
+    };
+    if (open) {
+      savePanelSize(side);
+      play(`panel-leave-${side}`, () => useSettings.getState().set(key, false));
+    } else {
+      useSettings.getState().set(key, true);
+      requestAnimationFrame(() => play(`panel-enter-${side}`));
+    }
+  };
+  // the last open width of each panel, kept in a ref while dragging (no re-render per frame)
+  const panelSizes = useRef({
+    left: useSettings.getState().leftPanelSize,
+    right: useSettings.getState().rightPanelSize,
+  });
+  const savePanelSize = (side: 'left' | 'right') =>
+    useSettings.getState().set(side === 'left' ? 'leftPanelSize' : 'rightPanelSize', panelSizes.current[side]);
+  // dragging a panel closed (or open again) updates the saved state too
+  const syncPanelSetting = (side: 'left' | 'right') => {
+    const ref = side === 'left' ? leftPanel : rightPanel;
+    const collapsed = ref.current?.isCollapsed();
+    if (collapsed === undefined) return;
+    if (!collapsed) {
+      const size = ref.current!.getSize().asPercentage;
+      if (size > 1) panelSizes.current[side] = Math.round(size * 10) / 10;
+    }
+    const key = side === 'left' ? 'leftPanelOpen' : 'rightPanelOpen';
+    if (useSettings.getState()[key] === collapsed) useSettings.getState().set(key, !collapsed);
+  };
+  useEffect(() => {
+    for (const [ref, open] of [
+      [leftPanel, leftOpen],
+      [rightPanel, rightOpen],
+    ] as const) {
+      const panel = ref.current;
+      if (!panel) continue;
+      const side = ref === leftPanel ? 'left' : 'right';
+      // reopen at exactly the width it had, not the minimum the library falls back to
+      if (open && panel.isCollapsed()) panel.resize(`${panelSizes.current[side]}%`);
+      else if (!open && !panel.isCollapsed()) panel.collapse();
+    }
+  }, [leftOpen, rightOpen, file, workingFile, conflictFile, repoPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'b' || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"], .xterm')) return;
+      e.preventDefault();
+      togglePanel(e.altKey ? 'right' : 'left');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ---- command palette (Cmd/Ctrl+P) and shortcut list (Cmd/Ctrl+/) ----
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [editorList, setEditorList] = useState<{ id: string; name: string }[]>([]);
@@ -499,6 +621,8 @@ export default function App() {
     [`${shortcutModifier}/`, 'Keyboard shortcuts'],
     [`${shortcutModifier}F`, 'Search commits'],
     [`${shortcutModifier}J`, 'Ask AI'],
+    [`${shortcutModifier}B`, 'Show / hide branches sidebar'],
+    [`${shortcutModifier}⌥B`, 'Show / hide details panel'],
     [`${shortcutModifier}Z / ${shortcutModifier}⇧Z`, 'Undo / redo the last action or staging change'],
     [`${shortcutModifier}= / ${shortcutModifier}- / ${shortcutModifier}0`, 'Zoom in / out / actual size'],
     ['Ctrl+`', 'Toggle terminal'],
@@ -521,7 +645,8 @@ export default function App() {
   const runUndo = async (direction: 'undo' | 'redo') => {
     const entry = direction === 'undo' ? gitUndo : gitRedo;
     const index = direction === 'undo' ? indexUndo : indexRedo;
-    if (!repoPath) return;
+    // never reset or check out underneath another running Git action
+    if (!repoPath || useRepo.getState().working || useRepo.getState().busy) return;
     if (!preferGit(entry, index)) {
       await moveIndexHistory(direction);
       setWorkingFile(null);
@@ -536,6 +661,9 @@ export default function App() {
       state.notify('error', `Could not ${direction}`, String((error as Error)?.message ?? error));
     }
   };
+  // subscribe once; the latest runUndo is read through a ref
+  const runUndoRef = useRef(runUndo);
+  runUndoRef.current = runUndo;
   useEffect(() => {
     // native Edit menu (Electron): undo text in a focused field, otherwise the last action
     const stop = platformApi()?.onEditKey?.((key) => {
@@ -544,11 +672,8 @@ export default function App() {
         document.execCommand(key);
         return;
       }
-      if (!document.querySelector('[role="dialog"]')) void runUndo(key);
+      if (!document.querySelector('[role="dialog"]')) void runUndoRef.current(key);
     });
-    return () => stop?.();
-  });
-  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'z') return;
       const target = e.target as HTMLElement | null;
@@ -556,11 +681,14 @@ export default function App() {
       if (target && (target.closest('input, textarea, [contenteditable="true"]') || target.closest('.xterm'))) return;
       if (document.querySelector('[role="dialog"]')) return;
       e.preventDefault();
-      void runUndo(e.shiftKey ? 'redo' : 'undo');
+      void runUndoRef.current(e.shiftKey ? 'redo' : 'undo');
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
+    return () => {
+      stop?.();
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
   const paletteCommands = (): PaletteCommand[] => {
     const noRepo = !repoPath;
     const blocked = noRepo || !!working;
@@ -783,7 +911,7 @@ export default function App() {
           title: b.name,
           keywords: 'checkout switch branch',
           disabled: blocked,
-          run: () => void checkout(b.name),
+          run: () => void openRef('local', b.name),
         })),
       ...recentRepos
         .filter((r) => r !== repoPath)
@@ -1352,22 +1480,34 @@ export default function App() {
                 busy={working === 'Creating branch…'}
                 onClick={newBranch}
               />
-              <ToolBtn
-                icon={<Archive size={22} />}
+              <ToolGroup
                 label="Stash"
-                disabled={dis}
-                busy={busy === 'stash'}
-                onClick={async () => {
-                  const message = await askText('Name this stash', 'e.g. Before refactoring');
-                  if (message) await action('stash', message);
-                }}
-              />
-              <ToolBtn
-                icon={<ArchiveRestore size={22} />}
-                label="Pop"
-                disabled={dis || !refs.stashes.length}
-                busy={busy === 'stashPop'}
-                onClick={() => action('stashPop')}
+                icon={
+                  busy === 'stash' || busy === 'stashPop' ? (
+                    <Spinner size={22} className="text-accent" />
+                  ) : (
+                    <Archive size={22} />
+                  )
+                }
+                children={[
+                  {
+                    id: 'stash',
+                    label: 'Stash changes…',
+                    icon: <Archive />,
+                    disabled: dis,
+                    onClick: async () => {
+                      const message = await askText('Name this stash', 'e.g. Before refactoring');
+                      if (message) await action('stash', message);
+                    },
+                  },
+                  {
+                    id: 'pop',
+                    label: refs.stashes.length ? 'Pop latest stash' : 'Pop (no stashes)',
+                    icon: <ArchiveRestore />,
+                    disabled: dis || !refs.stashes.length,
+                    onClick: () => void action('stashPop'),
+                  },
+                ]}
               />
               <span
                 title={
@@ -1387,44 +1527,49 @@ export default function App() {
               </span>
             </div>
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block" aria-hidden />
-            <button
-              onClick={() => {
-                setWorkspaceInspectionOpen(false);
-                setAiOpen(false);
-                setRecoveryOpen((value) => !value);
-              }}
-              aria-pressed={recoveryOpen}
-              aria-label="Recovery"
-              title="Recovery history"
-              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${recoveryOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
-            >
-              <History size={21} aria-hidden />
-              <span className="ui-label hidden min-[1400px]:block">Recovery</span>
-            </button>
-            <button
-              onClick={() => {
-                setRecoveryOpen(false);
-                setAiOpen(false);
-                setWorkspaceInspectionOpen((value) => !value);
-              }}
-              aria-pressed={workspaceInspectionOpen}
-              aria-label="Workspace"
-              title="Remotes and worktrees"
-              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${workspaceInspectionOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
-            >
-              <GitFork size={21} aria-hidden />
-              <span className="ui-label hidden min-[1400px]:block">Workspace</span>
-            </button>
-            <button
-              onClick={() => repoPath && setPullRequestRepo(repoPath)}
-              disabled={!repoPath}
-              aria-label="Pull request"
-              title="Create a pull / merge request"
-              className="ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs hover:bg-surface/60 disabled:opacity-40"
-            >
-              <GitPullRequest size={21} aria-hidden />
-              <span className="ui-label hidden min-[1400px]:block">PR / MR</span>
-            </button>
+            <ToolGroup
+              label="Tools"
+              icon={<Wrench size={21} />}
+              children={[
+                {
+                  id: 'recovery',
+                  label: 'Recovery history',
+                  icon: <History />,
+                  pressed: recoveryOpen,
+                  onClick: () => {
+                    setWorkspaceInspectionOpen(false);
+                    setAiOpen(false);
+                    setRecoveryOpen((value) => !value);
+                  },
+                },
+                {
+                  id: 'workspace',
+                  label: 'Workspace',
+                  hint: 'Remotes, worktrees, LFS, submodules, patches, maintenance',
+                  icon: <GitFork />,
+                  pressed: workspaceInspectionOpen,
+                  onClick: () => {
+                    setRecoveryOpen(false);
+                    setAiOpen(false);
+                    setWorkspaceInspectionOpen((value) => !value);
+                  },
+                },
+                {
+                  id: 'pr',
+                  label: 'Pull / merge request…',
+                  icon: <GitPullRequest />,
+                  disabled: !repoPath,
+                  onClick: () => repoPath && setPullRequestRepo(repoPath),
+                },
+                {
+                  id: 'palette',
+                  label: 'All commands…',
+                  hint: `${shortcutModifier}P`,
+                  icon: <Command />,
+                  onClick: () => setPaletteOpen(true),
+                },
+              ]}
+            />
             <button
               onClick={() => setTermOpen((v) => !v)}
               aria-pressed={termOpen}
@@ -1529,7 +1674,15 @@ export default function App() {
                 }}
               />
             ) : (
-              <Panel defaultSize="20%" minSize="12%">
+              <Panel
+                defaultSize={leftOpen ? `${useSettings.getState().leftPanelSize}%` : '0%'}
+                minSize="12%"
+                collapsible
+                collapsedSize={0}
+                panelRef={leftPanel}
+                elementRef={leftEl}
+                onResize={() => syncPanelSetting('left')}
+              >
                 {repoPath && (
                   <Sidebar
                     onCreatePullRequest={() => repoPath && setPullRequestRepo(repoPath)}
@@ -1549,7 +1702,9 @@ export default function App() {
                 )}
               </Panel>
             )}
-            {!file && !workingFile && !conflictFile && <Handle />}
+            {!file && !workingFile && !conflictFile && (
+              <EdgeHandle side="left" open={leftOpen} onToggle={() => togglePanel('left')} />
+            )}
             <Panel defaultSize="55%" minSize="30%">
               {/* center column: graph / diff / merge tool on top, terminal underneath */}
               <Group orientation="vertical">
@@ -1659,8 +1814,8 @@ export default function App() {
                             }
                           }}
                           onDoubleClick={(r) => {
-                            if (!r.current && r.kind === 'local') checkout(r.name);
-                            else if (r.kind === 'remote') void checkoutRemoteWithSparseRecovery(r.name);
+                            if (r.kind === 'local' || r.kind === 'remote' || r.kind === 'tag')
+                              void openRef(r.kind, r.name);
                           }}
                         />
                       ) : loading ? (
@@ -1693,55 +1848,67 @@ export default function App() {
                 )}
               </Group>
             </Panel>
-            <Handle />
-            <Panel defaultSize="25%" minSize="15%" className="glass-panel bg-mantle">
-              {recoveryOpen && repoPath ? (
-                <RecoveryPanel
-                  repoPath={repoPath}
-                  onClose={() => setRecoveryOpen(false)}
-                  onNavigate={async (hash) => {
-                    const found = await navigateToHash(hash);
-                    if (found) setRecoveryOpen(false);
-                    return !!found;
-                  }}
-                />
-              ) : workspaceInspectionOpen && repoPath ? (
-                <WorkspaceInspectionPanel repoPath={repoPath} onClose={() => setWorkspaceInspectionOpen(false)} />
-              ) : operation && conflictView ? (
-                <ConflictPanel />
-              ) : stashView ? (
-                <DetailsPanel stash={stashView} file={file} onSelectFile={setFile} />
-              ) : workingView && repoPath ? (
-                <WorkingChangesPanel
-                  selected={workingFile}
-                  onSelect={setWorkingFile}
-                  onClear={() => setWorkingFile(null)}
-                  onRefresh={refreshWorking}
-                />
-              ) : (
-                <div className="flex h-full min-h-0 flex-col">
-                  {repoPath && status.length > 0 && (
-                    <div className="flex items-center gap-2 border-b border-surface bg-accent/15 px-4 py-2 text-sm">
-                      <span className="min-w-0 flex-1">
-                        {status.length} local file change{status.length === 1 ? '' : 's'}
-                      </span>
-                      <button
-                        onClick={showWorking}
-                        className="shrink-0 rounded border border-accent/50 px-2 py-1 text-accent hover:bg-accent/15"
-                      >
-                        View changes
-                      </button>
-                    </div>
-                  )}
-                  <div className="min-h-0 flex-1">
-                    {range ? (
-                      <CombinedChanges {...range} file={file} onSelectFile={setFile} />
-                    ) : (
-                      <DetailsPanel file={file} onSelectFile={setFile} />
+            <EdgeHandle side="right" open={rightOpen} onToggle={() => togglePanel('right')} />
+            <Panel
+              defaultSize={rightOpen ? `${useSettings.getState().rightPanelSize}%` : '0%'}
+              minSize="15%"
+              collapsible
+              collapsedSize={0}
+              panelRef={rightPanel}
+              elementRef={rightEl}
+              onResize={() => syncPanelSetting('right')}
+              className="glass-panel bg-mantle"
+            >
+              {/* the panel crossfades when what it shows changes kind (details, changes, workspace…) */}
+              <div key={rightPanelKind} className="panel-fade h-full min-h-0">
+                {recoveryOpen && repoPath ? (
+                  <RecoveryPanel
+                    repoPath={repoPath}
+                    onClose={() => setRecoveryOpen(false)}
+                    onNavigate={async (hash) => {
+                      const found = await navigateToHash(hash);
+                      if (found) setRecoveryOpen(false);
+                      return !!found;
+                    }}
+                  />
+                ) : workspaceInspectionOpen && repoPath ? (
+                  <WorkspaceInspectionPanel repoPath={repoPath} onClose={() => setWorkspaceInspectionOpen(false)} />
+                ) : operation && conflictView ? (
+                  <ConflictPanel />
+                ) : stashView ? (
+                  <DetailsPanel stash={stashView} file={file} onSelectFile={setFile} />
+                ) : workingView && repoPath ? (
+                  <WorkingChangesPanel
+                    selected={workingFile}
+                    onSelect={setWorkingFile}
+                    onClear={() => setWorkingFile(null)}
+                    onRefresh={refreshWorking}
+                  />
+                ) : (
+                  <div className="flex h-full min-h-0 flex-col">
+                    {repoPath && status.length > 0 && (
+                      <div className="flex items-center gap-2 border-b border-surface bg-accent/15 px-4 py-2 text-sm">
+                        <span className="min-w-0 flex-1">
+                          {status.length} local file change{status.length === 1 ? '' : 's'}
+                        </span>
+                        <button
+                          onClick={showWorking}
+                          className="shrink-0 rounded border border-accent/50 px-2 py-1 text-accent hover:bg-accent/15"
+                        >
+                          View changes
+                        </button>
+                      </div>
                     )}
+                    <div className="min-h-0 flex-1">
+                      {range ? (
+                        <CombinedChanges {...range} file={file} onSelectFile={setFile} />
+                      ) : (
+                        <DetailsPanel file={file} onSelectFile={setFile} />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </Panel>
             {aiOpen && (
               <>

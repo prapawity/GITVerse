@@ -116,3 +116,14 @@ test('git lfs status (skipped when git-lfs is not installed)', async (t) => {
   assert.ok((await git.lfsStatus(dir)).patterns.includes('*.bin'));
   await assert.rejects(git.lfsAction(dir, 'track', '--evil'));
 });
+
+test('a failing git am is aborted, not left half-applied', async () => {
+  const dir = repo();
+  const base = commit(dir, 'a.txt', 'one\n', 'first');
+  commit(dir, 'a.txt', 'one\ntwo\n', 'add two');
+  const mail = run(dir, 'format-patch', '-1', '--stdout', 'HEAD');
+  run(dir, 'reset', '-q', '--hard', base);
+  commit(dir, 'a.txt', 'completely different\n', 'conflict');
+  await assert.rejects(git.applyPatch(dir, `${mail}\n`, 'am'), /Nothing was applied/);
+  assert.ok(!existsSync(path.join(dir, '.git', 'rebase-apply')));
+});

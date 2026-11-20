@@ -210,8 +210,8 @@ export async function log(
     `--skip=${skip}`,
     `-n${limit}`,
     `--format=${fmt}`,
-    ...(hasHead && !solo ? ['HEAD'] : []),
-    ...(solo ? [] : bases),
+    ...(hasHead && !solo && !(await headHidden(cwd, scope)) ? ['HEAD'] : []),
+    ...(solo || hiding(scope) ? [] : bases),
   ]);
   return out
     .split(R)
@@ -718,8 +718,8 @@ export async function historyPosition(cwd: string, hash: string, sort = 'topo', 
     'rev-list',
     ...scopeRevisions(scope),
     historyOrder(sort),
-    ...(hasHead && !solo ? ['HEAD'] : []),
-    ...(solo ? [] : bases),
+    ...(hasHead && !solo && !(await headHidden(cwd, scope)) ? ['HEAD'] : []),
+    ...(solo || hiding(scope) ? [] : bases),
   ]);
   const index = out.split('\n').indexOf(hash);
   if (index < 0) throw new Error('This commit is no longer in the repository history. Refresh and try again.');
@@ -1588,6 +1588,14 @@ function checkRefs(names: unknown, full = false): string[] {
     return name;
   });
 }
+const hiding = (scope?: HistoryScope | null) =>
+  !!(scope?.hide?.branches?.length || scope?.hide?.remotes?.length || scope?.hide?.tags?.length);
+/** HEAD would bring a hidden checked-out branch back into the graph, so leave it out then. */
+async function headHidden(cwd: string, scope?: HistoryScope | null) {
+  if (!scope?.hide?.branches?.length) return false;
+  const current = (await git(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')).trim();
+  return !!current && scope.hide.branches.includes(current);
+}
 /** Revision arguments for log / rev-list: everything, minus hidden refs, or only the solo refs. */
 export function scopeRevisions(scope?: HistoryScope | null): string[] {
   const solo = checkRefs(scope?.solo, true);
@@ -1872,7 +1880,12 @@ export async function applyPatch(cwd: string, patch: string, mode: 'apply' | 'am
   if (typeof patch !== 'string' || !patch.trim()) throw new Error('The patch is empty.');
   if (patch.length > 20 * 1024 * 1024) throw new Error('The patch is too large.');
   if (mode === 'check') return gitWithInput(cwd, ['apply', '--check', '-'], patch);
-  if (mode === 'am') return gitWithInput(cwd, ['am', '--3way'], patch);
+  if (mode === 'am')
+    return gitWithInput(cwd, ['am', '--3way'], patch).catch(async (error: Error) => {
+      // never leave the repository in the middle of an am the app cannot continue
+      await git(cwd, ['am', '--abort']).catch(() => '');
+      throw new Error(`${error.message}\nNothing was applied.`);
+    });
   if (mode === 'apply') return gitWithInput(cwd, ['apply', '--3way', '-'], patch);
   throw new Error('Unknown patch mode.');
 }
@@ -1986,4 +1999,18 @@ export async function maintenance(cwd: string) {
   await git(cwd, ['commit-graph', 'write', '--reachable']).catch(() => '');
   const after = await size();
   return { beforeKiB: before, afterKiB: after };
+}
+
+// ---- author / committer of a commit (commit details) ----
+
+export interface Person {
+  name: string;
+  email: string;
+  date: string;
+}
+export async function commitPeople(cwd: string, hash: string): Promise<{ author: Person; committer: Person }> {
+  if (!/^[0-9a-f]{7,64}$/i.test(hash) && hash !== 'HEAD') throw new Error('Invalid commit ID.');
+  const out = await git(cwd, ['show', '-s', '--format=%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI', hash]);
+  const [an, ae, ad, cn, ce, cd] = out.trim().split('\x1f');
+  return { author: { name: an, email: ae, date: ad }, committer: { name: cn, email: ce, date: cd } };
 }

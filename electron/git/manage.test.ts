@@ -93,3 +93,30 @@ test('history scope hides and solos refs', async () => {
   await assert.rejects(git.log(dir, 50, 0, 'topo', { hide: { branches: ['--all'] } }));
   await assert.rejects(git.log(dir, 50, 0, 'topo', { solo: ['side'] }));
 });
+
+test('hiding the checked-out branch removes its commits too', async () => {
+  const dir = repo();
+  run(dir, 'checkout', '-q', '-b', 'feature');
+  writeFileSync(path.join(dir, 'f.txt'), 'f\n');
+  run(dir, 'add', '.');
+  run(dir, 'commit', '-q', '-m', 'feature work');
+  const hidden = await git.log(dir, 50, 0, 'topo', { hide: { branches: ['feature'] } });
+  assert.ok(!hidden.some((c) => c.subject === 'feature work'));
+});
+
+test('commitPeople returns author and committer separately', async () => {
+  const dir = repo();
+  writeFileSync(path.join(dir, 'p.txt'), 'p\n');
+  run(dir, 'add', '.');
+  execFileSync(
+    'git',
+    ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'by someone', '--author', 'Ann <ann@example.com>'],
+    {
+      cwd: dir,
+      env: { ...process.env, GIT_COMMITTER_NAME: 'Bot', GIT_COMMITTER_EMAIL: 'bot@example.com' },
+    },
+  );
+  const people = await git.commitPeople(dir, 'HEAD');
+  assert.equal(people.author.email, 'ann@example.com');
+  assert.equal(people.committer.name, 'Bot');
+});

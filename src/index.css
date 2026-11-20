@@ -571,3 +571,84 @@ svg.lucide {
   min-height: calc(40px * var(--ui-font-scale, 1)) !important;
   gap: 0 !important;
 }
+
+/* right panel: a new kind of content crossfades in; same-kind updates fade in place (no blink, no collapse) */
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.panel-fade {
+  animation: panel-fade 180ms ease-out;
+}
+
+/* side panels: content slides and fades (transform + opacity only); the panel width changes once */
+@keyframes panel-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes panel-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes panel-out-left {
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes panel-out-right {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+.panel-enter-left {
+  animation: panel-in-left 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.panel-enter-right {
+  animation: panel-in-right 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.panel-leave-left {
+  animation: panel-out-left 140ms ease-in forwards;
+}
+.panel-leave-right {
+  animation: panel-out-right 140ms ease-in forwards;
+}
+
+/* panel edge tab: hidden until the divider is hovered; always shown while its panel is closed */
+.edge-tab {
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.edge-handle:hover .edge-tab,
+.edge-handle.is-closed .edge-tab,
+.edge-tab:focus-visible {
+  opacity: 1;
+}
+.edge-handle.is-closed .edge-tab {
+  opacity: 1;
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent) / 0.45);
+  background: rgb(var(--accent) / 0.12);
+}
+
+/* Minimal: with labels gone, icons that had one take the freed space */
+:root[data-ui='minimal'] button:has(> .ui-label) > svg.lucide,
+:root[data-ui='minimal'] button:has(> .ui-label) > span > svg.lucide {
+  zoom: calc(var(--ui-font-scale, 1) * 1.25);
+}
+:root[data-ui='minimal'] .ui-tool {
+  width: calc(44px * var(--ui-font-scale, 1)) !important;
+  min-height: calc(44px * var(--ui-font-scale, 1)) !important;
+}

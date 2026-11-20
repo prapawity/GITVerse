@@ -18,7 +18,6 @@ import {
 import { ancestors, buildTree, visibleRows, type RefLeaf } from '../lib/refTree';
 import { useRepo } from '../store/repoStore';
 import { useSettings } from '../store/settingsStore';
-import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 import { SidebarSkeleton } from './Loading';
 import type { StashRef } from '../shared/types';
 import { askConfirm } from './Dialogs';
@@ -26,6 +25,7 @@ import { desktopApi } from '../platform/api';
 import { Chevron, Collapse } from './Motion';
 import { PullRequestList } from './PullRequestList';
 import { TagMenu } from './TagMenu';
+import { openRef } from '../lib/refActions';
 
 function Section({
   icon,
@@ -293,7 +293,7 @@ export function Sidebar({
   onStash: (stash: StashRef) => void;
   selectedStashHash?: string;
 }) {
-  const { refs, checkout, loading, repoPath, working, operation } = useRepo();
+  const { refs, loading, repoPath, working, operation } = useRepo();
   const [q, setQ] = useState('');
   const [stashMenu, setStashMenu] = useState<{ stash: StashRef; x: number; y: number } | null>(null);
   const [stashBusy, setStashBusy] = useState(false);
@@ -443,7 +443,7 @@ export function Sidebar({
           open={open}
           toggle={toggle}
           forceOpen={filtering}
-          onOpen={checkout}
+          onOpen={(name) => void openRef('local', name)}
           onNavigate={(name) => onNavigate('local', name)}
           onContext={(name, x, y) => onContext('local', name, x, y)}
           colorRoots
@@ -457,7 +457,7 @@ export function Sidebar({
           open={open}
           toggle={toggle}
           forceOpen={filtering}
-          onOpen={(name) => void checkoutRemoteWithSparseRecovery(name)}
+          onOpen={(name) => void openRef('remote', name)}
           onNavigate={(name) => onNavigate('remote', name)}
           onContext={(name, x, y) => onContext('remote', name, x, y)}
           rootIcon
@@ -500,7 +500,7 @@ export function Sidebar({
           open={open}
           toggle={toggle}
           forceOpen={filtering}
-          onOpen={checkout}
+          onOpen={(name) => void openRef('tag', name)}
           onNavigate={onTag}
           onContext={(name, x, y) => setTagMenu({ tag: name, x, y })}
         />

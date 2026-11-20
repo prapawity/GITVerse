@@ -48,6 +48,33 @@ function wire() {
   });
 }
 
+/** Light palette (Catppuccin Latte) used when the app shows a light theme. */
+const LIGHT_THEME = {
+  background: '#f8fafc',
+  foreground: '#4c4f69',
+  cursor: '#006fae',
+  selectionBackground: '#006fae33',
+  black: '#5c5f77',
+  red: '#d20f39',
+  green: '#40a02b',
+  yellow: '#df8e1d',
+  blue: '#1e66f5',
+  magenta: '#8839ef',
+  cyan: '#179299',
+  white: '#acb0be',
+  brightBlack: '#6c6f85',
+  brightRed: '#d20f39',
+  brightGreen: '#40a02b',
+  brightYellow: '#df8e1d',
+  brightBlue: '#1e66f5',
+  brightMagenta: '#8839ef',
+  brightCyan: '#179299',
+  brightWhite: '#bcc0cc',
+};
+/** The app sets `data-theme` on <html> to the theme actually shown (System already resolved). */
+const isLight = () => document.documentElement.dataset.theme === 'light';
+const terminalTheme = () => (isLight() ? LIGHT_THEME : THEME);
+
 const THEME = {
   background: '#13161c',
   foreground: '#cdd6f4',
@@ -80,7 +107,7 @@ async function create(cwd: string | null): Promise<Session> {
     fontFamily: termFont(cfg.termFontFamily),
     fontSize: cfg.termFontSize,
     cursorBlink: cfg.termCursorBlink,
-    theme: THEME,
+    theme: terminalTheme(),
     scrollback: cfg.termScrollback,
     allowProposedApi: false,
   });
@@ -146,6 +173,17 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
 
   const current = sessions.find((s) => s.key === active) ?? sessions[sessions.length - 1];
 
+  // follow light / dark (including System) in terminals that are already open
+  const [light, setLight] = useState(isLight);
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setLight(isLight());
+      sessions.forEach((x) => (x.term.options.theme = terminalTheme()));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+
   // font size / cursor changes in Preferences apply to terminals that are already open
   useEffect(
     () =>
@@ -192,7 +230,11 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
   };
 
   return (
-    <section aria-label="Terminal" className="flex h-full min-h-0 flex-col bg-[#13161c]">
+    <section
+      aria-label="Terminal"
+      className="flex h-full min-h-0 flex-col"
+      style={{ background: light ? LIGHT_THEME.background : THEME.background }}
+    >
       <div
         role="tablist"
         aria-label="Terminal sessions"

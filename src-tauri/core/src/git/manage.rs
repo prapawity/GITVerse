@@ -59,6 +59,29 @@ fn check_refs(names: &[String], full: bool) -> Result<Vec<String>> {
 }
 
 impl HistoryScope {
+    pub fn is_hiding(&self) -> bool {
+        self.hide
+            .as_ref()
+            .is_some_and(|h| !h.branches.is_empty() || !h.remotes.is_empty() || !h.tags.is_empty())
+    }
+
+    /// HEAD would bring a hidden checked-out branch back into the graph, so leave it out then.
+    pub async fn head_hidden(&self, git: &GitRunner, cwd: &Path) -> bool {
+        let Some(hide) = self.hide.as_ref().filter(|h| !h.branches.is_empty()) else {
+            return false;
+        };
+        let current = git
+            .run(
+                cwd,
+                &["symbolic-ref", "--quiet", "--short", "HEAD"],
+                RunOpts::default(),
+            )
+            .await
+            .unwrap_or_default();
+        let current = current.trim();
+        !current.is_empty() && hide.branches.iter().any(|b| b == current)
+    }
+
     pub fn is_solo(&self) -> bool {
         self.solo.as_ref().is_some_and(|s| !s.is_empty())
     }
