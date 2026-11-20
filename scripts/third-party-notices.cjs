@@ -22,7 +22,7 @@ module.exports = async function generateThirdPartyNotices() {
   const root = path.resolve(__dirname, '..');
   const packages = require('../package-lock.json').packages;
   const sections = [
-    'Third-party software notices\n\nThis inventory includes installed npm packages used to build or run GITVerse. It may include packages not present in the final application. License identifiers are package metadata, not a substitute for the license text. Electron and Chromium notices are also distributed with the Electron runtime.\n',
+    'Third-party software notices\n\nThis inventory includes installed npm packages used to build or run GITVerse by PRAPAWITY. It may include packages not present in the final application. License identifiers are package metadata, not a substitute for the license text. Electron and Chromium notices are also distributed with the Electron runtime.\n',
   ];
   const missing = [];
   for (const [location, metadata] of Object.entries(packages)) {

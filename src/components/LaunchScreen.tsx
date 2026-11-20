@@ -8,6 +8,19 @@ const stars = Array.from({ length: 52 }, (_, index) => ({
   duration: `${3 + (index % 4)}s`,
 }));
 
+const comets = [
+  { top: '8%', left: '30%', delay: '0.05s', duration: '2.2s' },
+  { top: '24%', left: '74%', delay: '0.25s', duration: '2.4s' },
+  { top: '4%', left: '94%', delay: '0.45s', duration: '2.6s' },
+  { top: '42%', left: '58%', delay: '0.65s', duration: '2.2s' },
+  { top: '18%', left: '46%', delay: '0.9s', duration: '2.4s' },
+  { top: '56%', left: '90%', delay: '1.15s', duration: '2.6s' },
+  { top: '30%', left: '82%', delay: '1.4s', duration: '2.2s' },
+  { top: '10%', left: '66%', delay: '1.65s', duration: '2.4s' },
+];
+
+const commits = [0, 1, 2, 3, 4];
+
 export function LaunchScreen({
   fading = false,
   status,
@@ -20,7 +33,7 @@ export function LaunchScreen({
   return (
     <section
       className={`launch-screen ${fading ? 'launch-screen--leaving' : ''}`}
-      aria-label="GITVerse launch screen"
+      aria-label="GITVerse by PRAPAWITY launch screen"
       aria-busy={!children}
     >
       <div className="launch-nebula" aria-hidden />
@@ -39,40 +52,41 @@ export function LaunchScreen({
           />
         ))}
       </div>
+      <div className="launch-comets" aria-hidden>
+        {comets.map((comet, index) => (
+          <span
+            key={index}
+            style={{
+              top: comet.top,
+              left: comet.left,
+              animationDelay: comet.delay,
+              animationDuration: comet.duration,
+            }}
+          />
+        ))}
+      </div>
       <div className="launch-content">
-        <div className="launch-stage" aria-hidden>
-          <div className="launch-orbit-formation">
-            <svg className="launch-orbit" viewBox="0 0 320 320" fill="none">
-              <circle cx="160" cy="160" r="132" stroke="#c084fc" strokeWidth="1.5" />
-              <circle cx="160" cy="160" r="144" stroke="#a78bfa" strokeWidth="1" strokeDasharray="1 13" />
-              <path d="M28 160A132 132 0 0 1 160 28" stroke="#f0abfc" strokeWidth="4" strokeLinecap="round" />
-              <circle cx="160" cy="28" r="8" fill="#c084fc" />
-              <circle cx="292" cy="160" r="5" fill="#67e8f9" />
-              <circle cx="160" cy="292" r="6" fill="#f0abfc" />
-              <circle cx="28" cy="160" r="4" fill="#a5f3fc" />
-            </svg>
-          </div>
-          <svg className="launch-graph" viewBox="0 0 128 128" fill="none">
-            <path d="M44 85V41M44 76C44 57 86 74 86 53" stroke="#22d3ee" strokeWidth="8" strokeLinecap="round" />
-            <circle cx="44" cy="30" r="10" fill="#0b1730" stroke="#67e8f9" strokeWidth="6" />
-            <circle cx="86" cy="42" r="10" fill="#0b1730" stroke="#22d3ee" strokeWidth="6" />
-            <circle cx="44" cy="96" r="10" fill="#0b1730" stroke="#06b6d4" strokeWidth="6" />
-            <circle className="launch-data" r="3" fill="#ecfeff">
-              <animateMotion dur="1.8s" repeatCount="indefinite" path="M44 85V41" />
-            </circle>
-          </svg>
-        </div>
         <h1 className="launch-name">
-          GIT<span>Verse</span>
+          GIT<span>Verse</span> <small className="launch-byline">by PRAPAWITY</small>
         </h1>
+        {!children && (
+          <div className="launch-track" aria-hidden>
+            <span className="launch-track-line" />
+            <span className="launch-track-pulse" />
+            {commits.map((index) => (
+              <span
+                key={index}
+                className="launch-track-node"
+                style={{ left: `${index * 25}%`, animationDelay: `${index * 0.24}s` }}
+              />
+            ))}
+          </div>
+        )}
         <p className="launch-status" role="status">
           {status}
         </p>
         {children && <div className="launch-actions">{children}</div>}
       </div>
-      <small className="launch-credit">
-        Orion Nebula: NASA, ESA, M. Robberto (STScI/ESA), Hubble Space Telescope Orion Treasury Project Team
-      </small>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 appId: io.github.prapawity.gitverse
-productName: GITVerse
+productName: GITVerse by PRAPAWITY
 beforePack: scripts/third-party-notices.cjs
 directories:
   output: release
@@ -24,13 +24,14 @@ asar: true
 npmRebuild: false
 asarUnpack:
   - node_modules/node-pty/**/*
-artifactName: GITVerse-${version}-${os}-${arch}.${ext}
+artifactName: GITVerse-by-PRAPAWITY-${version}-${os}-${arch}.${ext}
 publish:
   provider: github
   owner: prapawity
-  repo: GITVerse
+  repo: GITVerse-by-PRAPAWITY
   releaseType: release
 mac:
+  identity: '-'
   icon: resources/icon.icns
   category: public.app-category.developer-tools
   target:

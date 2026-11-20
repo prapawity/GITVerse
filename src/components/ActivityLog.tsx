@@ -34,7 +34,7 @@ export function ActivityLog() {
       </button>
       <span
         aria-label={`App version ${version}`}
-        title={`GITVerse ${version}`}
+        title={`GITVerse by PRAPAWITY ${version}`}
         className="ml-2 inline-flex h-5 max-w-[30%] min-w-0 shrink-0 items-center bg-[#c2410c] px-3 text-2xs font-semibold text-white"
         style={{ clipPath: 'polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)' }}
       >

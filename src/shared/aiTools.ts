@@ -205,7 +205,7 @@ export const AI_TOOLS: Anthropic.Beta.BetaTool[] = [
   ),
 ];
 
-export const AI_SYSTEM = `You are the assistant built into GITVerse, a desktop Git client. You operate the repository that is open in the app by calling the tools provided.
+export const AI_SYSTEM = `You are the assistant built into GITVerse by PRAPAWITY, a desktop Git client. You operate the repository that is open in the app by calling the tools provided.
 
 How the tools behave:
 - get_repo_status, list_branches and recent_commits run immediately. fetch also runs immediately because it only updates remote-tracking refs.
@@ -234,7 +234,7 @@ export const ConflictResolution = z.object({
 });
 export type ConflictResolutionT = z.infer<typeof ConflictResolution>;
 
-export const CONFLICT_SYSTEM = `You resolve Git merge conflicts inside GITVerse. You receive one file with numbered conflict regions; each region has version A and version B (and sometimes the common base), plus surrounding code for context.
+export const CONFLICT_SYSTEM = `You resolve Git merge conflicts inside GITVerse by PRAPAWITY. You receive one file with numbered conflict regions; each region has version A and version B (and sometimes the common base), plus surrounding code for context.
 
 For every region, write the text that should replace the whole region in the final file:
 - Combine the intent of both sides when they don't contradict (e.g. both added different fields, imports or cases: keep both, in a sensible order, without duplicates).

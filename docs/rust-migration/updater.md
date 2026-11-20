@@ -36,9 +36,9 @@ That is all: the next run of **Release** builds signed bundles.
 
 1. Push a `vX.Y.Z` tag that matches `package.json`.
 2. **Release** builds the installers, signs the update bundles and creates a draft release with
-   `latest.json` plus `GITVerse_X.Y.Z_<platform>.*`.
+   `latest.json` plus `GITVerse-by-PRAPAWITY_X.Y.Z_<platform>.*`.
 3. Publish the draft. Installed apps read
-   `https://github.com/prapawity/GITVerse/releases/latest/download/latest.json`, find the new
+   `https://github.com/prapawity/GITVerse-by-PRAPAWITY/releases/latest/download/latest.json`, find the new
    version, download and verify the bundle, install it and restart.
 
 ## Pieces

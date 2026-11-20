@@ -7,6 +7,42 @@ const { runInNewContext } = require('node:vm');
 const filename = path.join(__dirname, 'smoke-electron.cjs');
 const source = readFileSync(filename, 'utf8');
 
+test('dev branding preserves the executable helper prefix while updating the display name', () => {
+  const values = {
+    CFBundleExecutable: 'Electron',
+    CFBundleName: 'GITVerse',
+    CFBundleDisplayName: 'GITVerse by PRAPAWITY',
+  };
+  let signatures = 0;
+  runInNewContext(readFileSync(path.join(__dirname, 'brand-electron.cjs'), 'utf8'), {
+    __dirname,
+    process: { platform: 'darwin', exit: () => assert.fail('Unexpected early exit') },
+    console: { log() {}, warn: (message) => assert.fail(message) },
+    require(name) {
+      if (name === 'node:fs') return { existsSync: () => true };
+      if (name === 'node:child_process') {
+        return {
+          execFileSync(binary, args) {
+            if (binary === 'codesign') {
+              signatures++;
+              return '';
+            }
+            const [action, field, ...value] = args[1].split(' ');
+            const key = field.slice(1);
+            if (action === 'Print') return values[key];
+            values[key] = value.join(' ');
+            return '';
+          },
+        };
+      }
+      return require(name);
+    },
+  });
+  assert.equal(values.CFBundleName, values.CFBundleExecutable);
+  assert.equal(values.CFBundleDisplayName, 'GITVerse by PRAPAWITY');
+  assert.equal(signatures, 1);
+});
+
 for (const value of [undefined, '', '1']) {
   test(`smoke launcher removes Node mode when inherited value is ${JSON.stringify(value)}`, () => {
     const env = { PATH: 'preserved-path' };

@@ -89,7 +89,7 @@ export function platformApi(): PlatformApi | undefined {
 /** The desktop bridge; throws when it is missing. Use where a call cannot work without it. */
 export function desktopApi(): PlatformApi {
   const bridge = platformApi();
-  if (!bridge) throw new Error('The GITVerse desktop bridge is not available.');
+  if (!bridge) throw new Error('The GITVerse by PRAPAWITY desktop bridge is not available.');
   return bridge;
 }
 

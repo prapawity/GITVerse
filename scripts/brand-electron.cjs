@@ -1,13 +1,13 @@
 /**
  * Dev-only: macOS takes the bold menu-bar name from the Electron.app bundle, which says "Electron" when you
- * run `npm run dev`. This renames the dev bundle to GITVerse (idempotent; harmless elsewhere).
+ * run `npm run dev`. This renames the dev bundle to GITVerse by PRAPAWITY (idempotent; harmless elsewhere).
  * A packaged build gets its name from `productName`, so this is never needed for releases.
  */
 const { execFileSync } = require('node:child_process');
 const { existsSync } = require('node:fs');
 const path = require('node:path');
 
-const NAME = 'GITVerse';
+const NAME = 'GITVerse by PRAPAWITY';
 if (process.platform !== 'darwin') process.exit(0);
 
 try {
@@ -30,8 +30,9 @@ try {
     }
   };
 
-  if (get('CFBundleName') === NAME && get('CFBundleDisplayName') === NAME) process.exit(0); // already done
-  set('CFBundleName', NAME);
+  const executable = get('CFBundleExecutable') || 'Electron';
+  if (get('CFBundleName') === executable && get('CFBundleDisplayName') === NAME) process.exit(0); // already done
+  set('CFBundleName', executable);
   set('CFBundleDisplayName', NAME);
   // editing Info.plist breaks the bundle seal; re-sign ad hoc (the dev bundle already is ad hoc) so macOS keeps launching it
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'ignore' });

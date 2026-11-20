@@ -73,7 +73,7 @@ if (!process.versions.electron) {
   let releaseChecks = 0;
   const originalFetch = global.fetch;
   global.fetch = (...args) => {
-    if (String(args[0]) === 'https://api.github.com/repos/prapawity/GITVerse/releases/latest') {
+    if (String(args[0]) === 'https://api.github.com/repos/prapawity/GITVerse-by-PRAPAWITY/releases/latest') {
       releaseChecks++;
       return Promise.resolve(new Response(null, { status: 404 }));
     }
@@ -96,7 +96,7 @@ if (!process.versions.electron) {
               await win.webContents.executeJavaScript(
                 `document.body.textContent.includes(${JSON.stringify(repo)}) &&
                 document.body.textContent.includes('main') && !!document.querySelector('canvas') &&
-                !document.querySelector('[aria-label="GITVerse launch screen"]')`,
+                !document.querySelector('[aria-label="GITVerse by PRAPAWITY launch screen"]')`,
               )
             )
               return;
@@ -279,7 +279,7 @@ if (!process.versions.electron) {
         await unbridged.loadFile(path.join(__dirname, '../dist/index.html'));
         assert.equal(
           await unbridged.webContents.executeJavaScript(`document.querySelector('h1')?.textContent`),
-          'GITVerse could not start',
+          'GITVerse by PRAPAWITY could not start',
         );
         console.log('Electron smoke run passed: repository restore, graph hover highlight/clear, and bridge.');
         clearTimeout(timeout);

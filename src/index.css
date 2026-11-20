@@ -84,7 +84,7 @@ body {
   background: rgb(var(--canvas));
   color: rgb(var(--text));
   font-family: Inter, system-ui, sans-serif;
-  font-size: 14px;
+  font-size: calc(14px * var(--ui-font-scale, 1));
 }
 
 /* Layered glass surfaces retain an opaque base for readable repository data. */
@@ -171,6 +171,13 @@ body {
     linear-gradient(160deg, rgb(173 196 255 / 0.08), transparent 60%), rgb(var(--mantle));
   box-shadow: inset 1px 0 rgb(255 255 255 / 0.12);
 }
+@media (min-width: 1400px) {
+  .glass-toolbar > button {
+    min-width: max-content;
+    padding-inline: 8px;
+  }
+}
+
 .glass-toolbar button:not(:disabled):hover {
   background-color: rgb(180 222 255 / 0.14);
   box-shadow:

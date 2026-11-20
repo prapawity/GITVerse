@@ -1,4 +1,4 @@
-# GitVerse repository rules
+# GITVerse by PRAPAWITY repository rules
 
 Follow the [contribution workflow](../CONTRIBUTING.md), including Git Flow and the mandatory documentation checkpoint.
 

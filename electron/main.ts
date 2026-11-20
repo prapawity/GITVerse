@@ -13,8 +13,9 @@ import { checkAppUpdate, downloadMacUpdate, isReleaseDownloadUrl, listReleases, 
 import type { AppUpdateCheck } from '../src/shared/updates';
 import { scanRepositories } from './repositoryScan';
 
-// name shown in the macOS menu bar, About box and dock (a packaged build also gets it from productName)
+// Keep the internal name for existing storage and Keychain entries; public labels use the product name.
 app.setName('GITVerse');
+app.setAboutPanelOptions({ applicationName: 'GITVerse by PRAPAWITY' });
 const appIcon = app.isPackaged
   ? path.join(process.resourcesPath, 'icon.png')
   : path.join(__dirname, '../../resources/icon.png');
@@ -313,10 +314,10 @@ app.whenReady().then(async () => {
         const { response } = await dialog.showMessageBox(win, {
           type: 'info',
           title: 'Update available',
-          message: `GITVerse ${update.version} is available`,
+          message: `GITVerse by PRAPAWITY ${update.version} is available`,
           detail:
             process.platform === 'darwin'
-              ? 'Download the installer, then quit GITVerse and drag the new app to Applications.'
+              ? 'Download the installer, then quit GITVerse by PRAPAWITY and drag the new app to Applications.'
               : `You are using ${app.getVersion()}. Download and install the update from the app, or choose Later.`,
           buttons: ['Download update', 'Later'],
           defaultId: 0,
@@ -330,8 +331,8 @@ app.whenReady().then(async () => {
               message: 'Update downloaded',
               detail:
                 process.platform === 'darwin'
-                  ? 'Open the installer, quit GITVerse, then drag the new app to Applications.'
-                  : 'Restart GITVerse to install the update.',
+                  ? 'Open the installer, quit GITVerse by PRAPAWITY, then drag the new app to Applications.'
+                  : 'Restart GITVerse by PRAPAWITY to install the update.',
               buttons: [process.platform === 'darwin' ? 'Open installer' : 'Restart and install', 'Later'],
               cancelId: 1,
             });
@@ -358,7 +359,7 @@ app.whenReady().then(async () => {
         await dialog.showMessageBox(win, {
           type: 'warning',
           message: 'Could not check for updates',
-          detail: `${detail}\nYou can continue using GITVerse and retry from Help > Check for Updates.`,
+          detail: `${detail}\nYou can continue using GITVerse by PRAPAWITY and retry from Help > Check for Updates.`,
           buttons: ['Continue'],
           cancelId: 0,
           defaultId: 0,
@@ -370,7 +371,24 @@ app.whenReady().then(async () => {
   };
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+      ...(process.platform === 'darwin'
+        ? [
+            {
+              label: 'GITVerse by PRAPAWITY',
+              submenu: [
+                { role: 'about' as const, label: 'About GITVerse by PRAPAWITY' },
+                { type: 'separator' as const },
+                { role: 'services' as const },
+                { type: 'separator' as const },
+                { role: 'hide' as const, label: 'Hide GITVerse by PRAPAWITY' },
+                { role: 'hideOthers' as const },
+                { role: 'unhide' as const },
+                { type: 'separator' as const },
+                { role: 'quit' as const, label: 'Quit GITVerse by PRAPAWITY' },
+              ],
+            },
+          ]
+        : []),
       { role: 'fileMenu' as const },
       { role: 'editMenu' as const },
       { role: 'viewMenu' as const },
@@ -392,7 +410,7 @@ app.whenReady().then(async () => {
     ]),
   );
   const win = new BrowserWindow({
-    title: 'GITVerse',
+    title: 'GITVerse by PRAPAWITY',
     icon: appIcon,
     width: 1500,
     height: 900,

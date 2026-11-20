@@ -17,7 +17,6 @@ const HEAD_H = 28;
 const PALETTE = ['#4fc1e9', '#a855f7', '#a6e22e', '#f5a623', '#ec4899', '#2dd4bf', '#f97316', '#3b82f6'];
 const LIGHT_PALETTE = ['#087eaa', '#8334c8', '#628b08', '#a86400', '#ba2675', '#008e81', '#c64f08', '#2563c5'];
 const col = (i: number, light: boolean) => (light ? LIGHT_PALETTE : PALETTE)[i % PALETTE.length];
-const FONT = '13px Inter, system-ui, sans-serif';
 
 /** Time column: relative within the last 24 hours, otherwise the date ("17 Nov", or "3 Mar 2025" in another year). */
 export const commitTime = (iso: string) => {
@@ -147,6 +146,9 @@ export function CommitGraph({
   upstream,
 }: Props) {
   const light = useSettings((s) => s.theme === 'light');
+  const fontSize = useSettings((s) => s.fontSize);
+  const fontScale = fontSize / 14;
+  const font = `${13 * fontScale}px Inter, system-ui, sans-serif`;
   const columns = useSettings((s) => s.graphColumns);
   const sort = useSettings((s) => s.graphSort);
   const setSettings = useSettings((s) => s.set);
@@ -194,12 +196,17 @@ export function CommitGraph({
   const [colW, setColW] = useState<number | null>(null);
   const [gScroll, setGScroll] = useState(0);
   const naturalW = PAD * 2 + Math.max(2, layout.maxLanes) * LANE_W + wipOffset;
+  const authorW = columns.author ? Math.min(160 * fontScale, size.w * 0.18) : 0;
+  const dateW = columns.date ? Math.min(125 * fontScale, size.w * 0.16) : 0;
+  const shaW = columns.sha ? Math.min(90 * fontScale, size.w * 0.12) : 0;
+  const detailsW = authorW + dateW + shaW;
+  const contentW = Math.max(0, size.w - detailsW - 32);
   const desiredRefW = columns.branch ? REF_W : 0;
   const desiredGraphW = columns.graph
-    ? (colW ?? Math.max(GRAPH_MIN, Math.min(naturalW, Math.max(GRAPH_MIN, size.w - desiredRefW - 240))))
+    ? (colW ?? Math.max(GRAPH_MIN, Math.min(naturalW, Math.max(GRAPH_MIN, contentW - desiredRefW - 240))))
     : 0;
   const fixedW = desiredRefW + desiredGraphW;
-  const scale = fixedW ? Math.min(1, Math.max(0, size.w - 32 - 80) / fixedW) : 1;
+  const scale = fixedW ? Math.min(1, Math.max(0, contentW - 80) / fixedW) : 1;
   const refW = desiredRefW * scale;
   const graphW = desiredGraphW * scale;
   const maxGScroll = columns.graph ? Math.max(0, naturalW - graphW) : 0;
@@ -209,7 +216,7 @@ export function CommitGraph({
     gR = refW + graphW;
   const clampX = (x: number) => Math.max(gL, Math.min(gR, x));
   const msgX = refW + graphW + 10;
-  const availMsg = Math.max(0, size.w - msgX - 32);
+  const availMsg = Math.max(0, contentW - msgX);
   const maxMsgScroll = Math.max(0, maxMsgW.current - availMsg + 16);
   const ms = Math.min(msgScroll, maxMsgScroll);
 
@@ -253,7 +260,7 @@ export function CommitGraph({
     cv.height = size.h * dpr;
     const ctx = cv.getContext('2d')!;
     ctx.scale(dpr, dpr);
-    ctx.font = FONT;
+    ctx.font = font;
     ctx.textBaseline = 'middle';
 
     const first = Math.max(0, Math.floor(scrollTop / ROW_H) - 1 - wipRows);
@@ -277,11 +284,11 @@ export function CommitGraph({
       ctx.rect(msgX, top, availMsg, ROW_H);
       ctx.clip();
       ctx.fillStyle = light ? '#006a89' : '#80efff';
-      ctx.font = '600 13px Inter, system-ui, sans-serif';
+      ctx.font = `600 ${13 * fontScale}px Inter, system-ui, sans-serif`;
       ctx.fillText('// WIP', msgX, top + ROW_H / 2);
-      ctx.font = FONT;
+      ctx.font = font;
       ctx.fillStyle = light ? '#9b5a00' : '#e3ad62';
-      ctx.fillText(`${changeCount} changed · ${stagedCount} staged`, msgX + 64, top + ROW_H / 2);
+      ctx.fillText(`${changeCount} changed · ${stagedCount} staged`, msgX + 64 * fontScale, top + ROW_H / 2);
       ctx.restore();
       if (graphFocused && keyboardRow === -1) {
         ctx.strokeStyle = light ? '#006f9e' : '#8fe8ff';
@@ -409,7 +416,7 @@ export function CommitGraph({
       ctx.rect(0, top, refW, ROW_H);
       ctx.clip();
       if (columns.branch && c.stashId) {
-        ctx.font = FONT;
+        ctx.font = font;
         const prefix = '[Stash]';
         const label = c.stashBranch
           ? `: ${fitMiddle(ctx, c.stashBranch, Math.max(0, refW - 35 - ctx.measureText(prefix).width))}`
@@ -433,7 +440,7 @@ export function CommitGraph({
         const group = groups.find((x) => x.ref.current) ?? groups[0];
         const ref = group.ref;
         const extra = groups.length > 1 ? `+${groups.length - 1}` : '';
-        ctx.font = ref.current ? '600 15.6px Inter, system-ui, sans-serif' : FONT;
+        ctx.font = ref.current ? `600 ${15.6 * fontScale}px Inter, system-ui, sans-serif` : font;
         const hasLocal = ref.kind === 'local';
         const hasRemote = ref.kind === 'remote' || group.remotes.length > 0;
         const iconW = (hasLocal ? 17 : 0) + (hasRemote || ref.kind === 'tag' ? 18 : 0);
@@ -503,7 +510,7 @@ export function CommitGraph({
           ctx.fillText(extra, ix, mid + 0.5);
         }
         ctx.globalAlpha = 1;
-        ctx.font = FONT;
+        ctx.font = font;
       }
 
       ctx.restore();
@@ -554,19 +561,11 @@ export function CommitGraph({
         ctx.restore();
       }
 
-      // Message and optional details share one horizontal scrolling area.
-      ctx.font = FONT;
+      ctx.font = font;
       const subject = columns.message ? c.subject : '';
       const prefix = columns.message && c.hash === headHash ? 'HEAD  ' : '';
-      const details = [
-        columns.author && c.author,
-        columns.date && commitTime(c.date),
-        columns.sha && c.hash.slice(0, 7),
-      ]
-        .filter(Boolean)
-        .join(' · ');
       const subjectW = ctx.measureText(prefix + subject).width;
-      const total = subjectW + (details ? (subject ? 20 : 0) + ctx.measureText(details).width : 0);
+      const total = subjectW;
       if (total > maxMsgW.current + 1) {
         maxMsgW.current = total;
         grew = true;
@@ -577,11 +576,23 @@ export function CommitGraph({
       ctx.clip();
       ctx.fillStyle = light ? '#1d2939' : '#e8eef6';
       ctx.fillText(prefix + subject, msgX - ms, mid + 0.5);
-      if (details) {
-        ctx.fillStyle = light ? '#586b81' : '#a2afbf';
-        ctx.fillText(details, msgX - ms + subjectW + (subject ? 20 : 0), mid + 0.5);
-      }
       ctx.restore();
+      let detailX = contentW;
+      for (const [width, text] of [
+        [authorW, c.author],
+        [dateW, commitTime(c.date)],
+        [shaW, c.hash.slice(0, 7)],
+      ] as const) {
+        if (!width) continue;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(detailX, top, width, ROW_H);
+        ctx.clip();
+        ctx.fillStyle = light ? '#586b81' : '#a2afbf';
+        ctx.fillText(fitMiddle(ctx, text, Math.max(0, width - 24)), detailX + 12, mid + 0.5);
+        ctx.restore();
+        detailX += width;
+      }
     }
     if (grew) setMsgVer((v) => v + 1);
   }, [
@@ -608,6 +619,12 @@ export function CommitGraph({
     columns,
     refW,
     availMsg,
+    font,
+    fontScale,
+    authorW,
+    dateW,
+    shaW,
+    contentW,
   ]);
 
   useEffect(() => {
@@ -648,7 +665,10 @@ export function CommitGraph({
     'overflow-hidden whitespace-nowrap px-3 text-2xs font-mono uppercase tracking-wider text-sub flex items-center';
   return (
     <div className="relative flex h-full w-full min-w-0 flex-col bg-[var(--graph)]">
-      <div className="flex shrink-0 border-b border-surface bg-[var(--graph)]" style={{ height: HEAD_H }}>
+      <div
+        className="flex shrink-0 border-b border-surface bg-[var(--graph)]"
+        style={{ height: HEAD_H, width: size.w, maxWidth: '100%' }}
+      >
         {columns.branch && (
           <div className={headCls + ' shrink-0'} style={{ width: refW }}>
             Branch / Tag
@@ -694,6 +714,17 @@ export function CommitGraph({
             </span>
           )}
         </div>
+        {[
+          { label: 'Author', width: authorW },
+          { label: 'Date', width: dateW },
+          { label: 'SHA', width: shaW },
+        ].map(({ label, width }) =>
+          width ? (
+            <div key={label} className={headCls + ' shrink-0 border-l border-surface'} style={{ width }}>
+              {label}
+            </div>
+          ) : null,
+        )}
         <div ref={menuRef} className="relative z-40 shrink-0">
           <button
             type="button"
