@@ -48,6 +48,8 @@ import { PushDialog } from './components/PushDialog';
 import { PullRequestDialog } from './components/PullRequestDialog';
 import { GraphFilterBar } from './components/GraphFilterBar';
 import { ExplainDialog } from './components/ExplainDialog';
+import { ComposerDialog } from './components/ComposerDialog';
+import { useComposer } from './lib/composer';
 import { runAiTask, useExplain, workingMaterial, commitMaterial } from './lib/aiTask';
 import { ToolGroup } from './components/ToolGroup';
 import { CombinedChanges, consecutiveRange } from './components/CombinedChanges';
@@ -853,6 +855,14 @@ export default function App() {
             : 'Explain selected commit with AI',
         disabled: noRepo || !selectedHash,
         run: explainSelected,
+      },
+      {
+        id: 'compose',
+        group: 'AI',
+        title: 'Compose commits with AI…',
+        keywords: 'split group commits composer',
+        disabled: blocked || status.length < 2 || !!operation,
+        run: () => useComposer.getState().show(),
       },
       {
         id: 'stash-ai',
@@ -2207,6 +2217,7 @@ export default function App() {
       {cloneOpen && <CloneDialog onClose={() => setCloneOpen(false)} />}
       {pushRepo && <PushDialog repo={pushRepo} onClose={() => setPushRepo(null)} />}
       <ExplainDialog />
+      <ComposerDialog />
       {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
       {shortcutsOpen && <ShortcutList shortcuts={shortcuts} onClose={() => setShortcutsOpen(false)} />}
       {pullRequestRepo && !pushRepo && (

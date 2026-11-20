@@ -49,3 +49,20 @@ test('gitattributes patterns for the LFS badge', async () => {
   const deep = attributePattern('media/**/*.mp4');
   assert.ok(deep.test('media/a/b/c.mp4'));
 });
+
+test('commit composer plans keep every file exactly once', async () => {
+  const { parsePlan } = await import('./composer');
+  const plan = parsePlan(
+    'Here:\n{"commits":[{"message":"feat: a\\n\\nbody","files":["a.ts","ghost.ts"]},{"message":"fix: b","files":["a.ts","b.ts"]}]}',
+    ['a.ts', 'b.ts', 'c.ts'],
+  );
+  assert.deepEqual(
+    plan.map((c) => [c.summary, c.body, c.files]),
+    [
+      ['feat: a', 'body', ['a.ts']],
+      ['fix: b', '', ['b.ts']],
+      ['Remaining changes', '', ['c.ts']],
+    ],
+  );
+  assert.throws(() => parsePlan('no json', ['a.ts']));
+});

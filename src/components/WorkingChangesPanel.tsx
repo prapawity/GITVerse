@@ -12,6 +12,7 @@ import {
   Users,
   X,
   MessageSquareText,
+  Layers,
 } from 'lucide-react';
 import { OPEN_PUSH_DIALOG, useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
@@ -25,6 +26,7 @@ import { useLfs } from '../lib/lfs';
 import { LfsBadge } from './LfsBadge';
 import { entryFor, snapshot, useActionHistory } from '../lib/actionHistory';
 import { useExplain, workingMaterial } from '../lib/aiTask';
+import { useComposer } from '../lib/composer';
 
 export type WorkingFile = { path: string; status: string; area: 'staged' | 'unstaged' | 'untracked' };
 const api = () => desktopApi();
@@ -768,6 +770,17 @@ export function WorkingChangesPanel({
                 <MessageSquareText size={15} aria-hidden /> <span className="ui-label">Explain</span>
               </button>
             </div>
+            {staged.length + unstaged.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => useComposer.getState().show()}
+                disabled={busy || !!operation || conflict.length > 0}
+                title="Let AI split all uncommitted changes into a few commits you review before they are created"
+                className="flex min-h-[32px] w-full items-center justify-center gap-2 rounded-md border border-dashed border-ai/40 px-3 text-sm text-ai hover:bg-ai/10 disabled:opacity-40"
+              >
+                <Layers size={14} aria-hidden /> Compose commits with AI
+              </button>
+            )}
             <p className="text-xs text-sub">
               Sends staged changes to {providerLabel(provider)}. Review the message before committing.
             </p>

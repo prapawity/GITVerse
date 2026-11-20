@@ -67,6 +67,7 @@ pub const PORTED: &[&str] = &[
     "commitPeople",
     "branchDiff",
     "workingDiff",
+    "commitFiles",
     "lfsStatus",
     "lfsAction",
     "submodules",
@@ -280,6 +281,16 @@ pub async fn git_call(
         "commitPeople" => json(git::commit_people(&git, &a.repo()?, a.str(1)?).await?),
         "branchDiff" => json(git::branch_diff(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
         "workingDiff" => json(git::working_diff(&git, &a.repo()?).await?),
+        "commitFiles" => json(
+            git::commit_files(
+                &git,
+                &a.repo()?,
+                &a.strings(1)?,
+                a.str(2)?,
+                a.opt_str(3).unwrap_or(""),
+            )
+            .await?,
+        ),
         "renameBranch" => json(git::rename_branch(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
         "pushTag" => json(git::push_tag(&git, &a.repo()?, a.str(1)?, a.opt_str(2)).await?),
         "deleteTag" => json(git::delete_tag(&git, &a.repo()?, a.str(1)?, a.opt_str(2)).await?),

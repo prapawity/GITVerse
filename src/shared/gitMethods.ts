@@ -98,6 +98,7 @@ export const GIT_METHODS = [
   'commitPeople',
   'branchDiff',
   'workingDiff',
+  'commitFiles',
 ] as const;
 
 export type GitMethodName = (typeof GIT_METHODS)[number];

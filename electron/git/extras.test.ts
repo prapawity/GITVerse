@@ -143,3 +143,27 @@ test('AI material: branch diff and working diff', async () => {
   assert.match(working.diff, /\+two/);
   assert.deepEqual(working.untracked, ['new.txt']);
 });
+
+test('commitFiles commits exactly the chosen files and leaves other staged work alone', async () => {
+  const dir = repo();
+  commit(dir, 'keep.txt', 'k\n', 'first');
+  writeFileSync(path.join(dir, 'gone.txt'), 'g\n');
+  writeFileSync(path.join(dir, 'old.txt'), 'o\n');
+  run(dir, 'add', '.');
+  run(dir, 'commit', '-q', '-m', 'second');
+  run(dir, 'rm', '-q', 'gone.txt');
+  run(dir, 'mv', 'old.txt', 'new.txt');
+  writeFileSync(path.join(dir, 'fresh.txt'), 'f\n');
+  writeFileSync(path.join(dir, 'keep.txt'), 'k2\n');
+  run(dir, 'add', 'keep.txt'); // staged, but not part of the composed commit
+  await git.commitFiles(dir, ['gone.txt', 'new.txt', 'fresh.txt'], 'refactor: tidy files', 'body');
+  assert.equal(run(dir, 'log', '-1', '--format=%s|%b').trim(), 'refactor: tidy files|body');
+  const files = run(dir, 'show', '--name-status', '--format=', 'HEAD');
+  assert.match(files, /D\tgone\.txt/);
+  assert.match(files, /A\tfresh\.txt/);
+  assert.match(files, /R\d*\told\.txt\tnew\.txt|A\tnew\.txt/);
+  assert.doesNotMatch(files, /keep\.txt/);
+  assert.match(run(dir, 'status', '--porcelain'), /^M {2}keep\.txt/m);
+  await assert.rejects(git.commitFiles(dir, ['nope.txt'], 'x'));
+  await assert.rejects(git.commitFiles(dir, ['keep.txt'], '  '));
+});

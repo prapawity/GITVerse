@@ -631,3 +631,60 @@ pub fn write_work_file(cwd: &Path, rel: &str, text: &str) -> Result<()> {
     std::fs::write(full, text)?;
     Ok(())
 }
+
+/// Stage and commit only `paths` (deletions and both sides of renames included); other staged
+/// changes stay staged and are not part of this commit (`commitFiles` in git.ts).
+pub async fn commit_files(
+    git: &GitRunner,
+    cwd: &Path,
+    paths: &[String],
+    summary: &str,
+    description: &str,
+) -> Result<String> {
+    if paths.is_empty() {
+        return Err(invalid("Choose at least one file for this commit."));
+    }
+    if summary.trim().is_empty() {
+        return Err(invalid("Each commit needs a summary."));
+    }
+    let files = status(git, cwd).await?;
+    if files.iter().any(conflicted) {
+        return Err(invalid("Resolve conflicts before composing commits."));
+    }
+    let mut names: Vec<String> = Vec::new();
+    // only changes not yet in the index need adding; staged deletions / renames are already there
+    let mut unstaged: Vec<String> = Vec::new();
+    for p in paths {
+        let f = files.iter().find(|f| &f.path == p).ok_or_else(|| {
+            AppError::Invalid(format!(
+                "{p} has no uncommitted changes any more. Refresh and try again."
+            ))
+        })?;
+        if f.worktree != " " && !unstaged.contains(&f.path) {
+            unstaged.push(f.path.clone());
+        }
+        for n in std::iter::once(&f.path).chain(f.old_path.iter()) {
+            if !names.contains(n) {
+                names.push(n.clone());
+            }
+        }
+    }
+    if !unstaged.is_empty() {
+        let mut add: Vec<&str> = vec!["--literal-pathspecs", "add", "-A", "--"];
+        add.extend(unstaged.iter().map(String::as_str));
+        git.run(cwd, &add, RunOpts::default()).await?;
+    }
+    let mut args: Vec<&str> = vec![
+        "--literal-pathspecs",
+        "commit",
+        "--only",
+        "-m",
+        summary.trim(),
+    ];
+    if !description.trim().is_empty() {
+        args.extend(["-m", description.trim()]);
+    }
+    args.push("--");
+    args.extend(names.iter().map(String::as_str));
+    git.run(cwd, &args, RunOpts::default()).await
+}

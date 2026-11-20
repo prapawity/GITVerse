@@ -2057,3 +2057,31 @@ export async function workingDiff(cwd: string) {
   ]);
   return { diff: clip(diff), untracked: untracked.split('\n').filter(Boolean).slice(0, 200) };
 }
+
+// ---- Commit Composer: commit exactly a set of files ----
+
+/**
+ * Stage and commit only `paths` (deletions and both sides of renames included). Other staged changes
+ * stay staged and are not part of this commit (`git commit --only`).
+ */
+export async function commitFiles(cwd: string, paths: string[], summary: string, description = '') {
+  if (!Array.isArray(paths) || !paths.length) throw new Error('Choose at least one file for this commit.');
+  if (typeof summary !== 'string' || !summary.trim()) throw new Error('Each commit needs a summary.');
+  const files = await status(cwd);
+  if (files.some(conflicted)) throw new Error('Resolve conflicts before composing commits.');
+  const names = new Set<string>();
+  const unstaged = new Set<string>();
+  for (const p of paths) {
+    const f = files.find((x) => x.path === p);
+    if (!f) throw new Error(`${p} has no uncommitted changes any more. Refresh and try again.`);
+    names.add(f.path);
+    if (f.oldPath) names.add(f.oldPath);
+    // only changes not yet in the index need adding; staged deletions / renames are already there
+    if (f.worktree !== ' ') unstaged.add(f.path);
+  }
+  const list = [...names];
+  if (unstaged.size) await git(cwd, ['--literal-pathspecs', 'add', '-A', '--', ...unstaged]);
+  const args = ['--literal-pathspecs', 'commit', '--only', '-m', summary.trim()];
+  if (description.trim()) args.push('-m', description.trim());
+  return git(cwd, [...args, '--', ...list]);
+}
