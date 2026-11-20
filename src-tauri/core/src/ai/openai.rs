@@ -1395,7 +1395,11 @@ mod tests {
                 let cb = format!("{}?state={}&code=abc", q("redirect_uri"), q("state"));
                 tokio::spawn(async move {
                     let res = reqwest::get(cb).await.unwrap();
-                    assert!(res.text().await.unwrap().contains("Signed in to GITVerse by PRAPAWITY"));
+                    assert!(res
+                        .text()
+                        .await
+                        .unwrap()
+                        .contains("Signed in to GITVerse by PRAPAWITY"));
                 });
             })
             .await

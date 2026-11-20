@@ -162,6 +162,13 @@ npm run build:tauri    # Local Tauri installers for the current host
 npm run release:tauri  # Release bundles: notices, staged Node + Copilot, release config
 ```
 
+Tauri CI also enforces Rust formatting and treats Clippy warnings as errors. Run both before pushing Rust changes:
+
+```bash
+cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- -D warnings
+```
+
 The React UI is shared. `src/platform/tauri.ts` maps the same `PlatformApi` the Electron preload exposes onto Tauri commands, so UI code does not branch on the runtime.
 
 ### Code quality and dependency security
