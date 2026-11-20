@@ -189,10 +189,27 @@ pub async fn git_call(
     let a = Args(args);
     match method.as_str() {
         "status" => json(git::status(&git, &a.repo()?).await?),
-        "log" => json(git::log(&git, &a.repo()?, a.u64_or(1, 400)?, a.u64_or(2, 0)?).await?),
+        "log" => json(
+            git::log_sorted(
+                &git,
+                &a.repo()?,
+                a.u64_or(1, 400)?,
+                a.u64_or(2, 0)?,
+                a.opt_str(3).unwrap_or("topo"),
+            )
+            .await?,
+        ),
         "refs" => json(git::refs(&git, &a.repo()?).await?),
         "reflog" => json(git::reflog(&git, &a.repo()?).await?),
-        "historyPosition" => json(git::history_position(&git, &a.repo()?, a.str(1)?).await?),
+        "historyPosition" => json(
+            git::history_position_sorted(
+                &git,
+                &a.repo()?,
+                a.str(1)?,
+                a.opt_str(2).unwrap_or("topo"),
+            )
+            .await?,
+        ),
         "commitDetail" => json(git::commit_detail(&git, &a.repo()?, a.str(1)?).await?),
         "commitFileDiff" => {
             json(git::commit_file_diff(&git, &a.repo()?, a.str(1)?, a.str(2)?, a.opt_str(3)).await?)
@@ -447,11 +464,19 @@ pub async fn repo_clone(
     handle: tauri::AppHandle,
     url: String,
     destination: String,
+    credentials: Option<PushCredentials>,
 ) -> CmdResult<()> {
     use tauri::Emitter;
-    git::clone(&url, &destination, |line| {
-        let _ = handle.emit("repo:cloneProgress", line);
-    })
+    git::clone_with_credentials(
+        &url,
+        &destination,
+        credentials
+            .as_ref()
+            .map(|c| (c.username.as_str(), c.password.as_str())),
+        |line| {
+            let _ = handle.emit("repo:cloneProgress", line);
+        },
+    )
     .await
 }
 

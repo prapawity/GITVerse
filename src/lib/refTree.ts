@@ -11,7 +11,7 @@ export interface TreeNode {
   count: number; // refs at or below this node
 }
 
-export function buildTree(items: RefLeaf[]): TreeNode[] {
+export function buildTree(items: RefLeaf[], hideSingleRoot = false): TreeNode[] {
   const root: TreeNode = { name: '', path: '', children: [], count: 0 };
   for (const it of items) {
     let node = root;
@@ -32,7 +32,9 @@ export function buildTree(items: RefLeaf[]): TreeNode[] {
     n.children.forEach(sort);
   };
   sort(root);
-  return root.children;
+  return hideSingleRoot && root.children.length === 1 && root.children[0].children.length
+    ? root.children[0].children
+    : root.children;
 }
 
 export interface Row {

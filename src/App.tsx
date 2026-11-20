@@ -34,6 +34,7 @@ import { AiPanel } from './components/AiPanel';
 import { TerminalPanel } from './components/TerminalPanel';
 import { useSettings } from './store/settingsStore';
 import { storage } from './lib/storage';
+import { reorderRepoTabs } from './lib/reorderRepoTabs';
 import { checkoutRemoteWithSparseRecovery } from './lib/checkoutRemoteFlow';
 import { ActivityBar, GraphSkeleton, Spinner } from './components/Loading';
 import { FileRail } from './components/FileRail';
@@ -131,7 +132,7 @@ export default function App() {
   const [workingRevision, setWorkingRevision] = useState(0);
   const [navigation, setNavigation] = useState<{ hash: string; id: number } | null>(null);
   const navigationSeq = useRef(0);
-  const attemptedHead = useRef('');
+  const openedHead = useRef<string | null>(null);
   const [termOpen, setTermOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -176,6 +177,9 @@ export default function App() {
   const [cancellingScan, setCancellingScan] = useState(false);
   const scanRequest = useRef<{ id: string; cancelled: boolean } | null>(null);
   const dragDepth = useRef(0);
+  const draggedTab = useRef<string | null>(null);
+  const [dropTab, setDropTab] = useState<{ target: string; after: boolean } | null>(null);
+  const suppressTabClick = useRef(false);
   const [groupMenu, setGroupMenu] = useState<{ repo: string; x: number; y: number } | null>(null);
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [pushRepo, setPushRepo] = useState<string | null>(null);
@@ -308,23 +312,6 @@ export default function App() {
     branch ?? (operation?.head && operation.head !== 'HEAD' ? operation.head : detached ? 'Detached HEAD' : '—');
   const dis = !repoPath;
 
-  useEffect(() => {
-    if (
-      !repoPath ||
-      !headHash ||
-      !status.length ||
-      loading ||
-      loadingMore ||
-      !graph.rows.length ||
-      graph.rows.some((r) => r.commit.hash === headHash)
-    )
-      return;
-    const key = `${repoPath}\0${headHash}`;
-    if (attemptedHead.current === key) return;
-    attemptedHead.current = key;
-    void ensureCommitVisible(headHash);
-  }, [repoPath, headHash, status.length, loading, loadingMore, graph.rows, ensureCommitVisible]);
-
   const navigateToHash = async (hash: string) => {
     const stash = useRepo.getState().refs.stashes.find((entry) => entry.hash === hash);
     if (stash) {
@@ -340,9 +327,27 @@ export default function App() {
     if (!(await ensureCommitVisible(hash)) || id !== navigationSeq.current || useRepo.getState().repoPath !== cwd)
       return false;
     setSearch('');
+    setWorkingView(false);
+    setSelectedHashes([hash]);
+    select(hash);
     setNavigation({ hash, id });
     return true;
   };
+  useEffect(() => {
+    openedHead.current = null;
+  }, [repoPath]);
+
+  useEffect(() => {
+    if (!repoPath) return;
+    if (loading || loadingMore || !headHash || !graph.rows.length || openedHead.current === repoPath) return;
+    openedHead.current = repoPath;
+    const id = ++navigationSeq.current;
+    void ensureCommitVisible(headHash).then((found) => {
+      if (found && id === navigationSeq.current && useRepo.getState().repoPath === repoPath)
+        setNavigation({ hash: headHash, id });
+    });
+  }, [repoPath, loading, loadingMore, headHash, graph.rows, ensureCommitVisible]);
+
   const navigateBranch = (kind: 'local' | 'remote', name: string) => {
     const ref = refs[kind].find((item) => item.name === name);
     const hash =
@@ -494,6 +499,7 @@ export default function App() {
   useEffect(
     () =>
       platformApi()?.onFileDrop?.((event) => {
+        if (draggedTab.current) return;
         if (event.type === 'enter') setDraggingFolders(true);
         else {
           dragDepth.current = 0;
@@ -541,14 +547,14 @@ export default function App() {
         setGroupMenu(null);
       }}
       onDragEnter={(e) => {
-        if (e.dataTransfer.types.includes('Files')) {
+        if (!draggedTab.current && e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
           dragDepth.current++;
           setDraggingFolders(true);
         }
       }}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('Files')) {
+        if (!draggedTab.current && e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
         }
@@ -560,7 +566,9 @@ export default function App() {
           setDraggingFolders(false);
         }
       }}
-      onDrop={(e) => void dropFolders(e)}
+      onDrop={(e) => {
+        if (!draggedTab.current && e.dataTransfer.types.includes('Files')) void dropFolders(e);
+      }}
     >
       {(draggingFolders || scanningFolders) && (
         <div
@@ -601,7 +609,7 @@ export default function App() {
       {!settingsOpen && (
         <nav
           aria-label="Open repositories"
-          className="glass-tabs flex min-w-0 items-center gap-1 border-b border-surface bg-crust px-2"
+          className="glass-tabs flex min-w-0 items-center gap-1 border-b border-surface bg-crust px-2 py-1"
         >
           <div className="flex shrink-0 items-center gap-2 px-2 pr-4 text-sm font-bold" aria-label="GITVerse">
             <img src={new URL('./assets/gitverse-mark.svg', import.meta.url).href} width={24} height={24} alt="" />
@@ -609,77 +617,6 @@ export default function App() {
               GIT<span className="font-medium text-[#a78bfa]">Verse</span>
             </span>
           </div>
-          {recentRepos.map((r, index) => {
-            const group = repoGroups[r] || '';
-            if (group && recentRepos.findIndex((path) => repoGroups[path] === group) !== index) return null;
-            const repos = group ? recentRepos.filter((path) => repoGroups[path] === group) : [r];
-            if (group)
-              return (
-                <RepoGroup
-                  key={group}
-                  name={group}
-                  repos={repos}
-                  root={repoGroupRoots[group]}
-                  current={repoPath}
-                  onOpen={(path) => void openRepo(path)}
-                  onCloseRepo={closeRepo}
-                  onContext={(repo, x, y) => {
-                    setNewGroup(null);
-                    setGroupMenu({ repo, x, y });
-                  }}
-                  onDelete={async () => {
-                    if (
-                      !(await askConfirm(
-                        'Delete group',
-                        `Remove “${group}” and close its repositories? No files will be deleted from disk.`,
-                        { label: 'Delete group' },
-                      ))
-                    )
-                      return;
-                    const state = useRepo.getState();
-                    const members = state.recentRepos.filter(
-                      (repo) => useSettings.getState().repoGroups[repo] === group,
-                    );
-                    for (const repo of members) if (repo !== state.repoPath) state.closeRepo(repo);
-                    if (state.repoPath && members.includes(state.repoPath)) state.closeRepo(state.repoPath);
-                    useSettings.getState().deleteRepoGroup(group);
-                  }}
-                />
-              );
-            return (
-              <div
-                key={r}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setNewGroup(null);
-                  setGroupMenu({ repo: r, x: e.clientX, y: e.clientY });
-                }}
-                title={`${r} — right-click to organize groups`}
-                className={`repo-tab group relative my-1 flex min-h-[36px] min-w-0 max-w-[220px] items-center gap-1 rounded-lg px-2 text-sm ${r === repoPath ? 'repo-tab-active text-text' : 'text-sub hover:bg-white/5 hover:text-text'}`}
-              >
-                <button
-                  type="button"
-                  aria-current={r === repoPath ? 'page' : undefined}
-                  onClick={() => void openRepo(r)}
-                  className="flex min-h-[36px] min-w-0 items-center gap-2 rounded-md px-1 text-left"
-                >
-                  <GitBranch size={15} className="shrink-0" aria-hidden />
-                  <span className="truncate">{r.split(/[\\/]/).filter(Boolean).pop() || r}</span>
-                </button>
-                <button
-                  aria-label={`Close ${r.split(/[\\/]/).filter(Boolean).pop() || r}`}
-                  className="shrink-0 rounded p-1 text-sub hover:bg-surface hover:text-danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeRepo(r);
-                  }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            );
-          })}
           <button
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sub hover:bg-white/10 hover:text-text"
             title="Add repository"
@@ -688,6 +625,158 @@ export default function App() {
           >
             <Plus size={17} />
           </button>
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {recentRepos.map((r, index) => {
+              const group = repoGroups[r] || '';
+              if (group && recentRepos.findIndex((path) => repoGroups[path] === group) !== index) return null;
+              const repos = group ? recentRepos.filter((path) => repoGroups[path] === group) : [r];
+              return (
+                <div
+                  key={group || r}
+                  data-repo-tab={r}
+                  className={`relative flex shrink-0 items-center ${draggedTab.current === r ? 'opacity-40' : ''}`}
+                  onDragStart={(e) => e.preventDefault()}
+                  onClickCapture={(e) => {
+                    if (suppressTabClick.current) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      suppressTabClick.current = false;
+                    }
+                  }}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0 || (e.target as HTMLElement).closest('[aria-label^="Close "]')) return;
+                    const x = e.clientX,
+                      y = e.clientY,
+                      source = r;
+                    let active = false;
+                    let target: { target: string; after: boolean } | null = null;
+                    const move = (event: PointerEvent) => {
+                      if (!active && Math.hypot(event.clientX - x, event.clientY - y) < 5) return;
+                      if (!active) {
+                        active = true;
+                        draggedTab.current = source;
+                        setDraggingFolders(false);
+                      }
+                      const node = document
+                        .elementFromPoint(event.clientX, event.clientY)
+                        ?.closest<HTMLElement>('[data-repo-tab]');
+                      if (node && node.dataset.repoTab !== source) {
+                        const bounds = node.getBoundingClientRect();
+                        target = {
+                          target: node.dataset.repoTab!,
+                          after: event.clientX >= bounds.left + bounds.width / 2,
+                        };
+                      } else target = null;
+                      setDropTab(target);
+                    };
+                    const end = (event: PointerEvent) => {
+                      window.removeEventListener('pointermove', move);
+                      window.removeEventListener('pointerup', end);
+                      window.removeEventListener('pointercancel', end);
+                      if (active) {
+                        suppressTabClick.current = true;
+                        setTimeout(() => {
+                          suppressTabClick.current = false;
+                        }, 0);
+                        if (target && event.type !== 'pointercancel') {
+                          const destination = target;
+                          useRepo.setState((state) => ({
+                            recentRepos: reorderRepoTabs(
+                              state.recentRepos,
+                              useSettings.getState().repoGroups,
+                              source,
+                              destination.target,
+                              destination.after,
+                            ),
+                          }));
+                        }
+                      }
+                      draggedTab.current = null;
+                      setDropTab(null);
+                    };
+                    window.addEventListener('pointermove', move);
+                    window.addEventListener('pointerup', end);
+                    window.addEventListener('pointercancel', end);
+                  }}
+                >
+                  {dropTab?.target === r && !dropTab.after && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -left-0.5 top-1 z-10 h-8 w-1 rounded-full bg-accent"
+                    />
+                  )}
+                  {group ? (
+                    <RepoGroup
+                      name={group}
+                      repos={repos}
+                      root={repoGroupRoots[group]}
+                      current={repoPath}
+                      onOpen={(path) => void openRepo(path)}
+                      onCloseRepo={closeRepo}
+                      onContext={(repo, x, y) => {
+                        setNewGroup(null);
+                        setGroupMenu({ repo, x, y });
+                      }}
+                      onDelete={async () => {
+                        if (
+                          !(await askConfirm(
+                            'Delete group',
+                            `Remove “${group}” and close its repositories? No files will be deleted from disk.`,
+                            { label: 'Delete group' },
+                          ))
+                        )
+                          return;
+                        const state = useRepo.getState();
+                        const members = state.recentRepos.filter(
+                          (repo) => useSettings.getState().repoGroups[repo] === group,
+                        );
+                        for (const repo of members) if (repo !== state.repoPath) state.closeRepo(repo);
+                        if (state.repoPath && members.includes(state.repoPath)) state.closeRepo(state.repoPath);
+                        useSettings.getState().deleteRepoGroup(group);
+                      }}
+                    />
+                  ) : (
+                    <div
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setNewGroup(null);
+                        setGroupMenu({ repo: r, x: e.clientX, y: e.clientY });
+                      }}
+                      title={`${r} — right-click to organize groups`}
+                      className={`repo-tab group relative my-1 flex min-h-[36px] min-w-0 max-w-[220px] items-center gap-1 rounded-lg px-2 text-sm ${r === repoPath ? 'repo-tab-active text-text' : 'text-sub hover:bg-white/5 hover:text-text'}`}
+                    >
+                      <button
+                        type="button"
+                        aria-current={r === repoPath ? 'page' : undefined}
+                        onClick={() => void openRepo(r)}
+                        className="flex min-h-[36px] min-w-0 items-center gap-2 rounded-md px-1 text-left"
+                      >
+                        <GitBranch size={15} className="shrink-0" aria-hidden />
+                        <span className="truncate">{r.split(/[\\/]/).filter(Boolean).pop() || r}</span>
+                      </button>
+                      <button
+                        aria-label={`Close ${r.split(/[\\/]/).filter(Boolean).pop() || r}`}
+                        className="shrink-0 rounded p-1 text-sub hover:bg-surface hover:text-danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeRepo(r);
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                  {dropTab?.target === r && dropTab.after && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -right-0.5 top-1 z-10 h-8 w-1 rounded-full bg-accent"
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
           <ProfilePicker
             onManage={() => {
               setSettingsSection('profiles');

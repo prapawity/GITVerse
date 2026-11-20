@@ -4,6 +4,8 @@ import { storage } from '../lib/storage';
 
 export interface Settings {
   theme: 'dark' | 'midnight' | 'graphite' | 'light';
+  graphSort: 'topo' | 'date' | 'author-date';
+  graphColumns: { branch: boolean; graph: boolean; message: boolean; author: boolean; date: boolean; sha: boolean };
   autoFetchMinutes: number; // 0 disables
   autoPrune: boolean;
   autoCheckUpdates: boolean;
@@ -49,6 +51,8 @@ export interface IdentityProfile {
 
 export const DEFAULTS: Settings = {
   theme: 'dark',
+  graphSort: 'topo',
+  graphColumns: { branch: true, graph: true, message: true, author: true, date: true, sha: false },
   autoFetchMinutes: 1,
   autoPrune: true,
   autoCheckUpdates: true,

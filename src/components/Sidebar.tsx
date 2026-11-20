@@ -100,6 +100,7 @@ function RefTree({
   onNavigate,
   onContext,
   rootIcon,
+  hideRoot,
   colorRoots,
   currentStatus,
 }: {
@@ -112,12 +113,13 @@ function RefTree({
   onNavigate?: (full: string) => void;
   onContext?: (name: string, x: number, y: number) => void;
   rootIcon?: boolean; // top level are remotes (origin, upstream…)
+  hideRoot?: boolean;
   colorRoots?: boolean; // tint git-flow prefixes
   currentStatus?: { upstream?: string; ahead?: number; behind?: number; gone?: boolean };
 }) {
   const rows = useMemo(
-    () => visibleRows(buildTree(items), (p) => open.has(`${id}:${p}`), forceOpen),
-    [items, open, id, forceOpen],
+    () => visibleRows(buildTree(items, hideRoot), (p) => open.has(`${id}:${p}`), forceOpen),
+    [items, open, id, forceOpen, hideRoot],
   );
   const [focusPath, setFocusPath] = useState<string | null>(null);
   const tabStopPath = rows.some(({ node }) => node.path === focusPath)
@@ -163,7 +165,7 @@ function RefTree({
         const pad = 14 + depth * INDENT;
         if (isFolder) {
           const tint = colorRoots && depth === 0 ? FLOW_COLOR[node.name] : undefined;
-          const Icon = rootIcon && depth === 0 ? Globe : expanded ? FolderOpen : Folder;
+          const Icon = rootIcon && !hideRoot && depth === 0 ? Globe : expanded ? FolderOpen : Folder;
           return (
             <button
               key={key}
@@ -441,6 +443,7 @@ export function Sidebar({
           onNavigate={(name) => onNavigate('remote', name)}
           onContext={(name, x, y) => onContext('remote', name, x, y)}
           rootIcon
+          hideRoot={new Set(refs.remote.map((branch) => branch.name.split('/')[0])).size === 1}
         />
       </Section>
       <Section icon={<Archive />} title="Stashes" count={stashes.length} filtering={filtering}>
