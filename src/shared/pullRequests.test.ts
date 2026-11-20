@@ -65,3 +65,16 @@ test('makes a readable title from a branch name', async () => {
   assert.equal(titleFromBranch('develop'), 'Develop');
   assert.equal(commitList(['Add x\n\nbody', "Merge branch 'main'", 'Fix y']), '- Add x\n- Fix y');
 });
+
+test('issue branch names and issue numbers from branches', async () => {
+  const { issueBranchName, issueFromBranch } = await import('../lib/pullRequests');
+  assert.equal(
+    issueBranchName({ number: 123, title: 'Fix login crash on iOS 18!' }),
+    'feature/123-fix-login-crash-on-ios-18',
+  );
+  assert.equal(issueBranchName({ number: 7, title: 'ทดสอบ' }, 'bugfix/'), 'bugfix/7');
+  assert.equal(issueFromBranch('feature/123-fix-login'), 123);
+  assert.equal(issueFromBranch('456-quick'), 456);
+  assert.equal(issueFromBranch('develop'), null);
+  assert.equal(issueFromBranch('release/1.0.4'), null);
+});

@@ -523,3 +523,97 @@ export function commitList(commits: string[]): string {
     .map((s) => `- ${s}`)
     .join('\n');
 }
+
+// ---- issues (GitHub / GitLab) ----
+
+export interface OpenIssue {
+  id: string;
+  number: number;
+  title: string;
+  author: string;
+  url: string;
+  labels: string[];
+  updated: string;
+  assignedToMe: boolean;
+  mine: boolean;
+}
+
+/** Open issues of the repository, newest activity first (first 50). Bitbucket is not supported. */
+export async function openIssues(repo: HostedRepo): Promise<OpenIssue[]> {
+  const user = await me(repo);
+  if (repo.kind === 'github') {
+    const list = await call<
+      {
+        id: number;
+        number: number;
+        title: string;
+        user: Person;
+        html_url: string;
+        labels: ({ name: string } | string)[];
+        updated_at: string;
+        assignees?: Person[];
+        pull_request?: unknown;
+      }[]
+    >(repo, 'GET', `${repoPath(repo)}/issues?state=open&sort=updated&direction=desc&per_page=50`);
+    return list
+      .filter((i) => !i.pull_request) // the issues API also lists pull requests
+      .map((i) => ({
+        id: String(i.id),
+        number: i.number,
+        title: i.title,
+        author: who(i.user),
+        url: i.html_url,
+        labels: i.labels.map((l) => (typeof l === 'string' ? l : l.name)),
+        updated: i.updated_at,
+        assignedToMe: (i.assignees ?? []).some((a) => same(a, user)),
+        mine: same(i.user, user),
+      }));
+  }
+  if (repo.kind === 'gitlab') {
+    const list = await call<
+      {
+        id: number;
+        iid: number;
+        title: string;
+        author: Person;
+        web_url: string;
+        labels: string[];
+        updated_at: string;
+        assignees?: Person[];
+      }[]
+    >(repo, 'GET', `${project(repo)}/issues?state=opened&order_by=updated_at&per_page=50`);
+    return list.map((i) => ({
+      id: String(i.id),
+      number: i.iid,
+      title: i.title,
+      author: who(i.author),
+      url: i.web_url,
+      labels: i.labels ?? [],
+      updated: i.updated_at,
+      assignedToMe: (i.assignees ?? []).some((a) => same(a, user)),
+      mine: same(i.author, user),
+    }));
+  }
+  throw new HostError('Issues are available for GitHub and GitLab repositories.', 400);
+}
+
+/** Branch name for working on an issue: `feature/123-fix-login-crash`. */
+export function issueBranchName(issue: { number: number; title: string }, prefix = 'feature/'): string {
+  const slug = issue.title
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .split('-')
+    .slice(0, 6)
+    .join('-');
+  return `${prefix}${issue.number}${slug ? `-${slug}` : ''}`;
+}
+
+/** Issue number a branch was made for (`feature/123-…`, `123-…`), if any. */
+export function issueFromBranch(branch: string): number | null {
+  const m = /(?:^|\/)(\d{1,7})(?:-|$)/.exec(branch);
+  return m ? Number(m[1]) : null;
+}
+
+export const ISSUES_CHANGED = 'gitverse:issues-changed';

@@ -107,6 +107,8 @@ const sub = <T extends unknown[]>(ch: string, cb: (...a: T) => void) => {
     ipcRenderer.invoke('ai:resolveConflict', provider, model, prompt, count),
   commitMessage: (provider: string, model: string | undefined, diff: string) =>
     ipcRenderer.invoke('ai:commitMessage', provider, model, diff),
+  task: (provider: string, model: string | undefined, task: string, prompt: string) =>
+    ipcRenderer.invoke('ai:task', provider, model, task, prompt),
   pullRequest: (provider: string, model: string | undefined, prompt: string) =>
     ipcRenderer.invoke('ai:pullRequest', provider, model, prompt),
   onDelta: (cb: (reqId: number, text: string) => void) => sub('ai:delta', cb),

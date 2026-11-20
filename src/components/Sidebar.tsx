@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Archive,
   Check,
+  CircleDot,
   Cloud,
   EyeOff,
   GitPullRequest,
@@ -24,6 +25,7 @@ import { askConfirm } from './Dialogs';
 import { desktopApi } from '../platform/api';
 import { Chevron, Collapse } from './Motion';
 import { PullRequestList } from './PullRequestList';
+import { IssueList } from './IssueList';
 import { TagMenu } from './TagMenu';
 import { openRef } from '../lib/refActions';
 
@@ -300,6 +302,7 @@ export function Sidebar({
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [pullRequestCount, setPullRequestCount] = useState(0);
+  const [issueCount, setIssueCount] = useState(0);
   const toggle = (key: string) =>
     setOpen((s) => {
       const n = new Set(s);
@@ -472,6 +475,17 @@ export function Sidebar({
             query={q}
             onCount={setPullRequestCount}
             onCreate={onCreatePullRequest}
+          />
+        </Section>
+      )}
+      {repoPath && (
+        <Section icon={<CircleDot />} title="Issues" count={issueCount} always filtering={filtering}>
+          <IssueList
+            key={repoPath}
+            repoPath={repoPath}
+            query={q}
+            onCount={setIssueCount}
+            onConnect={onCreatePullRequest}
           />
         </Section>
       )}

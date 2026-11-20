@@ -127,3 +127,19 @@ test('a failing git am is aborted, not left half-applied', async () => {
   await assert.rejects(git.applyPatch(dir, `${mail}\n`, 'am'), /Nothing was applied/);
   assert.ok(!existsSync(path.join(dir, '.git', 'rebase-apply')));
 });
+
+test('AI material: branch diff and working diff', async () => {
+  const dir = repo();
+  commit(dir, 'a.txt', 'one\n', 'first');
+  run(dir, 'checkout', '-q', '-b', 'topic');
+  commit(dir, 'b.txt', 'b\n', 'add b');
+  const branch = await git.branchDiff(dir, 'main', 'topic');
+  assert.match(branch.commits, /- add b/);
+  assert.match(branch.diff, /\+b/);
+  await assert.rejects(git.branchDiff(dir, '--evil', 'topic'));
+  writeFileSync(path.join(dir, 'a.txt'), 'one\ntwo\n');
+  writeFileSync(path.join(dir, 'new.txt'), 'n\n');
+  const working = await git.workingDiff(dir);
+  assert.match(working.diff, /\+two/);
+  assert.deepEqual(working.untracked, ['new.txt']);
+});

@@ -47,7 +47,7 @@ function ago(iso: string) {
 }
 
 /** Find the hosted repository for `cwd` (origin remote, or the provider saved for its host). */
-async function hostedFor(cwd: string): Promise<HostedRepo | null> {
+export async function hostedFor(cwd: string): Promise<HostedRepo | null> {
   const url: string = await desktopApi().remoteUrl(cwd);
   const host = remoteHost(url);
   const saved = host ? desktopApi().stateStorage.getItem(savedKindKey(host)) : null;

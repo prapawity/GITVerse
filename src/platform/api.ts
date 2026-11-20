@@ -83,7 +83,8 @@ export interface PlatformApi extends Record<GitMethodName, AnyAsync> {
     | 'toolResult'
     | 'resolveConflict'
     | 'commitMessage'
-    | 'pullRequest',
+    | 'pullRequest'
+    | 'task',
     AnyAsync
   > & {
     onDelta(cb: (reqId: number, text: string) => void): Unsubscribe;

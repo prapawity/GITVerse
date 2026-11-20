@@ -1359,13 +1359,25 @@ export async function fileBlame(cwd: string, hash: string, path: string): Promis
 }
 
 export async function fileHistory(cwd: string, hash: string, path: string) {
-  const out = await git(cwd, ['log', '--follow', '-n200', '--format=%H%x1f%an%x1f%aI%x1f%s', hash, '--', path]);
+  // --name-only gives the file's path in each commit, which differs before a rename (--follow)
+  const out = await git(cwd, [
+    'log',
+    '--follow',
+    '--name-only',
+    '-n200',
+    '--format=%x1e%H%x1f%an%x1f%aI%x1f%s',
+    hash,
+    '--',
+    path,
+  ]);
   return out
-    .split('\n')
+    .split('\x1e')
+    .map((record) => record.trim())
     .filter(Boolean)
-    .map((l) => {
-      const [h, author, date, subject] = l.split('\x1f');
-      return { hash: h, author, date, subject };
+    .map((record) => {
+      const [header, ...files] = record.split('\n').filter(Boolean);
+      const [h, author, date, subject] = header.split('\x1f');
+      return { hash: h, author, date, subject, path: files[files.length - 1] ?? path };
     });
 }
 
@@ -2013,4 +2025,35 @@ export async function commitPeople(cwd: string, hash: string): Promise<{ author:
   const out = await git(cwd, ['show', '-s', '--format=%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI', hash]);
   const [an, ae, ad, cn, ce, cd] = out.trim().split('\x1f');
   return { author: { name: an, email: ae, date: ad }, committer: { name: cn, email: ce, date: cd } };
+}
+
+// ---- material for AI explanations ----
+
+const AI_LIMIT = 140_000;
+const clip = (text: string) => (text.length > AI_LIMIT ? `${text.slice(0, AI_LIMIT)}\n… (truncated)` : text);
+
+/** Commits and diff of `branch` since it left `base` (what a merge of it would bring). */
+export async function branchDiff(cwd: string, base: string, branch: string) {
+  for (const ref of [base, branch])
+    if (typeof ref !== 'string' || !ref || ref.startsWith('-') || /\s/.test(ref)) throw new Error('Invalid branch.');
+  const [log, diff] = await Promise.all([
+    git(cwd, ['log', '--no-merges', '--format=- %s', `${base}..${branch}`, '--']),
+    git(cwd, ['diff', '--no-ext-diff', '--no-color', '--find-renames', `${base}...${branch}`, '--']),
+  ]);
+  return { commits: log.trim(), diff: clip(diff) };
+}
+
+/** Every uncommitted change (staged and not), plus untracked file names. */
+export async function workingDiff(cwd: string) {
+  const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
+    () => true,
+    () => false,
+  );
+  const [diff, untracked] = await Promise.all([
+    hasHead
+      ? git(cwd, ['diff', '--no-ext-diff', '--no-color', '--find-renames', 'HEAD', '--'])
+      : git(cwd, ['diff', '--no-ext-diff', '--no-color', '--cached', '--']),
+    git(cwd, ['ls-files', '--others', '--exclude-standard']),
+  ]);
+  return { diff: clip(diff), untracked: untracked.split('\n').filter(Boolean).slice(0, 200) };
 }

@@ -42,6 +42,7 @@ import {
   savedKindKey,
   templates as loadTemplates,
   titleFromBranch,
+  issueFromBranch,
   type Template,
 } from '../lib/pullRequests';
 import { askConfirm } from './Dialogs';
@@ -222,6 +223,17 @@ export function PullRequestDialog({
       active = false;
     };
   }, [hosted, connected, base, head, headPushed]);
+
+  // a branch made for an issue (feature/123-…) closes it when merged
+  useEffect(() => {
+    const issue = issueFromBranch(head);
+    if (!issue || touched.current.body) return;
+    setBody((value) =>
+      new RegExp(`#${issue}\\b`).test(value)
+        ? value
+        : `${value.trimEnd()}${value.trim() ? '\n\n' : ''}Closes #${issue}`,
+    );
+  }, [head, templates]);
 
   // manual pre-fill: a single commit's subject, else a title made from the branch name
   useEffect(() => {

@@ -66,7 +66,10 @@ export function ToolGroup({
         }}
         className={`ui-tool flex min-h-[44px] w-10 flex-col items-center justify-center gap-1 rounded-md text-xs min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] ${anyPressed ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
       >
-        {icon}
+        <span className="relative">
+          {icon}
+          <ChevronDown size={9} aria-hidden className="ui-group-hint absolute -bottom-1 -right-2 text-sub" />
+        </span>
         <span className="ui-label hidden items-center gap-0.5 min-[1400px]:flex">
           {label}
           <ChevronDown size={11} aria-hidden />

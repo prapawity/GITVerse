@@ -14,6 +14,10 @@ import { readSecret, writeSecret } from './ai/common';
 import { checkAppUpdate, downloadMacUpdate, isReleaseDownloadUrl, listReleases, RELEASES_URL } from './updates';
 import type { AppUpdateCheck } from '../src/shared/updates';
 import { scanRepositories } from './repositoryScan';
+import { fixPath } from './shellPath';
+
+// before any Git command: hooks (git-lfs…) need the same PATH as the user's terminal
+fixPath();
 
 // Keep the internal name for existing storage and Keychain entries; public labels use the product name.
 app.setName('GITVerse');
@@ -71,6 +75,8 @@ const handlers = {
   setExternalToolConfig: git.setExternalToolConfig,
   maintenance: git.maintenance,
   commitPeople: git.commitPeople,
+  branchDiff: git.branchDiff,
+  workingDiff: git.workingDiff,
   refs: git.refs,
   reflog,
   inspectWorkspace,

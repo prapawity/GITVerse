@@ -338,6 +338,44 @@ pub async fn ai_commit_message(
 }
 
 #[tauri::command]
+pub async fn ai_task(
+    app: tauri::State<'_, AppState>,
+    provider: Provider,
+    model: Option<String>,
+    task: String,
+    prompt: String,
+) -> Result<MessageResult, ()> {
+    let spec = gitverse_core::ai::spec();
+    let system = match task.as_str() {
+        "explain" => &spec.explain_system,
+        "stash" => &spec.stash_system,
+        "compose" => &spec.compose_system,
+        _ => {
+            return Ok(MessageResult::failed(err(
+                ErrKind::Other,
+                "Invalid AI request.",
+            )))
+        }
+    };
+    if prompt.trim().is_empty() || prompt.encode_utf16().count() > 150_000 {
+        return Ok(MessageResult::failed(err(
+            ErrKind::Other,
+            "Invalid AI request.",
+        )));
+    }
+    let cancel = deadline(Duration::from_secs(180));
+    Ok(match provider {
+        Provider::Claude => {
+            claude::Claude::new(app.secrets.as_ref())
+                .message(system, &prompt, 4096, &cancel)
+                .await
+        }
+        Provider::Openai => chatgpt(&app).message(system, &prompt, model, &cancel).await,
+        Provider::Copilot => app.copilot.task(&task, &prompt, model).await,
+    })
+}
+
+#[tauri::command]
 pub async fn ai_pull_request(
     app: tauri::State<'_, AppState>,
     provider: Provider,

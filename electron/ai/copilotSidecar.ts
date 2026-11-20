@@ -52,6 +52,13 @@ const methods: Record<string, (p: P) => Promise<unknown> | unknown> = {
   cancelLogin: () => copilotCancelLogin(),
   reset: (p) => copilotResetConversation(p.convId),
   commit: (p) => copilotCommitMessage(p.diff, p.model ?? undefined, signalFor(180_000)),
+  task: (p) => {
+    const system = (
+      { explain: spec.explainSystem, stash: spec.stashSystem, compose: spec.composeSystem } as Record<string, string>
+    )[p.task];
+    if (!system) return { ok: false, error: { kind: 'other', message: 'Unknown AI task.' } };
+    return copilotCommitMessage(p.prompt, p.model ?? undefined, signalFor(180_000), system);
+  },
   pullRequest: (p) => copilotCommitMessage(p.prompt, p.model ?? undefined, signalFor(180_000), spec.prSystem),
   resolve: (p) => copilotResolve(p.prompt, p.model ?? undefined, signalFor(240_000)),
   turn: async (p) => {

@@ -141,6 +141,8 @@ export async function createTauriApi(): Promise<PlatformApi> {
         call('ai_resolve_conflict', { provider, model: model ?? null, prompt, count }),
       commitMessage: (provider: string, model: string | undefined, diff: string) =>
         call('ai_commit_message', { provider, model: model ?? null, diff }),
+      task: (provider: string, model: string | undefined, task: string, prompt: string) =>
+        call('ai_task', { provider, model: model ?? null, task, prompt }),
       pullRequest: (provider: string, model: string | undefined, prompt: string) =>
         call('ai_pull_request', { provider, model: model ?? null, prompt }),
       onDelta: (cb) => subscribe<{ reqId: number; text: string }>('ai:delta', (p) => cb(p.reqId, p.text)),

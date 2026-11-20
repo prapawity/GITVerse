@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownUp, Check, FilePen, Loader2, Minus, Plus, Sparkles, Trash2, Upload, Users, X } from 'lucide-react';
+import {
+  ArrowDownUp,
+  Check,
+  FilePen,
+  Loader2,
+  Minus,
+  Plus,
+  Sparkles,
+  Trash2,
+  Upload,
+  Users,
+  X,
+  MessageSquareText,
+} from 'lucide-react';
 import { OPEN_PUSH_DIALOG, useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
 import type { FileChangeCount, FileStatus } from '../shared/types';
@@ -11,6 +24,7 @@ import { IgnoreMenu } from './IgnoreMenu';
 import { useLfs } from '../lib/lfs';
 import { LfsBadge } from './LfsBadge';
 import { entryFor, snapshot, useActionHistory } from '../lib/actionHistory';
+import { useExplain, workingMaterial } from '../lib/aiTask';
 
 export type WorkingFile = { path: string; status: string; area: 'staged' | 'unstaged' | 'untracked' };
 const api = () => desktopApi();
@@ -726,16 +740,34 @@ export function WorkingChangesPanel({
         {/* while a merge/rebase is in progress the commit happens in the conflict panel */}
         {!operation && (
           <>
-            <button
-              type="button"
-              onClick={() => void generate()}
-              disabled={busy || !staged.length || !!operation || conflict.length > 0}
-              title={`Send staged changes to ${providerLabel(provider)} and review the result before committing`}
-              className="flex min-h-[36px] w-full items-center justify-center gap-2 rounded-md border border-ai/40 bg-ai/10 px-3 text-sm font-semibold text-ai hover:bg-ai/20 disabled:opacity-40"
-            >
-              {generating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}{' '}
-              {generating ? 'Generating…' : 'Write message with AI'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void generate()}
+                disabled={busy || !staged.length || !!operation || conflict.length > 0}
+                title={`Send staged changes to ${providerLabel(provider)} and review the result before committing`}
+                className="flex min-h-[36px] flex-1 items-center justify-center gap-2 rounded-md border border-ai/40 bg-ai/10 px-3 text-sm font-semibold text-ai hover:bg-ai/20 disabled:opacity-40"
+              >
+                {generating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}{' '}
+                {generating ? 'Generating…' : 'Write message with AI'}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  repoPath &&
+                  useExplain.getState().open({
+                    title: 'Explain working changes',
+                    subtitle: `${staged.length + unstaged.length} changed file${staged.length + unstaged.length === 1 ? '' : 's'}`,
+                    material: () => workingMaterial(repoPath),
+                  })
+                }
+                disabled={!staged.length && !unstaged.length}
+                title={`Ask ${providerLabel(provider)} to explain all uncommitted changes`}
+                className="flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-md border border-ai/40 px-3 text-sm text-ai hover:bg-ai/10 disabled:opacity-40"
+              >
+                <MessageSquareText size={15} aria-hidden /> <span className="ui-label">Explain</span>
+              </button>
+            </div>
             <p className="text-xs text-sub">
               Sends staged changes to {providerLabel(provider)}. Review the message before committing.
             </p>

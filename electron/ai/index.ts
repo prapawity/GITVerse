@@ -175,6 +175,35 @@ export function registerAi() {
     }
   });
 
+  // ---- one-shot AI tasks: explain changes, name a stash, compose commits ----
+  const TASK_SYSTEM: Record<string, string> = {
+    explain: spec.explainSystem,
+    stash: spec.stashSystem,
+    compose: spec.composeSystem,
+  };
+  ipcMain.handle('ai:task', async (_e, provider: Provider, model: string | undefined, task: string, prompt: string) => {
+    const system = TASK_SYSTEM[task];
+    if (
+      !system ||
+      !['claude', 'openai', 'copilot'].includes(provider) ||
+      typeof prompt !== 'string' ||
+      !prompt.trim() ||
+      prompt.length > 150000
+    )
+      return { ok: false, error: err('other', 'Invalid AI request.') };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 180_000);
+    try {
+      return provider === 'claude'
+        ? await claudeCommitMessage(prompt, ac.signal, system)
+        : provider === 'openai'
+          ? await openaiCommitMessage(prompt, model, ac.signal, system)
+          : await copilotCommitMessage(prompt, model, ac.signal, system);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
   // ---- pull/merge request title and description ----
   ipcMain.handle('ai:pullRequest', async (_e, provider: Provider, model: string | undefined, prompt: string) => {
     if (

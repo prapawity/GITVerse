@@ -652,3 +652,20 @@ svg.lucide {
   width: calc(44px * var(--ui-font-scale, 1)) !important;
   min-height: calc(44px * var(--ui-font-scale, 1)) !important;
 }
+
+/* Minimal toolbar: icons are larger, so give each button and each group room to breathe */
+:root[data-ui='minimal'] header .ui-tool {
+  margin-inline: calc(3px * var(--ui-font-scale, 1));
+}
+:root[data-ui='minimal'] header [role='group'] + [role='group'],
+:root[data-ui='minimal'] header [role='group'] + div,
+:root[data-ui='minimal'] header [aria-hidden].bg-surface {
+  margin-inline: calc(10px * var(--ui-font-scale, 1));
+}
+/* grouped toolbar buttons keep a small ▾ when their label is hidden */
+.ui-group-hint {
+  display: none;
+}
+:root[data-ui='minimal'] .ui-group-hint {
+  display: block;
+}

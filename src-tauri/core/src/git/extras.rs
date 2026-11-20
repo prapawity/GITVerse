@@ -473,3 +473,95 @@ mod tests {
         assert!(tool_name_ok("vscode") && !tool_name_ok("rm -rf"));
     }
 }
+
+// ---- material for AI explanations (`branchDiff` / `workingDiff` in git.ts) ----
+
+const AI_LIMIT: usize = 140_000;
+fn clip(text: String) -> String {
+    if text.len() <= AI_LIMIT {
+        return text;
+    }
+    let mut end = AI_LIMIT;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}\n… (truncated)", &text[..end])
+}
+
+#[derive(Debug, Serialize)]
+pub struct BranchDiff {
+    pub commits: String,
+    pub diff: String,
+}
+
+pub async fn branch_diff(
+    git: &GitRunner,
+    cwd: &Path,
+    base: &str,
+    branch: &str,
+) -> Result<BranchDiff> {
+    for r in [base, branch] {
+        if r.is_empty() || r.starts_with('-') || r.chars().any(char::is_whitespace) {
+            return Err(invalid("Invalid branch."));
+        }
+    }
+    let range = format!("{base}..{branch}");
+    let sym = format!("{base}...{branch}");
+    let log_args = ["log", "--no-merges", "--format=- %s", range.as_str(), "--"];
+    let diff_args = [
+        "diff",
+        "--no-ext-diff",
+        "--no-color",
+        "--find-renames",
+        sym.as_str(),
+        "--",
+    ];
+    let (log, diff) = tokio::join!(run(git, cwd, &log_args), run(git, cwd, &diff_args));
+    Ok(BranchDiff {
+        commits: log?.trim().to_owned(),
+        diff: clip(diff?),
+    })
+}
+
+#[derive(Debug, Serialize)]
+pub struct WorkingDiff {
+    pub diff: String,
+    pub untracked: Vec<String>,
+}
+
+pub async fn working_diff(git: &GitRunner, cwd: &Path) -> Result<WorkingDiff> {
+    let has_head = git.succeeds(cwd, &["rev-parse", "--verify", "HEAD"]).await;
+    let diff = if has_head {
+        run(
+            git,
+            cwd,
+            &[
+                "diff",
+                "--no-ext-diff",
+                "--no-color",
+                "--find-renames",
+                "HEAD",
+                "--",
+            ],
+        )
+        .await?
+    } else {
+        run(
+            git,
+            cwd,
+            &["diff", "--no-ext-diff", "--no-color", "--cached", "--"],
+        )
+        .await?
+    };
+    let untracked = run(git, cwd, &["ls-files", "--others", "--exclude-standard"])
+        .await?
+        .lines()
+        .filter(|l| !l.is_empty())
+        .take(200)
+        .map(str::to_owned)
+        .collect();
+    Ok(WorkingDiff {
+        diff: clip(diff),
+        untracked,
+    })
+}

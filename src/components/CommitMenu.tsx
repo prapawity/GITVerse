@@ -8,6 +8,8 @@ import { groupRefs } from '../lib/refGroups';
 import { desktopApi } from '../platform/api';
 import { useSettings } from '../store/settingsStore';
 import { refKey } from '../lib/historyScope';
+import { branchMaterial, commitMaterial, useExplain } from '../lib/aiTask';
+import { consecutiveRange } from './CombinedChanges';
 
 const api = () => desktopApi();
 
@@ -237,6 +239,24 @@ export function CommitMenu({
                   ]
                 : []),
               {
+                label: 'Explain changes with AI',
+                run: () => {
+                  const fallback = ['main', 'master', 'develop'].find(
+                    (b) => b !== refName && refs.local.some((l) => l.name === b),
+                  );
+                  const base = isCurrent || !current ? fallback : current;
+                  if (!base) {
+                    useRepo.getState().notify('info', 'Nothing to compare with', 'Check out another branch first.');
+                    return;
+                  }
+                  useExplain.getState().open({
+                    title: `Explain ${refName}`,
+                    subtitle: `What it brings compared with ${base}`,
+                    material: () => branchMaterial(repoPath!, base, refName),
+                  });
+                },
+              },
+              {
                 label: 'Copy branch name',
                 run: attempt(async () => {
                   await navigator.clipboard.writeText(refName);
@@ -307,6 +327,18 @@ export function CommitMenu({
               '-' as const,
             ]
           : branchItems),
+        {
+          label: selected.length > 1 ? `Explain ${selected.length} commits with AI` : 'Explain commit with AI',
+          run: () => {
+            const hashes = selected.length > 1 ? selected : [hash];
+            const range = consecutiveRange(hashes, graph.rows);
+            useExplain.getState().open({
+              title: hashes.length > 1 ? `Explain ${hashes.length} commits` : 'Explain commit',
+              subtitle: hashes.length > 1 ? undefined : short,
+              material: () => commitMaterial(repoPath!, hashes, range),
+            });
+          },
+        },
         {
           label: 'Checkout this commit',
           run: sure(

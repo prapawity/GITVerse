@@ -47,6 +47,8 @@ import { RepoBranchDropdown } from './components/RepoBranchDropdown';
 import { PushDialog } from './components/PushDialog';
 import { PullRequestDialog } from './components/PullRequestDialog';
 import { GraphFilterBar } from './components/GraphFilterBar';
+import { ExplainDialog } from './components/ExplainDialog';
+import { runAiTask, useExplain, workingMaterial, commitMaterial } from './lib/aiTask';
 import { ToolGroup } from './components/ToolGroup';
 import { CombinedChanges, consecutiveRange } from './components/CombinedChanges';
 import { CommandPalette, ShortcutList, type PaletteCommand } from './components/CommandPalette';
@@ -328,6 +330,16 @@ export default function App() {
   useEffect(() => {
     setFile(null);
   }, [repoPath, selectedHash]);
+  // History / Blame in a diff: go to that commit and keep showing the same file there
+  const pendingFile = useRef<{ hash: string; path: string } | null>(null);
+  const loadedDetail = useRepo((s) => s.detail);
+  useEffect(() => {
+    const want = pendingFile.current;
+    if (!want || !loadedDetail || loadedDetail.hash !== want.hash || selectedHash !== want.hash) return;
+    pendingFile.current = null;
+    const files = (loadedDetail.files ?? []) as ChangedFile[];
+    setFile(files.find((f) => f.path === want.path || f.oldPath === want.path) ?? { status: 'M', path: want.path });
+  }, [loadedDetail, selectedHash]);
   useEffect(() => {
     setWorkingView(true);
     setWorkingFile(null);
@@ -406,6 +418,10 @@ export default function App() {
     branch ?? (operation?.head && operation.head !== 'HEAD' ? operation.head : detached ? 'Detached HEAD' : '—');
   const dis = !repoPath;
 
+  const openFileAt = async (hash: string, path: string) => {
+    pendingFile.current = { hash, path };
+    if (!(await navigateToHash(hash))) pendingFile.current = null;
+  };
   const navigateToHash = async (hash: string) => {
     const stash = useRepo.getState().refs.stashes.find((entry) => entry.hash === hash);
     if (stash) {
@@ -553,29 +569,55 @@ export default function App() {
   const savePanelSize = (side: 'left' | 'right') =>
     useSettings.getState().set(side === 'left' ? 'leftPanelSize' : 'rightPanelSize', panelSizes.current[side]);
   // dragging a panel closed (or open again) updates the saved state too
+  /**
+   * The panel API throws for a panel that is not mounted (the left panel is swapped for the file rail
+   * while a file is open), so every call checks the panel is on screen and never lets an error escape.
+   */
+  const livePanel = (side: 'left' | 'right') => {
+    const el = (side === 'left' ? leftEl : rightEl).current;
+    const panel = (side === 'left' ? leftPanel : rightPanel).current;
+    return el?.isConnected && panel ? panel : null;
+  };
   const syncPanelSetting = (side: 'left' | 'right') => {
-    const ref = side === 'left' ? leftPanel : rightPanel;
-    const collapsed = ref.current?.isCollapsed();
+    const ref = { current: livePanel(side) };
+    let collapsed: boolean | undefined;
+    try {
+      collapsed = ref.current?.isCollapsed();
+    } catch {
+      return;
+    }
     if (collapsed === undefined) return;
     if (!collapsed) {
-      const size = ref.current!.getSize().asPercentage;
+      let size: number;
+      try {
+        size = ref.current!.getSize().asPercentage;
+      } catch {
+        return;
+      }
       if (size > 1) panelSizes.current[side] = Math.round(size * 10) / 10;
     }
     const key = side === 'left' ? 'leftPanelOpen' : 'rightPanelOpen';
     if (useSettings.getState()[key] === collapsed) useSettings.getState().set(key, !collapsed);
   };
   useEffect(() => {
-    for (const [ref, open] of [
-      [leftPanel, leftOpen],
-      [rightPanel, rightOpen],
-    ] as const) {
-      const panel = ref.current;
-      if (!panel) continue;
-      const side = ref === leftPanel ? 'left' : 'right';
-      // reopen at exactly the width it had, not the minimum the library falls back to
-      if (open && panel.isCollapsed()) panel.resize(`${panelSizes.current[side]}%`);
-      else if (!open && !panel.isCollapsed()) panel.collapse();
-    }
+    // after the layout settles, so a panel that was just mounted is registered with its group
+    const frame = requestAnimationFrame(() => {
+      for (const [side, open] of [
+        ['left', leftOpen],
+        ['right', rightOpen],
+      ] as const) {
+        const panel = livePanel(side);
+        if (!panel) continue;
+        try {
+          // reopen at exactly the width it had, not the minimum the library falls back to
+          if (open && panel.isCollapsed()) panel.resize(`${panelSizes.current[side]}%`);
+          else if (!open && !panel.isCollapsed()) panel.collapse();
+        } catch {
+          /* panel left the layout in the meantime */
+        }
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [leftOpen, rightOpen, file, workingFile, conflictFile, repoPath]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -689,6 +731,36 @@ export default function App() {
       window.removeEventListener('keydown', onKey);
     };
   }, []);
+  const stashWithAiName = async () => {
+    if (!repoPath) return;
+    const cwd = repoPath;
+    const state = useRepo.getState();
+    let suggestion = '';
+    try {
+      const material = await workingMaterial(cwd);
+      if (material) suggestion = (await runAiTask('stash', material)).split('\n')[0].slice(0, 80);
+    } catch (e) {
+      state.notify('warning', 'AI could not name the stash', String((e as Error)?.message ?? e));
+    }
+    const message = await askText('Name this stash', 'e.g. Before refactoring', suggestion);
+    if (message && useRepo.getState().repoPath === cwd) await action('stash', message);
+  };
+  const explainWorking = () =>
+    repoPath &&
+    useExplain.getState().open({
+      title: 'Explain working changes',
+      subtitle: `${status.length} changed file${status.length === 1 ? '' : 's'}`,
+      material: () => workingMaterial(repoPath),
+    });
+  const explainSelected = () => {
+    if (!repoPath || !selectedHash) return;
+    const hashes = selectedHashes.length > 1 ? selectedHashes : [selectedHash];
+    useExplain.getState().open({
+      title: hashes.length > 1 ? `Explain ${hashes.length} commits` : 'Explain commit',
+      subtitle: hashes.length > 1 ? undefined : selectedHash.slice(0, 7),
+      material: () => commitMaterial(repoPath, hashes, range),
+    });
+  };
   const paletteCommands = (): PaletteCommand[] => {
     const noRepo = !repoPath;
     const blocked = noRepo || !!working;
@@ -764,6 +836,30 @@ export default function App() {
         shortcut: `${shortcutModifier}⇧Z`,
         disabled: blocked || !redoTarget,
         run: () => void runUndo('redo'),
+      },
+      {
+        id: 'explain-working',
+        group: 'AI',
+        title: 'Explain working changes with AI',
+        disabled: noRepo || !status.length,
+        run: () => void explainWorking(),
+      },
+      {
+        id: 'explain-commit',
+        group: 'AI',
+        title:
+          selectedHashes.length > 1
+            ? `Explain ${selectedHashes.length} selected commits with AI`
+            : 'Explain selected commit with AI',
+        disabled: noRepo || !selectedHash,
+        run: explainSelected,
+      },
+      {
+        id: 'stash-ai',
+        group: 'AI',
+        title: 'Stash with AI name…',
+        disabled: blocked || !status.length,
+        run: () => void stashWithAiName(),
       },
       {
         id: 'maintenance',
@@ -1501,6 +1597,13 @@ export default function App() {
                     },
                   },
                   {
+                    id: 'stash-ai',
+                    label: 'Stash with AI name…',
+                    icon: <Sparkles />,
+                    disabled: dis || !status.length,
+                    onClick: () => void stashWithAiName(),
+                  },
+                  {
                     id: 'pop',
                     label: refs.stashes.length ? 'Pop latest stash' : 'Pop (no stashes)',
                     icon: <ArchiveRestore />,
@@ -1750,7 +1853,7 @@ export default function App() {
                           hash={selectedHash}
                           file={file}
                           onClose={() => setFile(null)}
-                          onJumpToCommit={select}
+                          onJumpToCommit={(hash, path) => void openFileAt(hash, path ?? file.path)}
                         />
                       ) : graph.rows.length ? (
                         <CommitGraph
@@ -2103,6 +2206,7 @@ export default function App() {
       )}
       {cloneOpen && <CloneDialog onClose={() => setCloneOpen(false)} />}
       {pushRepo && <PushDialog repo={pushRepo} onClose={() => setPushRepo(null)} />}
+      <ExplainDialog />
       {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
       {shortcutsOpen && <ShortcutList shortcuts={shortcuts} onClose={() => setShortcutsOpen(false)} />}
       {pullRequestRepo && !pushRepo && (
