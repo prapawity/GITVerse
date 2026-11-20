@@ -16,6 +16,7 @@ pub struct AiSpec {
     pub system: String,
     pub conflict_system: String,
     pub commit_system: String,
+    pub pr_system: String,
     pub tools: Value,
     pub conflict_format: Value,
 }

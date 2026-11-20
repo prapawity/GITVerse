@@ -5,6 +5,8 @@ import { groupRefs } from '../lib/refGroups';
 import { Spinner } from './Loading';
 import { DEFAULTS, useSettings } from '../store/settingsStore';
 import { useRepo } from '../store/repoStore';
+import { useResolvedTheme } from '../lib/theme';
+import { useAvatars } from '../lib/avatars';
 
 const ROW_H = 28;
 const LANE_W = 16;
@@ -145,7 +147,7 @@ export function CommitGraph({
   onLocateCurrent,
   upstream,
 }: Props) {
-  const light = useSettings((s) => s.theme === 'light');
+  const light = useResolvedTheme() === 'light';
   const fontSize = useSettings((s) => s.fontSize);
   const fontScale = fontSize / 14;
   const font = `${13 * fontScale}px Inter, system-ui, sans-serif`;
@@ -251,6 +253,15 @@ export function CommitGraph({
     if (!hasMore || loadingMore || filter) return;
     if (scrollTop + size.h > totalRows * ROW_H - ROW_H * 40) onLoadMore?.();
   }, [scrollTop, size.h, totalRows, hasMore, loadingMore, filter, onLoadMore]);
+
+  // author photos for the rows around the viewport (initials stay until a photo loads)
+  const avatarRepo = useRepo((state) => state.repoPath);
+  const nearFirst = Math.max(0, Math.floor(scrollTop / ROW_H) - 40);
+  const avatarEmails = rows
+    .slice(nearFirst, nearFirst + Math.ceil(size.h / ROW_H) + 80)
+    .map((row) => row.commit.email)
+    .filter((email): email is string => !!email);
+  const avatars = useAvatars(avatarRepo, [...new Set(avatarEmails)].sort());
 
   const draw = useCallback(() => {
     const cv = canvasRef.current;
@@ -543,11 +554,21 @@ export function CommitGraph({
         ctx.arc(cx, mid, AV - 1.5, 0, Math.PI * 2);
         ctx.fillStyle = light ? '#f4f7fb' : '#1b2633';
         ctx.fill();
-        ctx.fillStyle = lane;
-        ctx.font = 'bold 8px Inter, system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(initials(c.author), cx, mid + 0.5);
-        ctx.textAlign = 'left';
+        const photo = c.email ? avatars.get(c.email) : null;
+        if (photo) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, mid, AV - 1.5, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(photo, cx - AV + 1.5, mid - AV + 1.5, (AV - 1.5) * 2, (AV - 1.5) * 2);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = lane;
+          ctx.font = 'bold 8px Inter, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(initials(c.author), cx, mid + 0.5);
+          ctx.textAlign = 'left';
+        }
       }
       ctx.restore();
 
@@ -625,6 +646,7 @@ export function CommitGraph({
     dateW,
     shaW,
     contentW,
+    avatars.version,
   ]);
 
   useEffect(() => {
@@ -1146,7 +1168,7 @@ export function CommitGraph({
               role="group"
               aria-label="Branches and tags on this commit"
               data-branch-tooltip
-              className="absolute z-30 max-h-[60vh] min-w-[220px] max-w-[min(480px,60vw)] overflow-y-auto rounded-lg border border-surface bg-mantle py-2 shadow-2xl"
+              className="pop-in absolute z-30 max-h-[60vh] min-w-[220px] max-w-[min(480px,60vw)] overflow-y-auto rounded-lg border border-surface bg-mantle py-2 shadow-2xl"
               style={{ left: 8, top }}
               onMouseLeave={(e) => {
                 if (e.relatedTarget instanceof Node && scrollRef.current?.contains(e.relatedTarget)) return;

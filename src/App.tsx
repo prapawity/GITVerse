@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles,
   Settings as GearIcon,
   SquareTerminal,
+  GitPullRequest,
   ArchiveRestore,
   Archive,
   ArrowDownToLine,
@@ -41,13 +42,20 @@ import { FileRail } from './components/FileRail';
 import { Sidebar } from './components/Sidebar';
 import { RepoBranchDropdown } from './components/RepoBranchDropdown';
 import { PushDialog } from './components/PushDialog';
+import { PullRequestDialog } from './components/PullRequestDialog';
+import { GraphFilterBar } from './components/GraphFilterBar';
+import { CombinedChanges, consecutiveRange } from './components/CombinedChanges';
+import { CommandPalette, ShortcutList, type PaletteCommand } from './components/CommandPalette';
 import { CloneDialog } from './components/CloneDialog';
 import { RepoGroup } from './components/RepoGroup';
 import { ActivityLog } from './components/ActivityLog';
 import { StashView } from './components/StashView';
 import { ProfilePicker } from './components/ProfilePicker';
 import { WorkingChangesPanel, type WorkingFile } from './components/WorkingChangesPanel';
-import { useRepo } from './store/repoStore';
+import { OPEN_PUSH_DIALOG, OPEN_REQUEST_AFTER_PUSH, useRepo } from './store/repoStore';
+import { useResolvedTheme } from './lib/theme';
+import { stepZoom, useAppZoom } from './lib/zoom';
+import { replay, snapshot, useActionHistory } from './lib/actionHistory';
 import { AgentCheckpoints } from './components/AgentCheckpoints';
 import { RecoveryPanel } from './components/RecoveryPanel';
 import { RebasePreview } from './components/RebasePreview';
@@ -80,10 +88,10 @@ function ToolBtn({
       aria-label={label}
       aria-busy={busy}
       title={label}
-      className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[60px] items-center justify-center gap-1 rounded-md text-xs ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
+      className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[60px] items-center justify-center gap-1 rounded-md text-xs ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
     >
       {busy ? <Spinner size={22} className="text-accent" /> : icon}
-      <span className="hidden min-[1400px]:block">{label}</span>
+      <span className="ui-label hidden min-[1400px]:block">{label}</span>
     </button>
   );
 }
@@ -125,6 +133,8 @@ export default function App() {
     ref?: { name: string; kind: 'local' | 'remote' };
   } | null>(null);
   const [selectedHashes, setSelectedHashes] = useState<string[]>([]);
+  // two or more consecutive commits selected: show their combined changes
+  const range = useMemo(() => consecutiveRange(selectedHashes, graph.rows), [selectedHashes, graph.rows]);
   const [file, setFile] = useState<ChangedFile | null>(null);
   const [workingView, setWorkingView] = useState(true);
   const [stashView, setStashView] = useState<StashRef | null>(null);
@@ -183,11 +193,35 @@ export default function App() {
   const [groupMenu, setGroupMenu] = useState<{ repo: string; x: number; y: number } | null>(null);
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [pushRepo, setPushRepo] = useState<string | null>(null);
+  const [pullRequestRepo, setPullRequestRepo] = useState<string | null>(null);
+  // reload history when refs are hidden / soloed for the open repository
+  const graphHiddenKey = useSettings((s) => (repoPath ? (s.graphHidden[repoPath] ?? []).join('\n') : ''));
+  const graphSoloKey = useSettings((s) => (repoPath ? (s.graphSolo[repoPath] ?? []).join('\n') : ''));
+  const firstScope = useRef(true);
+  useEffect(() => {
+    if (firstScope.current) {
+      firstScope.current = false;
+      return;
+    }
+    if (repoPath) void useRepo.getState().refresh(true);
+  }, [graphHiddenKey, graphSoloKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const openAfterPush = (event: Event) => setPullRequestRepo((event as CustomEvent<string>).detail);
+    const openPush = (event: Event) => setPushRepo((event as CustomEvent<string>).detail);
+    window.addEventListener(OPEN_REQUEST_AFTER_PUSH, openAfterPush);
+    window.addEventListener(OPEN_PUSH_DIALOG, openPush);
+    return () => {
+      window.removeEventListener(OPEN_REQUEST_AFTER_PUSH, openAfterPush);
+      window.removeEventListener(OPEN_PUSH_DIALOG, openPush);
+    };
+  }, []);
   const autoFetchMinutes = useSettings((s) => s.autoFetchMinutes);
   const fetchMode = useSettings((s) => s.fetchMode);
   const { indexUndo, indexRedo, moveIndexHistory } = useRepo();
-  const theme = useSettings((s) => s.theme);
+  const theme = useResolvedTheme();
+  useAppZoom();
   const fontSize = useSettings((s) => s.fontSize);
+  const uiMode = useSettings((s) => s.uiMode);
   const repoGroups = useSettings((s) => s.repoGroups);
   const syncingGroups = useRepo((s) => s.syncingGroups);
   const repoGroupRoots = useSettings((s) => s.repoGroupRoots);
@@ -196,6 +230,9 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.dataset.ui = uiMode;
+  }, [uiMode]);
   useEffect(() => {
     document.documentElement.style.setProperty('--ui-font-scale', String(fontSize / 14));
   }, [fontSize]);
@@ -428,6 +465,337 @@ export default function App() {
       current === '—' ? 'the current checkout' : current,
     );
     if (name) exec('createBranch', name);
+  };
+
+  // ---- command palette (Cmd/Ctrl+P) and shortcut list (Cmd/Ctrl+/) ----
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [editorList, setEditorList] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    if (paletteOpen)
+      void platformApi()
+        ?.editors?.()
+        .then(setEditorList)
+        .catch(() => {});
+  }, [paletteOpen]);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setShortcutsOpen(false);
+        setPaletteOpen((v) => !v);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        setPaletteOpen(false);
+        setShortcutsOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const shortcuts: [string, string][] = [
+    [`${shortcutModifier}P`, 'Command palette'],
+    [`${shortcutModifier}/`, 'Keyboard shortcuts'],
+    [`${shortcutModifier}F`, 'Search commits'],
+    [`${shortcutModifier}J`, 'Ask AI'],
+    [`${shortcutModifier}Z / ${shortcutModifier}⇧Z`, 'Undo / redo the last action or staging change'],
+    [`${shortcutModifier}= / ${shortcutModifier}- / ${shortcutModifier}0`, 'Zoom in / out / actual size'],
+    ['Ctrl+`', 'Toggle terminal'],
+    ['Enter / Shift+Enter', 'Locate / check out the focused branch in the sidebar'],
+    ['Esc', 'Close menus and side panels'],
+  ];
+  const openSettingsAt = (section: Section) => {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  };
+  // Undo / Redo: the most recent of a Git action (commit, checkout, reset…) or a staging change
+  const actionStacks = useActionHistory((s) => (repoPath ? s.stacks[repoPath] : undefined));
+  const lastStagingAt = useActionHistory((s) => s.lastStagingAt);
+  const gitUndo = actionStacks?.undo.at(-1);
+  const gitRedo = actionStacks?.redo.at(-1);
+  const preferGit = (entry: { at: number } | undefined, index: boolean) =>
+    !!entry && (!index || entry.at > lastStagingAt);
+  const undoTarget = preferGit(gitUndo, indexUndo) ? gitUndo!.label : indexUndo ? 'staging' : null;
+  const redoTarget = preferGit(gitRedo, indexRedo) ? gitRedo!.label : indexRedo ? 'staging' : null;
+  const runUndo = async (direction: 'undo' | 'redo') => {
+    const entry = direction === 'undo' ? gitUndo : gitRedo;
+    const index = direction === 'undo' ? indexUndo : indexRedo;
+    if (!repoPath) return;
+    if (!preferGit(entry, index)) {
+      await moveIndexHistory(direction);
+      setWorkingFile(null);
+      return;
+    }
+    const state = useRepo.getState();
+    try {
+      const label = await replay(repoPath, direction, snapshot(state.refs), state.status.length > 0);
+      await state.refresh();
+      state.notify('success', `${direction === 'undo' ? 'Undid' : 'Redid'} ${label}`);
+    } catch (error) {
+      state.notify('error', `Could not ${direction}`, String((error as Error)?.message ?? error));
+    }
+  };
+  useEffect(() => {
+    // native Edit menu (Electron): undo text in a focused field, otherwise the last action
+    const stop = platformApi()?.onEditKey?.((key) => {
+      const focused = document.activeElement as HTMLElement | null;
+      if (focused?.closest('input, textarea, [contenteditable="true"]')) {
+        document.execCommand(key);
+        return;
+      }
+      if (!document.querySelector('[role="dialog"]')) void runUndo(key);
+    });
+    return () => stop?.();
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'z') return;
+      const target = e.target as HTMLElement | null;
+      // text fields keep their own undo
+      if (target && (target.closest('input, textarea, [contenteditable="true"]') || target.closest('.xterm'))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      void runUndo(e.shiftKey ? 'redo' : 'undo');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  const paletteCommands = (): PaletteCommand[] => {
+    const noRepo = !repoPath;
+    const blocked = noRepo || !!working;
+    const settings = useSettings.getState();
+    const list: PaletteCommand[] = [
+      {
+        id: 'fetch',
+        group: 'Remote',
+        title: 'Fetch all remotes',
+        disabled: blocked,
+        run: () => void action('fetch', 'all'),
+      },
+      {
+        id: 'pull',
+        group: 'Remote',
+        title: 'Pull (fast-forward only)',
+        disabled: blocked,
+        run: () => void action('fetch', 'ff-only'),
+      },
+      {
+        id: 'pull-rebase',
+        group: 'Remote',
+        title: 'Pull (rebase)',
+        disabled: blocked,
+        run: () => void action('fetch', 'rebase'),
+      },
+      { id: 'push', group: 'Remote', title: 'Push…', disabled: blocked, run: () => repoPath && setPushRepo(repoPath) },
+      {
+        id: 'push-tags',
+        group: 'Remote',
+        title: 'Push all tags to origin',
+        disabled: blocked,
+        run: () => void exec('pushTag', 'origin', null),
+      },
+      {
+        id: 'pr',
+        group: 'Remote',
+        title: 'Create pull / merge request…',
+        keywords: 'pr mr',
+        disabled: noRepo,
+        run: () => repoPath && setPullRequestRepo(repoPath),
+      },
+      { id: 'branch', group: 'Branch', title: 'New branch…', disabled: blocked, run: () => void newBranch() },
+      {
+        id: 'stash',
+        group: 'Changes',
+        title: 'Stash changes…',
+        disabled: blocked,
+        run: async () => {
+          const m = await askText('Name this stash', 'e.g. Before refactoring');
+          if (m) await action('stash', m);
+        },
+      },
+      {
+        id: 'pop',
+        group: 'Changes',
+        title: 'Pop latest stash',
+        disabled: blocked || !refs.stashes.length,
+        run: () => void action('stashPop'),
+      },
+      {
+        id: 'undo',
+        group: 'Changes',
+        title: `Undo ${undoTarget ?? ''}`.trim(),
+        shortcut: `${shortcutModifier}Z`,
+        disabled: blocked || !undoTarget,
+        run: () => void runUndo('undo'),
+      },
+      {
+        id: 'redo',
+        group: 'Changes',
+        title: `Redo ${redoTarget ?? ''}`.trim(),
+        shortcut: `${shortcutModifier}⇧Z`,
+        disabled: blocked || !redoTarget,
+        run: () => void runUndo('redo'),
+      },
+      {
+        id: 'maintenance',
+        group: 'Repository',
+        title: 'Run repository maintenance',
+        keywords: 'gc clean compact',
+        disabled: blocked,
+        run: () => setWorkspaceInspectionOpen(true),
+      },
+      {
+        id: 'lfs-pull',
+        group: 'Repository',
+        title: 'Git LFS: pull files',
+        disabled: blocked,
+        run: () => void exec('lfsAction', 'pull'),
+      },
+      {
+        id: 'submodules',
+        group: 'Repository',
+        title: 'Update all submodules',
+        disabled: blocked,
+        run: () => void exec('submoduleUpdate', null),
+      },
+      {
+        id: 'patch',
+        group: 'Repository',
+        title: 'Apply patch…',
+        disabled: blocked,
+        run: () => setWorkspaceInspectionOpen(true),
+      },
+      {
+        id: 'tools',
+        group: 'Settings',
+        title: 'External diff / merge tools',
+        disabled: noRepo,
+        run: () => openSettingsAt('tools'),
+      },
+      { id: 'zoom-in', group: 'View', title: 'Zoom in', shortcut: `${shortcutModifier}=`, run: () => stepZoom('in') },
+      {
+        id: 'zoom-out',
+        group: 'View',
+        title: 'Zoom out',
+        shortcut: `${shortcutModifier}-`,
+        run: () => stepZoom('out'),
+      },
+      {
+        id: 'zoom-reset',
+        group: 'View',
+        title: 'Actual size',
+        shortcut: `${shortcutModifier}0`,
+        run: () => stepZoom('reset'),
+      },
+      ...editorList.map((editor) => ({
+        id: `open-in-${editor.id}`,
+        group: 'Open in',
+        title: `Open repository in ${editor.name}`,
+        keywords: 'editor ide',
+        disabled: noRepo,
+        run: () =>
+          repoPath &&
+          void desktopApi()
+            .openIn(editor.id, repoPath)
+            .catch((e: Error) => useRepo.getState().notify('error', `Could not open ${editor.name}`, e.message)),
+      })),
+      {
+        id: 'show-all',
+        group: 'Graph',
+        title: 'Show all hidden branches and tags',
+        disabled: noRepo,
+        run: () => repoPath && settings.resetRefVisibility(repoPath),
+      },
+      {
+        id: 'search',
+        group: 'Graph',
+        title: 'Search commits',
+        shortcut: `${shortcutModifier}F`,
+        disabled: noRepo,
+        run: () => searchRef.current?.focus(),
+      },
+      {
+        id: 'terminal',
+        group: 'View',
+        title: 'Toggle terminal',
+        shortcut: 'Ctrl+`',
+        run: () => setTermOpen((v) => !v),
+      },
+      { id: 'ai', group: 'View', title: 'Ask AI', shortcut: `${shortcutModifier}J`, run: () => setAiOpen(true) },
+      { id: 'recovery', group: 'View', title: 'Recovery history', disabled: noRepo, run: () => setRecoveryOpen(true) },
+      {
+        id: 'workspace',
+        group: 'View',
+        title: 'Remotes and worktrees',
+        keywords: 'remote add remove',
+        disabled: noRepo,
+        run: () => setWorkspaceInspectionOpen(true),
+      },
+      {
+        id: 'shortcuts',
+        group: 'View',
+        title: 'Keyboard shortcuts',
+        shortcut: `${shortcutModifier}/`,
+        run: () => setShortcutsOpen(true),
+      },
+      { id: 'clone', group: 'Repository', title: 'Clone repository…', run: () => setCloneOpen(true) },
+      { id: 'open', group: 'Repository', title: 'Open / add repository…', run: () => openAddRepo() },
+      { id: 'settings', group: 'Settings', title: 'Settings', run: () => openSettingsAt('general') },
+      {
+        id: 'appearance',
+        group: 'Settings',
+        title: 'Appearance',
+        keywords: 'theme font',
+        run: () => openSettingsAt('appearance'),
+      },
+      {
+        id: 'signing',
+        group: 'Settings',
+        title: 'Commit signing',
+        keywords: 'gpg ssh sign',
+        disabled: noRepo,
+        run: () => openSettingsAt('signing'),
+      },
+      ...(['system', 'dark', 'light', 'midnight', 'graphite'] as const).map((theme) => ({
+        id: `theme-${theme}`,
+        group: 'Settings',
+        title: `Theme: ${theme[0].toUpperCase()}${theme.slice(1)}`,
+        run: () => settings.set('theme', theme),
+      })),
+      {
+        id: 'ui-minimal',
+        group: 'Settings',
+        title: 'Interface: Minimal',
+        run: () => settings.set('uiMode', 'minimal'),
+      },
+      {
+        id: 'ui-standard',
+        group: 'Settings',
+        title: 'Interface: Standard',
+        run: () => settings.set('uiMode', 'standard'),
+      },
+      ...refs.local
+        .filter((b) => !b.current)
+        .map((b) => ({
+          id: `checkout-${b.name}`,
+          group: 'Check out branch',
+          title: b.name,
+          keywords: 'checkout switch branch',
+          disabled: blocked,
+          run: () => void checkout(b.name),
+        })),
+      ...recentRepos
+        .filter((r) => r !== repoPath)
+        .map((r) => ({
+          id: `repo-${r}`,
+          group: 'Switch repository',
+          title: r.split(/[\\/]/).pop() || r,
+          keywords: `repository ${r}`,
+          run: () => void openRepo(r),
+        })),
+    ];
+    return list;
   };
 
   const importFolders = async (paths: string[]) => {
@@ -906,25 +1274,21 @@ export default function App() {
           <header className="glass-toolbar flex shrink-0 flex-wrap items-center gap-x-1 gap-y-1 border-b border-surface bg-mantle px-3 py-2 sm:px-5">
             <RepoBranchDropdown current={current} />
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block xl:mx-5" aria-hidden />
-            <div className="flex shrink-0" role="group" aria-label="Index history">
-              <span title="Undo the last stage or unstage action">
+            <div className="flex shrink-0" role="group" aria-label="Undo and redo">
+              <span title={undoTarget ? `Undo ${undoTarget}` : 'Nothing to undo'}>
                 <ToolBtn
                   icon={<Undo2 size={22} />}
                   label="Undo"
-                  disabled={!indexUndo || !!working}
-                  onClick={() => {
-                    void moveIndexHistory('undo').then(() => setWorkingFile(null));
-                  }}
+                  disabled={!undoTarget || !!working}
+                  onClick={() => void runUndo('undo')}
                 />
               </span>
-              <span title="Redo the last undone stage or unstage action">
+              <span title={redoTarget ? `Redo ${redoTarget}` : 'Nothing to redo'}>
                 <ToolBtn
                   icon={<Redo2 size={22} />}
                   label="Redo"
-                  disabled={!indexRedo || !!working}
-                  onClick={() => {
-                    void moveIndexHistory('redo').then(() => setWorkingFile(null));
-                  }}
+                  disabled={!redoTarget || !!working}
+                  onClick={() => void runUndo('redo')}
                 />
               </span>
             </div>
@@ -1032,10 +1396,10 @@ export default function App() {
               aria-pressed={recoveryOpen}
               aria-label="Recovery"
               title="Recovery history"
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${recoveryOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
+              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${recoveryOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <History size={21} aria-hidden />
-              <span className="hidden min-[1400px]:block">Recovery</span>
+              <span className="ui-label hidden min-[1400px]:block">Recovery</span>
             </button>
             <button
               onClick={() => {
@@ -1046,20 +1410,30 @@ export default function App() {
               aria-pressed={workspaceInspectionOpen}
               aria-label="Workspace"
               title="Remotes and worktrees"
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${workspaceInspectionOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
+              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${workspaceInspectionOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <GitFork size={21} aria-hidden />
-              <span className="hidden min-[1400px]:block">Workspace</span>
+              <span className="ui-label hidden min-[1400px]:block">Workspace</span>
+            </button>
+            <button
+              onClick={() => repoPath && setPullRequestRepo(repoPath)}
+              disabled={!repoPath}
+              aria-label="Pull request"
+              title="Create a pull / merge request"
+              className="ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs hover:bg-surface/60 disabled:opacity-40"
+            >
+              <GitPullRequest size={21} aria-hidden />
+              <span className="ui-label hidden min-[1400px]:block">PR / MR</span>
             </button>
             <button
               onClick={() => setTermOpen((v) => !v)}
               aria-pressed={termOpen}
               aria-label="Terminal"
               title="Terminal (Ctrl+`)"
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${termOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
+              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${termOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <SquareTerminal size={22} aria-hidden />
-              <span className="hidden min-[1400px]:block">Terminal</span>
+              <span className="ui-label hidden min-[1400px]:block">Terminal</span>
             </button>
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block" aria-hidden />
             <button
@@ -1067,10 +1441,10 @@ export default function App() {
               aria-pressed={aiOpen}
               aria-label="Ask AI"
               title={`Ask AI (${shortcutModifier}J)`}
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs font-semibold text-ai hover:bg-ai/10 ${aiOpen ? 'bg-ai/15 ring-1 ring-ai/60' : ''}`}
+              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs font-semibold text-ai hover:bg-ai/10 ${aiOpen ? 'bg-ai/15 ring-1 ring-ai/60' : ''}`}
             >
               <Sparkles size={22} aria-hidden />
-              <span className="hidden min-[1400px]:block">Ask AI</span>
+              <span className="ui-label hidden min-[1400px]:block">Ask AI</span>
             </button>
             <div className="relative ml-auto min-w-[120px] flex-1 sm:max-w-72">
               <Search size={13} className="absolute left-2.5 top-3 text-sub" aria-hidden />
@@ -1158,6 +1532,7 @@ export default function App() {
               <Panel defaultSize="20%" minSize="12%">
                 {repoPath && (
                   <Sidebar
+                    onCreatePullRequest={() => repoPath && setPullRequestRepo(repoPath)}
                     onNavigate={navigateBranch}
                     onTag={(name) => void navigateTag(name)}
                     onStash={showStash}
@@ -1184,6 +1559,9 @@ export default function App() {
                     {repoPath && !conflictFile && !file && !workingFile && !stashView && (
                       <AgentCheckpoints key={repoPath} repo={repoPath} />
                     )}
+                    {repoPath && !conflictFile && !file && !workingFile && !stashView && (
+                      <GraphFilterBar repo={repoPath} />
+                    )}
                     <div className="min-h-0 flex-1">
                       {conflictFile ? (
                         <MergeTool path={conflictFile} />
@@ -1198,6 +1576,18 @@ export default function App() {
                           revision={workingRevision}
                           onRefresh={refreshWorking}
                           onClose={() => setWorkingFile(null)}
+                        />
+                      ) : file && repoPath && range ? (
+                        <DiffView
+                          key={`${range.oldest}..${range.newest}:${file.path}`}
+                          repoPath={repoPath}
+                          hash={range.newest}
+                          file={file}
+                          onClose={() => setFile(null)}
+                          loadDiff={() =>
+                            desktopApi().rangeFileDiff(repoPath, range.oldest, range.newest, file.path, file.oldPath)
+                          }
+                          readOnlySnapshot
                         />
                       ) : file && repoPath && selectedHash ? (
                         <DiffView
@@ -1344,7 +1734,11 @@ export default function App() {
                     </div>
                   )}
                   <div className="min-h-0 flex-1">
-                    <DetailsPanel file={file} onSelectFile={setFile} />
+                    {range ? (
+                      <CombinedChanges {...range} file={file} onSelectFile={setFile} />
+                    ) : (
+                      <DetailsPanel file={file} onSelectFile={setFile} />
+                    )}
                   </div>
                 </div>
               )}
@@ -1542,6 +1936,15 @@ export default function App() {
       )}
       {cloneOpen && <CloneDialog onClose={() => setCloneOpen(false)} />}
       {pushRepo && <PushDialog repo={pushRepo} onClose={() => setPushRepo(null)} />}
+      {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
+      {shortcutsOpen && <ShortcutList shortcuts={shortcuts} onClose={() => setShortcutsOpen(false)} />}
+      {pullRequestRepo && !pushRepo && (
+        <PullRequestDialog
+          repo={pullRequestRepo}
+          onClose={() => setPullRequestRepo(null)}
+          onPush={() => setPushRepo(pullRequestRepo)}
+        />
+      )}
       <Toasts />
       <BusyOverlay />
       {ctx && (

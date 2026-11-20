@@ -5,7 +5,15 @@ import { loadState, saveKey } from '../state';
 const dir = () => app.getPath('userData');
 export const canEncrypt = () => safeStorage.isEncryptionAvailable();
 
+/**
+ * When the OS keychain refuses access (e.g. a rebuilt, ad-hoc signed app is not on the keychain item's
+ * access list), secrets are kept in memory for this session instead of failing outright.
+ */
+const sessionSecrets = new Map<string, string>();
+export const isSessionOnly = (key: string) => sessionSecrets.has(key);
+
 export function readSecret(key: string): string | null {
+  if (sessionSecrets.has(key)) return sessionSecrets.get(key)!;
   const v = loadState(dir())[key];
   if (!v) return null;
   try {
@@ -14,16 +22,19 @@ export function readSecret(key: string): string | null {
     return null;
   }
 }
-export function writeSecret(key: string, value: string | null) {
+/** Returns 'session' when the secret could only be kept in memory until the app quits. */
+export function writeSecret(key: string, value: string | null): 'saved' | 'session' {
+  sessionSecrets.delete(key);
   if (value == null) {
     saveKey(dir(), key, null);
-    return;
+    return 'saved';
   }
-  if (!canEncrypt())
-    throw new Error(
-      'This system has no secure storage, so the secret cannot be saved safely. Use an environment variable instead.',
-    );
+  if (!canEncrypt()) {
+    sessionSecrets.set(key, value);
+    return 'session';
+  }
   saveKey(dir(), key, safeStorage.encryptString(value).toString('base64'));
+  return 'saved';
 }
 export const readPlain = (key: string) => loadState(dir())[key] ?? null;
 export const writePlain = (key: string, value: string | null) => saveKey(dir(), key, value);

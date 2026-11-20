@@ -1,22 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  ArrowDownUp,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FilePen,
-  Loader2,
-  Minus,
-  Plus,
-  Sparkles,
-  Trash2,
-} from 'lucide-react';
-import { useRepo } from '../store/repoStore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDownUp, Check, FilePen, Loader2, Minus, Plus, Sparkles, Trash2, Upload, Users, X } from 'lucide-react';
+import { OPEN_PUSH_DIALOG, useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
 import type { FileChangeCount, FileStatus } from '../shared/types';
 import { useSettings } from '../store/settingsStore';
 import { providerLabel } from '../shared/aiTypes';
 import { desktopApi } from '../platform/api';
+import { Chevron, Collapse } from './Motion';
+import { IgnoreMenu } from './IgnoreMenu';
+import { entryFor, snapshot, useActionHistory } from '../lib/actionHistory';
 
 export type WorkingFile = { path: string; status: string; area: 'staged' | 'unstaged' | 'untracked' };
 const api = () => desktopApi();
@@ -54,6 +46,43 @@ export function WorkingChangesPanel({
   const provider = useSettings((s) => s.aiProvider);
   const draft = repoPath ? (commitDrafts[repoPath] ?? EMPTY_DRAFT) : EMPTY_DRAFT;
   const { summary, description, amend } = draft;
+  const openRequestAfterPush = useSettings((state) => state.openRequestAfterPush);
+  const [skipHooks, setSkipHooks] = useState(false);
+  const [ignoreMenu, setIgnoreMenu] = useState<{ path: string; tracked: boolean; x: number; y: number } | null>(null);
+  const [coAuthors, setCoAuthors] = useState<string[]>([]);
+  const [coAuthorInput, setCoAuthorInput] = useState('');
+  const commits = useRepo((state) => state.commits);
+  // people who already committed here, as "Name <email>" suggestions for co-authors
+  const knownPeople = useMemo(
+    () => [...new Set(commits.filter((c) => c.email).map((c) => `${c.author} <${c.email}>`))].slice(0, 200),
+    [commits],
+  );
+  const addCoAuthor = (value: string) => {
+    const person = value.trim();
+    if (!/^[^<>\r\n]+ <[^\s<>@]+@[^\s<>]+>$/.test(person)) return false;
+    setCoAuthors((list) => (list.includes(person) ? list : [...list, person]));
+    setCoAuthorInput('');
+    return true;
+  };
+  // commit.template: pre-fill an empty draft once per repository
+  useEffect(() => {
+    if (!repoPath) return;
+    const cwd = repoPath;
+    let active = true;
+    void api()
+      .commitTemplate(cwd)
+      .then((text: string | null) => {
+        const current = useRepo.getState().commitDrafts[cwd];
+        if (!active || !text || current?.summary || current?.description) return;
+        const [first, ...rest] = text.split('\n');
+        setCommitDraft(cwd, { ...EMPTY_DRAFT, summary: first.trim(), description: rest.join('\n').trim() });
+        if (rest.join('').trim()) setDescriptionOpen(true);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [repoPath]); // eslint-disable-line react-hooks/exhaustive-deps
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   useEffect(() => {
     setDescriptionOpen(!!(repoPath && useRepo.getState().commitDrafts[repoPath]?.description));
@@ -266,6 +295,7 @@ export function WorkingChangesPanel({
     setPending(true);
     setError('');
     try {
+      useActionHistory.getState().markStaging();
       await api().trackedStage(
         cwd,
         action,
@@ -336,7 +366,7 @@ export function WorkingChangesPanel({
     }
   };
 
-  const submit = async () => {
+  const submit = async (andPush = false) => {
     if (!repoPath || missingSummary || busy || conflict.length || operation || (!staged.length && !amend)) return;
     if (
       amend &&
@@ -351,13 +381,27 @@ export function WorkingChangesPanel({
     setPending(true);
     setError('');
     try {
-      await api().commit(cwd, summary.trim(), description, { amend });
+      const trailers = coAuthors.map((person) => `Co-authored-by: ${person}`).join('\n');
+      const message = trailers ? `${description.trimEnd()}${description.trim() ? '\n\n' : ''}${trailers}` : description;
+      const start = snapshot(useRepo.getState().refs);
+      await api().commit(cwd, summary.trim(), message, { amend, noVerify: skipHooks });
       setCommitDraft(cwd, null);
+      setCoAuthors([]);
+      setSkipHooks(false);
       if (useRepo.getState().repoPath === cwd) {
         onClear();
         await refresh();
+        const entry = entryFor(amend ? 'Amend commit' : 'Commit', 'commit', start, snapshot(useRepo.getState().refs));
+        if (entry) useActionHistory.getState().record(cwd, entry);
       }
       notify('success', amend ? 'Commit amended' : 'Commit created');
+      if (andPush) {
+        // straight push when the branch tracks a remote and no push profile is chosen; otherwise the Push dialog
+        const branch = useRepo.getState().refs.local.find((b) => b.current);
+        const profile = useSettings.getState().selectedPushProfiles[cwd];
+        if (branch?.upstream && !branch.gone && !profile) await useRepo.getState().action('push');
+        else window.dispatchEvent(new CustomEvent(OPEN_PUSH_DIALOG, { detail: cwd }));
+      }
     } catch (e) {
       reportError(clean(e));
       useRepo.getState().recordActivity('error', 'Commit failed', clean(e), cwd);
@@ -375,7 +419,7 @@ export function WorkingChangesPanel({
           onClick={() => setCollapsed((value) => ({ ...value, [area]: !value[area] }))}
           className="flex min-w-0 flex-1 items-center gap-1 text-left hover:text-text"
         >
-          {collapsed[area] ? <ChevronRight size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+          <Chevron open={!collapsed[area]} />
           {label} · {files.length}
         </button>
         {files.length > 0 && (
@@ -416,8 +460,8 @@ export function WorkingChangesPanel({
           )}
         </div>
       )}
-      {!collapsed[area] &&
-        files.map((f) => {
+      <Collapse open={!collapsed[area]}>
+        {files.map((f) => {
           const kind = area === 'unstaged' && f.index === '?' ? 'untracked' : area;
           const code = kind === 'untracked' ? '?' : kind === 'staged' ? f.index : f.worktree;
           const active = selected?.path === f.path && selected.area === kind;
@@ -428,6 +472,10 @@ export function WorkingChangesPanel({
           return (
             <div
               key={f.path}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setIgnoreMenu({ path: f.path, tracked: kind !== 'untracked', x: event.clientX, y: event.clientY });
+              }}
               className={`group flex items-center ${chosen ? 'bg-accent/20' : active ? 'bg-surface/25' : 'hover:bg-surface/40'}`}
             >
               <button
@@ -478,6 +526,7 @@ export function WorkingChangesPanel({
             </div>
           );
         })}
+      </Collapse>
       {!collapsed[area] && !files.length && (
         <p className="px-4 py-2 text-xs text-sub">No {label.toLowerCase()} files.</p>
       )}
@@ -665,6 +714,32 @@ export function WorkingChangesPanel({
               />{' '}
               Amend previous commit
             </label>
+            <label
+              className="flex items-center gap-2 text-sm text-sub"
+              title="Commit with --no-verify: pre-commit and commit-msg hooks do not run"
+            >
+              <input
+                type="checkbox"
+                checked={skipHooks}
+                disabled={busy}
+                onChange={(e) => setSkipHooks(e.target.checked)}
+                className="accent-accent"
+              />{' '}
+              Skip Git hooks
+            </label>
+            <label
+              className="flex items-center gap-2 text-sm text-sub"
+              title="After a successful push, open the pull / merge request form for the pushed branch"
+            >
+              <input
+                type="checkbox"
+                role="switch"
+                checked={openRequestAfterPush}
+                onChange={(e) => useSettings.getState().set('openRequestAfterPush', e.target.checked)}
+                className="accent-accent"
+              />{' '}
+              Open pull / merge request after push
+            </label>
             <button
               type="button"
               onClick={() => void generate()}
@@ -711,24 +786,86 @@ export function WorkingChangesPanel({
                 className="mt-2 w-full resize-y rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent"
               />
             </details>
-            <button
-              type="submit"
-              disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}
-              className="min-h-[40px] w-full rounded-md border border-success/60 bg-success/15 px-3 py-2 font-medium text-success hover:bg-success/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
-            >
-              {generating
-                ? 'Generating message…'
-                : pending
-                  ? 'Working…'
-                  : amend
-                    ? 'Amend commit'
-                    : staged.length
-                      ? `Commit ${staged.length} staged file${staged.length === 1 ? '' : 's'}`
-                      : 'Stage changes to commit'}
-            </button>
+            <div className="space-y-1.5">
+              {coAuthors.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {coAuthors.map((person) => (
+                    <span
+                      key={person}
+                      className="pop-in flex items-center gap-1 rounded-full bg-surface/70 py-0.5 pl-2 pr-1 text-xs"
+                      title={`Co-authored-by: ${person}`}
+                    >
+                      {person.replace(/ <.*$/, '')}
+                      <button
+                        type="button"
+                        onClick={() => setCoAuthors((list) => list.filter((p) => p !== person))}
+                        aria-label={`Remove co-author ${person}`}
+                        className="rounded-full p-0.5 hover:bg-surface"
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Users size={14} className="shrink-0 text-sub" aria-hidden />
+                <input
+                  value={coAuthorInput}
+                  disabled={busy}
+                  list="co-author-suggestions"
+                  onChange={(e) => {
+                    setCoAuthorInput(e.target.value);
+                    if (knownPeople.includes(e.target.value)) addCoAuthor(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && coAuthorInput.trim()) {
+                      e.preventDefault();
+                      if (!addCoAuthor(coAuthorInput)) reportError('Co-author format: Name <email@example.com>');
+                    }
+                  }}
+                  placeholder="Add co-author (Name <email>)"
+                  aria-label="Add co-author"
+                  className="min-w-0 flex-1 rounded-md border border-surface bg-crust px-2 py-1.5 text-sm outline-none focus:border-accent"
+                />
+                <datalist id="co-author-suggestions">
+                  {knownPeople.map((person) => (
+                    <option key={person} value={person} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}
+                className="min-h-[40px] flex-1 rounded-md border border-success/60 bg-success/15 px-3 py-2 font-medium text-success hover:bg-success/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
+              >
+                {generating
+                  ? 'Generating message…'
+                  : pending
+                    ? 'Working…'
+                    : amend
+                      ? 'Amend commit'
+                      : staged.length
+                        ? `Commit ${staged.length} staged file${staged.length === 1 ? '' : 's'}`
+                        : 'Stage changes to commit'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void submit(true)}
+                disabled={busy || missingSummary || !!operation || conflict.length > 0 || (!staged.length && !amend)}
+                aria-label="Commit and push"
+                title="Commit and push"
+                className="flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-md border border-success/60 bg-success/15 px-3 text-sm font-medium text-success hover:bg-success/25 disabled:border-surface disabled:bg-transparent disabled:text-sub/60"
+              >
+                <Upload size={15} aria-hidden /> <span className="ui-label">&amp; Push</span>
+              </button>
+            </div>
           </>
         )}
       </form>
+      {ignoreMenu && <IgnoreMenu {...ignoreMenu} onClose={() => setIgnoreMenu(null)} />}
     </div>
   );
 }

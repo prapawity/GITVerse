@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, ChevronRight, Folder, GitBranch, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Folder, GitBranch, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { Chevron, Collapse } from './Motion';
 
 type GroupNode = { name: string; path: string; repo?: string; children: GroupNode[] };
 const parts = (path: string) => path.replace(/\\/g, '/').split('/').filter(Boolean);
@@ -111,7 +112,7 @@ export function RepoGroup({
               style={{ paddingLeft: 12 + depth * 16 }}
               className="flex min-h-[34px] w-full items-center gap-2 rounded text-left text-sm text-sub hover:bg-surface/50 hover:text-text"
             >
-              {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+              <Chevron open={isOpen} size={15} />
               <Folder size={15} />
               <span className="truncate">{node.name}</span>
             </button>
@@ -149,7 +150,7 @@ export function RepoGroup({
               </button>
             </div>
           )}
-          {isOpen && renderNodes(node.children, depth + 1)}
+          {node.children.length > 0 && <Collapse open={isOpen}>{renderNodes(node.children, depth + 1)}</Collapse>}
         </div>
       );
     });
@@ -185,7 +186,7 @@ export function RepoGroup({
             ref={menu}
             style={position}
             onClick={(e) => e.stopPropagation()}
-            className="fixed z-50 w-[320px] max-w-[80vw] rounded-lg border border-surface bg-mantle p-2 shadow-2xl"
+            className="pop-in fixed z-50 w-[320px] max-w-[80vw] rounded-lg border border-surface bg-mantle p-2 shadow-2xl"
           >
             <div className="flex items-center justify-between gap-2 px-2 pb-2">
               <div className="min-w-0 break-words text-xs font-semibold uppercase text-sub">

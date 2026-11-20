@@ -41,7 +41,7 @@ export function ActivityBar() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-6 left-6 z-[110] flex items-center gap-2 rounded-full border border-surface bg-[#2a2f3a] px-4 py-2 shadow-xl"
+          className="slide-down fixed bottom-6 left-6 z-[110] flex items-center gap-2 rounded-full border border-surface bg-[#2a2f3a] px-4 py-2 shadow-xl"
         >
           <Spinner size={15} className="text-accent" />
           <span>{working ?? 'Loading repository…'}</span>

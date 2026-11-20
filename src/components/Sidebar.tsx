@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   Archive,
   Check,
-  ChevronDown,
-  ChevronRight,
   Cloud,
+  EyeOff,
+  GitPullRequest,
   Folder,
   FolderOpen,
   GitBranch,
@@ -17,11 +17,15 @@ import {
 } from 'lucide-react';
 import { ancestors, buildTree, visibleRows, type RefLeaf } from '../lib/refTree';
 import { useRepo } from '../store/repoStore';
+import { useSettings } from '../store/settingsStore';
 import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 import { SidebarSkeleton } from './Loading';
 import type { StashRef } from '../shared/types';
 import { askConfirm } from './Dialogs';
 import { desktopApi } from '../platform/api';
+import { Chevron, Collapse } from './Motion';
+import { PullRequestList } from './PullRequestList';
+import { TagMenu } from './TagMenu';
 
 function Section({
   icon,
@@ -30,6 +34,7 @@ function Section({
   children,
   defaultOpen = false,
   filtering = false,
+  always = false,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -37,6 +42,8 @@ function Section({
   children: React.ReactNode;
   defaultOpen?: boolean;
   filtering?: boolean;
+  /** render children even when the count is 0, and keep them mounted while collapsed */
+  always?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const beforeFilter = useRef(open);
@@ -57,22 +64,22 @@ function Section({
         className="flex min-h-[42px] w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-semibold hover:bg-surface/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
         onClick={() => setOpen(!open)}
       >
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <Chevron open={open} size={16} />
         <span className="text-sub [&>svg]:h-[18px] [&>svg]:w-[18px]">{icon}</span>
         <span>{title}</span>
         <span className="ml-auto rounded bg-surface/70 px-1.5 py-0.5 text-xs font-medium tabular-nums text-sub">
           {count}
         </span>
       </button>
-      {open && (
+      <Collapse open={open} keepMounted={always}>
         <div className="pb-2">
-          {count ? (
+          {count || always ? (
             children
           ) : (
             <p className="px-10 py-1 text-xs text-sub">{filtering ? 'No matches' : `No ${title.toLowerCase()} yet`}</p>
           )}
         </div>
-      )}
+      </Collapse>
     </section>
   );
 }
@@ -117,6 +124,14 @@ function RefTree({
   colorRoots?: boolean; // tint git-flow prefixes
   currentStatus?: { upstream?: string; ahead?: number; behind?: number; gone?: boolean };
 }) {
+  // refs hidden in the graph are dimmed here, with an eye-off mark
+  const repoPath = useRepo((state) => state.repoPath);
+  const hiddenList = useSettings((state) => (repoPath ? state.graphHidden[repoPath] : undefined));
+  const hiddenKeys = useMemo(() => {
+    const kind = id === 'local' ? 'local' : id === 'remote' ? 'remote' : 'tag';
+    const prefix = `${kind}:`;
+    return new Set((hiddenList ?? []).filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length)));
+  }, [hiddenList, id]);
   const rows = useMemo(
     () => visibleRows(buildTree(items, hideRoot), (p) => open.has(`${id}:${p}`), forceOpen),
     [items, open, id, forceOpen, hideRoot],
@@ -180,11 +195,7 @@ function RefTree({
               className="flex min-h-[32px] w-full items-center gap-1.5 pr-4 text-left text-sm hover:bg-surface/50"
               style={{ paddingLeft: pad }}
             >
-              {expanded ? (
-                <ChevronDown size={14} className="shrink-0 text-sub" aria-hidden />
-              ) : (
-                <ChevronRight size={14} className="shrink-0 text-sub" aria-hidden />
-              )}
+              <Chevron open={expanded} className="text-sub" />
               <Icon size={16} className="shrink-0" style={{ color: tint ?? '#7f849c' }} aria-hidden />
               <span className="truncate" style={tint ? { color: tint } : undefined}>
                 {node.name}
@@ -239,7 +250,10 @@ function RefTree({
             ) : (
               <GitBranch size={15} className="shrink-0 text-sub" aria-hidden />
             )}
-            <span className="truncate">{node.name}</span>
+            <span className={`truncate ${hiddenKeys.has(node.leaf!.full) ? 'opacity-50' : ''}`}>{node.name}</span>
+            {hiddenKeys.has(node.leaf!.full) && (
+              <EyeOff size={13} className="shrink-0 text-sub" aria-label="Hidden in graph" />
+            )}
             {cur && <span className="ml-auto shrink-0 text-2xs font-normal">Current</span>}
             {cur &&
               currentStatus?.upstream &&
@@ -270,7 +284,9 @@ export function Sidebar({
   onTag,
   onStash,
   selectedStashHash,
+  onCreatePullRequest,
 }: {
+  onCreatePullRequest: () => void;
   onNavigate: (kind: 'local' | 'remote', name: string) => void;
   onContext: (kind: 'local' | 'remote', name: string, x: number, y: number) => void;
   onTag: (name: string) => void;
@@ -281,7 +297,9 @@ export function Sidebar({
   const [q, setQ] = useState('');
   const [stashMenu, setStashMenu] = useState<{ stash: StashRef; x: number; y: number } | null>(null);
   const [stashBusy, setStashBusy] = useState(false);
+  const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [pullRequestCount, setPullRequestCount] = useState(0);
   const toggle = (key: string) =>
     setOpen((s) => {
       const n = new Set(s);
@@ -383,7 +401,7 @@ export function Sidebar({
       <div className="px-4 pb-3 pt-4">
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold">Repository</h2>
-          <span className="text-xs text-sub">Branches & refs</span>
+          <span className="ui-label text-xs text-sub">Branches & refs</span>
         </div>
         <div className="relative">
           <Search
@@ -446,6 +464,17 @@ export function Sidebar({
           hideRoot={new Set(refs.remote.map((branch) => branch.name.split('/')[0])).size === 1}
         />
       </Section>
+      {repoPath && (
+        <Section icon={<GitPullRequest />} title="Pull Requests" count={pullRequestCount} always filtering={filtering}>
+          <PullRequestList
+            key={repoPath}
+            repoPath={repoPath}
+            query={q}
+            onCount={setPullRequestCount}
+            onCreate={onCreatePullRequest}
+          />
+        </Section>
+      )}
       <Section icon={<Archive />} title="Stashes" count={stashes.length} filtering={filtering}>
         {stashes.map((s) => (
           <button
@@ -473,8 +502,10 @@ export function Sidebar({
           forceOpen={filtering}
           onOpen={checkout}
           onNavigate={onTag}
+          onContext={(name, x, y) => setTagMenu({ tag: name, x, y })}
         />
       </Section>
+      {tagMenu && <TagMenu {...tagMenu} onClose={() => setTagMenu(null)} />}
       {stashMenu &&
         createPortal(
           <div

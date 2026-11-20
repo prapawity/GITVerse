@@ -27,6 +27,7 @@ import {
   openaiStatus,
   openaiTurn,
 } from './openai';
+import spec from '../../src/shared/aiSpec.json';
 
 /**
  * All model access is here, in the main process: keys, tokens and sign-ins never reach the renderer.
@@ -169,6 +170,28 @@ export function registerAi() {
         : provider === 'openai'
           ? await openaiCommitMessage(diff, model, ac.signal)
           : await copilotCommitMessage(diff, model, ac.signal);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
+  // ---- pull/merge request title and description ----
+  ipcMain.handle('ai:pullRequest', async (_e, provider: Provider, model: string | undefined, prompt: string) => {
+    if (
+      !['claude', 'openai', 'copilot'].includes(provider) ||
+      typeof prompt !== 'string' ||
+      !prompt.trim() ||
+      prompt.length > 150000
+    )
+      return { ok: false, error: err('other', 'Invalid pull request material or AI provider.') };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 180_000);
+    try {
+      return provider === 'claude'
+        ? await claudeCommitMessage(prompt, ac.signal, spec.prSystem)
+        : provider === 'openai'
+          ? await openaiCommitMessage(prompt, model, ac.signal, spec.prSystem)
+          : await copilotCommitMessage(prompt, model, ac.signal, spec.prSystem);
     } finally {
       clearTimeout(timer);
     }

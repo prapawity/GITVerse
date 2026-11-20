@@ -25,9 +25,11 @@ export function ActivityLog() {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls="activity-log"
+        title="Activity log"
+        aria-label="Activity log"
         className={`ml-auto flex h-full shrink-0 items-center gap-2 rounded px-2 hover:bg-surface/50 hover:text-text ${open ? 'text-accent' : ''}`}
       >
-        <ClipboardList size={15} /> Activity log{' '}
+        <ClipboardList size={15} aria-hidden /> <span className="ui-label">Activity log</span>{' '}
         {activity.length > 0 && (
           <span className="rounded-full bg-surface px-1.5 py-0.5 text-2xs">{activity.length}</span>
         )}
@@ -44,7 +46,7 @@ export function ActivityLog() {
         <section
           id="activity-log"
           aria-label="Activity log"
-          className="absolute bottom-full right-2 z-[70] mb-2 flex max-h-[min(60vh,520px)] w-[min(520px,90vw)] flex-col overflow-hidden rounded-lg border border-surface bg-mantle shadow-2xl"
+          className="pop-in absolute bottom-full right-2 z-[70] mb-2 flex max-h-[min(60vh,520px)] w-[min(520px,90vw)] flex-col overflow-hidden rounded-lg border border-surface bg-mantle shadow-2xl"
         >
           <header className="flex shrink-0 items-center gap-2 border-b border-surface px-4 py-3">
             <ClipboardList size={16} className="text-accent" />

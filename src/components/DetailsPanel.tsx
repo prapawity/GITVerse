@@ -142,8 +142,14 @@ export function DetailsPanel({
     .join('')
     .toUpperCase();
   const seg = (v: 'path' | 'tree', label: string, I: typeof List) => (
-    <button aria-pressed={view === v} onClick={() => setView(v)} className="seg-item flex items-center gap-1.5">
-      <I size={14} aria-hidden /> {label}
+    <button
+      aria-pressed={view === v}
+      onClick={() => setView(v)}
+      aria-label={label}
+      title={label}
+      className="seg-item flex items-center gap-1.5"
+    >
+      <I size={14} aria-hidden /> <span className="ui-label">{label}</span>
     </button>
   );
 

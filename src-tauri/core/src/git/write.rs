@@ -80,6 +80,8 @@ pub struct CommitOpts {
     pub signoff: bool,
     #[serde(default)]
     pub gpg_sign: bool,
+    #[serde(default)]
+    pub no_verify: bool,
 }
 
 pub async fn commit(
@@ -106,6 +108,9 @@ pub async fn commit(
     }
     if opts.gpg_sign {
         args.push("-S");
+    }
+    if opts.no_verify {
+        args.push("--no-verify");
     }
     git.run(cwd, &args, RunOpts::default()).await
 }

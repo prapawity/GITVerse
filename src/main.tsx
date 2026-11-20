@@ -2,6 +2,13 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { initPlatform, platformApi } from './platform/api';
+import { startCrashMonitor } from './lib/crashLog';
+import { startExitAnimations } from './lib/exitAnimations';
+import { version } from '../package.json';
+
+// before anything else can crash: logs an unclean previous exit and starts hang detection
+startCrashMonitor(version);
+startExitAnimations();
 
 const root = document.getElementById('root')!;
 

@@ -5,6 +5,8 @@ import { useRepo } from '../store/repoStore';
 import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 import { groupRefs } from '../lib/refGroups';
 import { desktopApi } from '../platform/api';
+import { useSettings } from '../store/settingsStore';
+import { refKey } from '../lib/historyScope';
 
 const api = () => desktopApi();
 
@@ -190,6 +192,17 @@ export function CommitMenu({
               : ref.kind === 'remote'
                 ? [{ label: `Delete remote ${refName}`, danger: true, run: deleteRemote(refName) }]
                 : []),
+          ...(ref.kind === 'local'
+            ? [
+                {
+                  label: `Rename ${refName}…`,
+                  run: async () => {
+                    const next = await askText(`Rename ${refName}`, 'New branch name', refName);
+                    if (next && next.trim() && next.trim() !== refName) exec('renameBranch', refName, next.trim());
+                  },
+                },
+              ]
+            : []),
           {
             label: 'Copy branch name',
             run: attempt(async () => {
@@ -197,6 +210,24 @@ export function CommitMenu({
               toast('Branch name copied');
             }),
           },
+          '-' as const,
+          ...(() => {
+            if (!repoPath || (ref.kind !== 'local' && ref.kind !== 'remote')) return [];
+            const key = refKey(ref.kind, refName);
+            const settings = useSettings.getState();
+            const hidden = (settings.graphHidden[repoPath] ?? []).includes(key);
+            const solo = (settings.graphSolo[repoPath] ?? []).includes(key);
+            return [
+              {
+                label: hidden ? `Show ${refName} in graph` : `Hide ${refName} in graph`,
+                run: () => settings.setRefVisibility(repoPath, key, hidden ? 'show' : 'hide'),
+              },
+              {
+                label: solo ? `Stop solo ${refName}` : `Solo ${refName}`,
+                run: () => settings.setRefVisibility(repoPath, key, solo ? 'unsolo' : 'solo'),
+              },
+            ];
+          })(),
           '-' as const,
         ]
       : [];

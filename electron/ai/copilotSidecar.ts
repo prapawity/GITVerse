@@ -10,6 +10,7 @@
  */
 import { createInterface } from 'node:readline';
 import type { NMsg } from '../../src/shared/aiTypes';
+import spec from '../../src/shared/aiSpec.json';
 import {
   configureCopilot,
   copilotAdvanceLogin,
@@ -51,6 +52,7 @@ const methods: Record<string, (p: P) => Promise<unknown> | unknown> = {
   cancelLogin: () => copilotCancelLogin(),
   reset: (p) => copilotResetConversation(p.convId),
   commit: (p) => copilotCommitMessage(p.diff, p.model ?? undefined, signalFor(180_000)),
+  pullRequest: (p) => copilotCommitMessage(p.prompt, p.model ?? undefined, signalFor(180_000), spec.prSystem),
   resolve: (p) => copilotResolve(p.prompt, p.model ?? undefined, signalFor(240_000)),
   turn: async (p) => {
     const reqId: number = p.reqId;

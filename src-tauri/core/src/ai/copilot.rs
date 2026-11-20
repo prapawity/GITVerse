@@ -313,6 +313,18 @@ impl Copilot {
         }
     }
 
+    pub async fn pull_request(&self, prompt: &str, model: Option<String>) -> MessageResult {
+        match self
+            .request("pullRequest", json!({ "prompt": prompt, "model": model }))
+            .await
+        {
+            Ok(v) => serde_json::from_value(v).unwrap_or_else(|_| {
+                MessageResult::failed(err(ErrKind::Other, "Copilot returned no answer."))
+            }),
+            Err(e) => MessageResult::failed(describe(&e)),
+        }
+    }
+
     pub async fn resolve(&self, prompt: &str, model: Option<String>) -> ResolveResult {
         match self
             .request("resolve", json!({ "prompt": prompt, "model": model }))

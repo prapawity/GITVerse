@@ -4,6 +4,13 @@ import type { Commit, FileStatus, GraphLayout, StashRef } from '../shared/types'
 import type { ScanResult } from '../shared/repositoryScan';
 import { useSettings } from './settingsStore';
 import { desktopApi, type AnyAsync } from '../platform/api';
+import { historyScope } from '../lib/historyScope';
+import { entryFor, snapshot, useActionHistory } from '../lib/actionHistory';
+
+/** Fired with the repository path after a successful push when "open PR/MR after push" is on. */
+export const OPEN_REQUEST_AFTER_PUSH = 'gitverse:open-request-after-push';
+/** Ask the app to open the Push dialog for a repository (detail: path). */
+export const OPEN_PUSH_DIALOG = 'gitverse:open-push-dialog';
 
 const api = () => desktopApi();
 // page size follows the user's settings: "show all" means one unbounded page, otherwise the initial-commits value
@@ -189,8 +196,32 @@ export const useRepo = create<RepoState>((set, get) => {
     createAnnotatedTag: { label: 'Creating tag…', fail: 'Could not create tag' },
     branchAt: { label: 'Creating branch…', fail: 'Could not create branch', blocking: true },
     worktreeAdd: { label: 'Creating worktree…', fail: 'Could not create worktree' },
+    renameBranch: { label: 'Renaming branch…', fail: 'Could not rename the branch' },
+    pushTag: { label: 'Pushing tags…', fail: 'Could not push the tag' },
+    deleteTag: { label: 'Deleting tag…', fail: 'Could not delete the tag' },
+    addRemote: { label: 'Adding remote…', fail: 'Could not add the remote' },
+    removeRemote: { label: 'Removing remote…', fail: 'Could not remove the remote' },
+    ignorePath: { label: 'Updating .gitignore…', fail: 'Could not update .gitignore' },
+    lfsAction: { label: 'Git LFS…', fail: 'Git LFS failed' },
+    submoduleUpdate: { label: 'Updating submodules…', fail: 'Could not update submodules' },
+    worktreeRemove: { label: 'Removing worktree…', fail: 'Could not remove the worktree' },
+    worktreeLock: { label: 'Updating worktree…', fail: 'Could not change the worktree lock' },
+    applyPatch: { label: 'Applying patch…', fail: 'Could not apply the patch', blocking: true },
   };
   const short = (h: unknown) => String(h).slice(0, 7);
+  /** actions that Undo can reverse, with the name shown on the Undo button */
+  const UNDO_LABEL: Record<string, string> = {
+    reset: 'Reset',
+    merge: 'Merge',
+    rebaseOnto: 'Rebase',
+    cherryPick: 'Cherry-pick',
+    cherryPickMany: 'Cherry-pick',
+    revert: 'Revert',
+    squashCommits: 'Squash',
+    opContinue: 'Continue',
+    renameBranch: 'Rename branch',
+    applyPatch: 'Apply patch',
+  };
   const KIND = { rebase: 'Rebase', merge: 'Merge', 'cherry-pick': 'Cherry-pick', revert: 'Revert' } as const;
   /** Success message for a finished action (null = say nothing). Read after the refresh, so it can look at fresh state. */
   const doneMsg = (name: string, args: unknown[], before: RepoState['operation']): string | null => {
@@ -200,6 +231,32 @@ export const useRepo = create<RepoState>((set, get) => {
         return args[0] === 'all' ? 'Fetched from all remotes' : 'Pulled from remote';
       case 'pull':
         return 'Pulled the latest changes';
+      case 'renameBranch':
+        return `Renamed ${args[0]} to ${args[1]}`;
+      case 'pushTag':
+        return args[1] ? `Pushed tag ${args[1]} to ${args[0]}` : `Pushed all tags to ${args[0]}`;
+      case 'deleteTag':
+        return args[1] ? `Deleted tag ${args[0]} here and on ${args[1]}` : `Deleted tag ${args[0]}`;
+      case 'addRemote':
+        return `Added remote ${args[0]}`;
+      case 'removeRemote':
+        return `Removed remote ${args[0]}`;
+      case 'ignorePath':
+        return `Added ${args[0]} to .gitignore`;
+      case 'lfsAction':
+        return args[0] === 'install'
+          ? 'Git LFS initialised'
+          : args[0] === 'pull'
+            ? 'LFS files downloaded'
+            : `${args[0] === 'track' ? 'Tracking' : 'Stopped tracking'} ${args[1]} with LFS`;
+      case 'submoduleUpdate':
+        return args[0] ? `Updated submodule ${args[0]}` : 'Updated all submodules';
+      case 'worktreeRemove':
+        return 'Worktree removed';
+      case 'worktreeLock':
+        return args[1] ? 'Worktree locked' : 'Worktree unlocked';
+      case 'applyPatch':
+        return args[1] === 'am' ? 'Patch commits applied' : 'Patch applied to working files';
       case 'push':
         return 'Pushed to remote';
       case 'stash':
@@ -315,6 +372,7 @@ export const useRepo = create<RepoState>((set, get) => {
       await guard(
         async () => {
           await api().moveIndexHistory(cwd, direction);
+          useActionHistory.getState().markStaging();
           if (get().repoPath === cwd) {
             await get().refreshStatus();
           }
@@ -464,10 +522,20 @@ export const useRepo = create<RepoState>((set, get) => {
       let stopped = false;
       const before = get().operation;
       const op = OPS[name] ?? { label: 'Working…', fail: 'Action failed' };
+      const repo = get().repoPath;
+      const start = snapshot(get().refs);
+      const record = () => {
+        const label = UNDO_LABEL[name];
+        if (!label || !repo || get().repoPath !== repo) return;
+        const kind = name === 'renameBranch' ? 'rename' : 'history';
+        const entry = entryFor(label, kind, start, snapshot(get().refs));
+        if (entry) useActionHistory.getState().record(repo, entry);
+      };
       return guard(
         async () => {
           stopped = await attempt(() => (api() as unknown as Record<string, AnyAsync>)[name](get().repoPath, ...args));
           await get().refresh();
+          record();
         },
         op.label,
         { blocking: op.blocking, fail: op.fail, done: () => (stopped ? null : doneMsg(name, args, before)) },
@@ -575,6 +643,8 @@ export const useRepo = create<RepoState>((set, get) => {
         );
       }
       if (get().repoPath === cwd) await get().refresh(true);
+      if (useSettings.getState().openRequestAfterPush)
+        window.dispatchEvent(new CustomEvent(OPEN_REQUEST_AFTER_PUSH, { detail: cwd }));
     },
 
     // background fetch: never shows a spinner or an error banner (being offline is normal)
@@ -598,10 +668,11 @@ export const useRepo = create<RepoState>((set, get) => {
           try {
             const limit = Math.max(pageSize(), silent ? get().commits.length : 0);
             const sort = useSettings.getState().graphSort;
-            const [commits, status, refs, operation] = await Promise.all([
-              api().log(cwd, limit, 0, sort),
+            // refs first: the hide/solo filter only names refs that still exist
+            const refs = await api().refs(cwd);
+            const [commits, status, operation] = await Promise.all([
+              api().log(cwd, limit, 0, sort, historyScope(cwd, refs)),
               api().status(cwd),
-              api().refs(cwd),
               api().opState(cwd),
             ]);
             if (get().repoPath !== cwd || useSettings.getState().graphSort !== sort) return; // history request became stale
@@ -641,7 +712,7 @@ export const useRepo = create<RepoState>((set, get) => {
       const sort = useSettings.getState().graphSort;
       set({ loadingMore: true });
       try {
-        const next: Commit[] = await api().log(cwd, pageSize(), commits.length, sort);
+        const next: Commit[] = await api().log(cwd, pageSize(), commits.length, sort, historyScope(cwd, get().refs));
         // ignore the result if the repo was switched or refreshed while we were waiting
         if (get().repoPath !== cwd || get().commits !== commits || useSettings.getState().graphSort !== sort) return;
         const all = [...commits, ...next];
@@ -669,8 +740,9 @@ export const useRepo = create<RepoState>((set, get) => {
       set({ loadingMore: true });
       try {
         const sort = useSettings.getState().graphSort;
-        const index: number = await api().historyPosition(cwd, hash, sort);
-        const loaded: Commit[] = await api().log(cwd, Math.max(index + 1, commits.length), 0, sort);
+        const scope = historyScope(cwd, get().refs);
+        const index: number = await api().historyPosition(cwd, hash, sort, scope);
+        const loaded: Commit[] = await api().log(cwd, Math.max(index + 1, commits.length), 0, sort, scope);
         if (get().repoPath !== cwd || useSettings.getState().graphSort !== sort) return false;
         if (get().commits !== commits) {
           if (get().commits.some((c) => c.hash === hash)) return true;
@@ -710,8 +782,12 @@ export const useRepo = create<RepoState>((set, get) => {
     checkout: (ref) =>
       guard(
         async () => {
-          await api().checkout(get().repoPath, ref);
+          const repo = get().repoPath;
+          const start = snapshot(get().refs);
+          await api().checkout(repo, ref);
           await get().refresh();
+          const entry = entryFor(`Checkout ${ref}`, 'checkout', start, snapshot(get().refs));
+          if (repo && entry && get().repoPath === repo) useActionHistory.getState().record(repo, entry);
         },
         'Checking out…',
         { blocking: true, fail: 'Checkout failed', done: `Checked out “${ref}”` },

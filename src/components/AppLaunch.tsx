@@ -6,7 +6,9 @@ import { LaunchScreen } from './LaunchScreen';
 import { UpdateNotice } from './UpdateNotice';
 import { ReleasePicker } from './ReleasePicker';
 import { useSettings } from '../store/settingsStore';
+import { useResolvedTheme } from '../lib/theme';
 import { platformApi, desktopApi } from '../platform/api';
+import { isVersionUnstable } from '../lib/crashLog';
 
 export function AppLaunch({ children }: { children: React.ReactNode }) {
   const [result, setResult] = useState<AppUpdateCheck | null>(null);
@@ -15,8 +17,10 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
   const [fading, setFading] = useState(false);
   const [finished, setFinished] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  // only offer another version when this one has crashed or hung 5 or more times
+  const [unstable] = useState(() => isVersionUnstable(version));
   const loading = useRepo((state) => state.loading);
-  const theme = useSettings((state) => state.theme);
+  const theme = useResolvedTheme();
   // apply the saved theme before the first paint so the launch screen never flashes the default palette
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -95,7 +99,7 @@ export function AppLaunch({ children }: { children: React.ReactNode }) {
               <button onClick={() => setAccepted(true)}>Continue</button>
             </>
           )}
-          {!fading && <button onClick={() => setShowVersions(true)}>Download another version</button>}
+          {!fading && unstable && <button onClick={() => setShowVersions(true)}>Download another version</button>}
         </LaunchScreen>
       )}
       {showVersions && (

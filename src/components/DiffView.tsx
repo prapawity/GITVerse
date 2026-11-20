@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Columns2, FilePen, History, Loader2, Rows2, Trash2, UserRound, X } from 'lucide-react';
+import { Columns2, FilePen, History, Loader2, Rows2, SquareArrowOutUpRight, Trash2, UserRound, X } from 'lucide-react';
 import { highlight, parseDiff, toSplit, type DiffLine } from '../lib/diff';
 import { Markdown } from '../lib/markdown';
 import { relTime } from './CommitGraph';
@@ -9,6 +9,7 @@ import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
 import { isJsonFile, isSvgFile, JsonPreview, MediaPreview, mediaType } from './MediaPreview';
 import { desktopApi } from '../platform/api';
+import { useActionHistory } from '../lib/actionHistory';
 
 const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-danger/[0.14]', ctx: '' } as const;
 const SIGN = { add: '+', del: '−', ctx: '' } as const;
@@ -233,6 +234,7 @@ export function DiffView({
     setDiscarding(true);
     setDiscardError('');
     try {
+      useActionHistory.getState().markStaging();
       await api().stageWorkingHunk(repoPath, file.path, area, diff.data, hunk);
       if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
         setDiscardRevision((value) => value + 1);
@@ -363,6 +365,28 @@ export function DiffView({
             className="shrink-0 rounded p-1.5 text-danger hover:bg-danger/15 disabled:opacity-40"
           >
             {discarding ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+          </button>
+        )}
+        {area && area !== 'untracked' && (
+          <button
+            onClick={() =>
+              void api()
+                .externalTool(repoPath, 'diff', file.path, area === 'staged')
+                .catch((e: Error) =>
+                  useRepo
+                    .getState()
+                    .notify(
+                      'error',
+                      'Could not open the diff tool',
+                      e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''),
+                    ),
+                )
+            }
+            aria-label="Open in external diff tool"
+            title="Open in external diff tool (git difftool)"
+            className="btn-ghost shrink-0 p-1.5"
+          >
+            <SquareArrowOutUpRight size={16} />
           </button>
         )}
         <button onClick={onClose} aria-label="Close file changes" title="Close (Esc)" className="btn-ghost p-1">

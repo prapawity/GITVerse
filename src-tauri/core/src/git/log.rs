@@ -3,6 +3,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use super::manage::HistoryScope;
 use super::{GitRunner, RunOpts};
 use crate::error::{AppError, Result};
 
@@ -139,6 +140,20 @@ pub async fn log_sorted(
     skip: u64,
     sort: &str,
 ) -> Result<Vec<Commit>> {
+    log_scoped(git, cwd, limit, skip, sort, &HistoryScope::default()).await
+}
+
+/// `log` in git.ts: history of every ref, minus hidden refs, or only the solo refs.
+pub async fn log_scoped(
+    git: &GitRunner,
+    cwd: &Path,
+    limit: u64,
+    skip: u64,
+    sort: &str,
+    scope: &HistoryScope,
+) -> Result<Vec<Commit>> {
+    let revisions = scope.revisions()?;
+    let solo = scope.is_solo();
     let order = history_order(sort)?;
     let stashes = super::refs::stash_entries(git, cwd).await?;
     let fmt = format!(
@@ -151,26 +166,20 @@ pub async fn log_sorted(
         format!("-n{limit}"),
         format!("--format={fmt}"),
     );
-    let mut args = vec![
-        "log",
-        "--branches",
-        "--remotes",
-        "--tags",
-        order,
-        "--decorate=full",
-        &skip,
-        &limit,
-        &fmt,
-    ];
-    if has_head {
+    let mut args = vec!["log"];
+    args.extend(revisions.iter().map(String::as_str));
+    args.extend([order, "--decorate=full", &skip, &limit, &fmt]);
+    if has_head && !solo {
         args.push("HEAD");
     }
-    args.extend(
-        stashes
-            .iter()
-            .map(|stash| stash.base_hash.as_str())
-            .filter(|hash| !hash.is_empty()),
-    );
+    if !solo {
+        args.extend(
+            stashes
+                .iter()
+                .map(|stash| stash.base_hash.as_str())
+                .filter(|hash| !hash.is_empty()),
+        );
+    }
     Ok(parse_log(&git.run(cwd, &args, RunOpts::default()).await?))
 }
 
@@ -189,22 +198,38 @@ pub async fn history_position_sorted(
     hash: &str,
     sort: &str,
 ) -> Result<usize> {
+    history_position_scoped(git, cwd, hash, sort, &HistoryScope::default()).await
+}
+
+pub async fn history_position_scoped(
+    git: &GitRunner,
+    cwd: &Path,
+    hash: &str,
+    sort: &str,
+    scope: &HistoryScope,
+) -> Result<usize> {
+    let revisions = scope.revisions()?;
+    let solo = scope.is_solo();
     let order = history_order(sort)?;
     if !is_object_id(hash) {
         return Err(AppError::Invalid("Invalid commit ID.".into()));
     }
     let stashes = super::refs::stash_entries(git, cwd).await?;
     let has_head = git.succeeds(cwd, &["rev-parse", "--verify", "HEAD"]).await;
-    let mut args = vec!["rev-list", "--branches", "--remotes", "--tags", order];
-    if has_head {
+    let mut args = vec!["rev-list"];
+    args.extend(revisions.iter().map(String::as_str));
+    args.push(order);
+    if has_head && !solo {
         args.push("HEAD");
     }
-    args.extend(
-        stashes
-            .iter()
-            .map(|stash| stash.base_hash.as_str())
-            .filter(|hash| !hash.is_empty()),
-    );
+    if !solo {
+        args.extend(
+            stashes
+                .iter()
+                .map(|stash| stash.base_hash.as_str())
+                .filter(|hash| !hash.is_empty()),
+        );
+    }
     let out = git.run(cwd, &args, RunOpts::default()).await?;
     out.split('\n')
         .position(|line| line == hash)
