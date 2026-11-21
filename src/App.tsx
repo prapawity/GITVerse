@@ -27,7 +27,7 @@ import {
   Rocket,
 } from 'lucide-react';
 import { Panel, Group, Separator, usePanelRef } from 'react-resizable-panels';
-import { CommitGraph } from './components/CommitGraph';
+import { CommitGraph, type WorktreeWip } from './components/CommitGraph';
 import { CommitMenu } from './components/CommitMenu';
 import { askConfirm, askFlow, askText, DialogHost } from './components/Dialogs';
 import { DetailsPanel, type ChangedFile } from './components/DetailsPanel';
@@ -518,6 +518,47 @@ export default function App() {
             : range
               ? 'combined'
               : 'details';
+
+  // other worktrees of this repository with uncommitted work: one WIP row each in the graph
+  const [worktreeWips, setWorktreeWips] = useState<WorktreeWip[]>([]);
+  useEffect(() => {
+    if (!repoPath) return setWorktreeWips([]);
+    const cwd = repoPath;
+    let active = true;
+    const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
+    const load = async () => {
+      const api = platformApi();
+      if (!api?.inspectWorkspace || document.visibilityState !== 'visible') return;
+      try {
+        const info: { worktrees: { path: string; head: string; branch?: string; bare: boolean; prunable: boolean }[] } =
+          await api.inspectWorkspace(cwd);
+        const others = info.worktrees.filter((w) => !w.bare && !w.prunable && norm(w.path) !== norm(cwd) && w.head);
+        const withChanges = await Promise.all(
+          others.map(async (w) => {
+            const files: unknown[] = await api.status(w.path).catch(() => []);
+            return {
+              path: w.path,
+              name: w.path.split(/[\\/]/).filter(Boolean).pop() ?? w.path,
+              branch: w.branch ? w.branch.replace(/^refs\/heads\//, '') : null,
+              head: w.head,
+              changes: files.length,
+            };
+          }),
+        );
+        if (active && useRepo.getState().repoPath === cwd) setWorktreeWips(withChanges.filter((w) => w.changes > 0));
+      } catch {
+        if (active) setWorktreeWips([]);
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 30_000);
+    window.addEventListener('focus', load);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener('focus', load);
+    };
+  }, [repoPath, status.length]);
 
   // ---- show / hide the side panels to give the graph more room (Cmd+B, Cmd+Alt+B) ----
   const leftOpen = useSettings((s) => s.leftPanelOpen);
@@ -1918,6 +1959,8 @@ export default function App() {
                           }
                           wipSelected={workingView}
                           onSelectWip={showWorking}
+                          worktreeWips={worktreeWips}
+                          onOpenWorktree={(path) => void openRepo(path)}
                           navigate={navigation}
                           onLocateCurrent={() => {
                             if (headHash) void navigateToHash(headHash);

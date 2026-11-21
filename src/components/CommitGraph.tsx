@@ -12,6 +12,14 @@ const ROW_H = 28;
 const LANE_W = 16;
 const PAD = 12;
 const AV = 9; // avatar radius
+
+export interface WorktreeWip {
+  path: string;
+  name: string;
+  branch: string | null;
+  head: string;
+  changes: number;
+}
 const DOT = 3.5; // merge-commit dot radius
 const REF_W = 150;
 const GRAPH_MIN = 80;
@@ -65,6 +73,9 @@ interface Props {
   stagedCount?: number;
   wipSelected: boolean;
   onSelectWip: () => void;
+  /** other worktrees of this repository with uncommitted changes: one WIP row each */
+  worktreeWips?: WorktreeWip[];
+  onOpenWorktree?: (path: string) => void;
   navigate?: { hash: string; id: number } | null;
   onLocateCurrent?: () => void;
   upstream?: { name: string; ahead: number; behind: number; gone: boolean };
@@ -143,6 +154,8 @@ export function CommitGraph({
   stagedCount = 0,
   wipSelected,
   onSelectWip,
+  worktreeWips = [],
+  onOpenWorktree,
   navigate,
   onLocateCurrent,
   upstream,
@@ -190,8 +203,12 @@ export function CommitGraph({
   const rows = filter ? layout.rows.filter((r) => matches(r, filter)) : layout.rows;
   const headIndex = headHash ? rows.findIndex((row) => row.commit.hash === headHash) : -1;
   const showLines = !filter;
-  const wipRows = changeCount > 0 && showLines ? 1 : 0;
-  const wipOffset = wipRows * LANE_W;
+  // the main working tree's WIP row is row -1 (just above the history); other worktrees sit above it
+  const mainWip = changeCount > 0 && showLines;
+  const extraWips = showLines ? worktreeWips : [];
+  const wipRows = (mainWip ? 1 : 0) + extraWips.length;
+  const extraAt = (i: number) => (i < 0 && !(mainWip && i === -1) ? (extraWips[i + wipRows] ?? null) : null);
+  const wipOffset = (mainWip ? 1 : 0) * LANE_W;
   const totalRows = rows.length + wipRows;
   const scrollHeight = totalRows * ROW_H + Math.max(0, (size.h - ROW_H) / 2);
   // GitKraken keeps the graph column a fixed (user-resizable) width and lets wide histories scroll sideways
@@ -278,8 +295,57 @@ export function CommitGraph({
     const last = Math.min(rows.length - 1, Math.ceil((scrollTop + size.h) / ROW_H) + 1 - wipRows);
     const label = (i: number) => (rows[i] ? relTime(rows[i].commit.date) : '');
 
-    if (wipRows && scrollTop < ROW_H) {
-      const top = -scrollTop;
+    // other worktrees: a node on the commit they are on, dashed down to it
+    extraWips.forEach((wip, k) => {
+      const top = k * ROW_H - scrollTop;
+      if (top < -ROW_H || top > size.h) return;
+      const target = rows.findIndex((row) => row.commit.hash === wip.head);
+      const x = target >= 0 ? clampX(gx(rows[target].col)) : clampX(refW + PAD + LANE_W / 2 - gs);
+      if (hover === k - wipRows) {
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(0, top, size.w, ROW_H);
+      }
+      ctx.save();
+      ctx.strokeStyle = light ? 'rgba(120,80,190,0.7)' : 'rgba(200,170,255,0.75)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      if (target >= 0) {
+        ctx.beginPath();
+        ctx.moveTo(x, top + ROW_H / 2);
+        ctx.lineTo(x, (target + wipRows) * ROW_H - scrollTop + ROW_H / 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(x, top + ROW_H / 2, 6, 0, Math.PI * 2);
+      ctx.fillStyle = light ? '#f4f7fb' : '#1b2633';
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(msgX, top, availMsg, ROW_H);
+      ctx.clip();
+      ctx.fillStyle = light ? '#6a3fb0' : '#cdb4ff';
+      ctx.font = `600 ${13 * fontScale}px Inter, system-ui, sans-serif`;
+      ctx.fillText('// WIP', msgX, top + ROW_H / 2);
+      ctx.font = font;
+      ctx.fillStyle = light ? '#5c6170' : '#a6adc8';
+      ctx.fillText(
+        `${wip.name}${wip.branch ? ` on ${wip.branch}` : ''}, ${wip.changes} changed${target < 0 ? ' (commit not loaded)' : ''}`,
+        msgX + 64 * fontScale,
+        top + ROW_H / 2,
+      );
+      ctx.restore();
+      if (graphFocused && keyboardRow === k - wipRows) {
+        ctx.strokeStyle = light ? '#6a3fb0' : '#cdb4ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, top + 1, Math.max(0, size.w - 2), ROW_H - 2);
+      }
+    });
+
+    if (mainWip && (wipRows - 1) * ROW_H - scrollTop > -ROW_H) {
+      const top = (wipRows - 1) * ROW_H - scrollTop;
       const x = clampX(refW + PAD + LANE_W / 2 - gs);
       if (wipSelected || hover === -1) {
         ctx.fillStyle = wipSelected ? 'rgba(79,193,233,0.14)' : 'rgba(255,255,255,0.04)';
@@ -354,9 +420,9 @@ export function CommitGraph({
     ctx.rect(gL, 0, graphW, size.h);
     ctx.clip();
     if (showLines) {
-      if (wipRows) {
+      if (mainWip) {
         const x = refW + PAD + LANE_W / 2 - gs;
-        const start = ROW_H / 2 - scrollTop;
+        const start = (wipRows - 1) * ROW_H + ROW_H / 2 - scrollTop;
         ctx.save();
         ctx.strokeStyle = light ? '#0089b3' : '#70efff';
         ctx.shadowColor = light ? '#009cc8' : '#39dfff';
@@ -647,6 +713,8 @@ export function CommitGraph({
     shaW,
     contentW,
     avatars.version,
+    extraWips,
+    mainWip,
   ]);
 
   useEffect(() => {
@@ -911,7 +979,9 @@ export function CommitGraph({
             }
           } else if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            if (keyboardRow === -1) onSelectWip();
+            const extra = keyboardRow !== null ? extraAt(keyboardRow) : null;
+            if (extra) onOpenWorktree?.(extra.path);
+            else if (keyboardRow === -1) onSelectWip();
             else if (rows[keyboardRow]) {
               const hash = rows[keyboardRow].commit.hash;
               anchor.current = hash;
@@ -962,6 +1032,12 @@ export function CommitGraph({
         }}
         onClick={(e) => {
           const i = rowAt(e);
+          const extra = i !== null ? extraAt(i) : null;
+          if (extra) {
+            setKeyboardRow(i);
+            onOpenWorktree?.(extra.path);
+            return;
+          }
           if (i === -1) {
             setKeyboardRow(-1);
             anchor.current = null;
@@ -1011,11 +1087,13 @@ export function CommitGraph({
         }}
       >
         <div id="graph-keyboard-description" className="sr-only" aria-live="polite">
-          {graphFocused && keyboardRow === -1
-            ? `Local changes, ${changeCount} files, ${stagedCount} staged`
-            : graphFocused && keyboardRow !== null && rows[keyboardRow]
-              ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${commitTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, stash ${rows[keyboardRow].commit.stashBranch ?? ''}` : ''}`
-              : ''}
+          {graphFocused && keyboardRow !== null && extraAt(keyboardRow)
+            ? `Worktree ${extraAt(keyboardRow)!.name}, ${extraAt(keyboardRow)!.changes} changed files. Press Enter to open it.`
+            : graphFocused && keyboardRow === -1
+              ? `Local changes, ${changeCount} files, ${stagedCount} staged`
+              : graphFocused && keyboardRow !== null && rows[keyboardRow]
+                ? `${rows[keyboardRow].commit.subject}, ${rows[keyboardRow].commit.author}, ${commitTime(rows[keyboardRow].commit.date)}, commit ${rows[keyboardRow].commit.hash.slice(0, 7)}${rows[keyboardRow].commit.hash === headHash ? ', current HEAD' : ''}${rows[keyboardRow].commit.stashId ? `, stash ${rows[keyboardRow].commit.stashBranch ?? ''}` : ''}`
+                : ''}
         </div>
         <div style={{ height: scrollHeight }} />
         {rows.map(
@@ -1040,7 +1118,21 @@ export function CommitGraph({
               />
             ),
         )}
-        {wipRows > 0 && (
+        {extraWips.map((wip, k) => (
+          <button
+            key={wip.path}
+            type="button"
+            aria-label={`Worktree ${wip.name}${wip.branch ? ` on ${wip.branch}` : ''}, ${wip.changes} changed files. Open it`}
+            title={`${wip.path}\nClick to open this worktree`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenWorktree?.(wip.path);
+            }}
+            className="absolute left-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ai"
+            style={{ top: k * ROW_H }}
+          />
+        ))}
+        {mainWip && (
           <button
             type="button"
             aria-label={`Local changes, ${changeCount} changed files, ${stagedCount} staged`}
@@ -1049,7 +1141,8 @@ export function CommitGraph({
               e.stopPropagation();
               onSelectWip();
             }}
-            className="absolute left-0 top-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            className="absolute left-0 z-10 h-7 w-full cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            style={{ top: (wipRows - 1) * ROW_H }}
           />
         )}
         {maxMsgScroll > 0 &&
