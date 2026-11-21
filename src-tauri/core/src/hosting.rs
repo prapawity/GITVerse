@@ -297,8 +297,8 @@ async fn run(file: &std::path::Path, args: &[&str], input: &str) -> String {
     }
 }
 
-/// Credentials already on this machine that might work as an API token, most likely first.
-async fn candidates(kind: HostKind, host: &str, pushed: Vec<String>) -> Vec<(String, String)> {
+/// Credentials the user chose to check that might work as an API token, most likely first.
+async fn candidates(kind: HostKind, host: &str) -> Vec<(String, String)> {
     let mut found: Vec<(String, String)> = Vec::new();
     let mut add = |source: &str, token: Option<String>| {
         if let Some(t) = token.map(|t| t.trim().to_owned()).filter(|t| !t.is_empty()) {
@@ -307,8 +307,9 @@ async fn candidates(kind: HostKind, host: &str, pushed: Vec<String>) -> Vec<(Str
             }
         }
     };
-    for token in pushed {
-        add("push profile token", Some(token));
+    // The host goes into git's line-based credential protocol: never let it add lines.
+    if host.is_empty() || host.contains(['\n', '\r', '\0', '=']) {
+        return found;
     }
     let git = find_tool("git").unwrap_or_else(|| "git".into());
     let filled = run(
@@ -363,14 +364,13 @@ async fn candidates(kind: HostKind, host: &str, pushed: Vec<String>) -> Vec<(Str
     found
 }
 
-/// Check a new token before saving it, or the saved one; otherwise look for credentials already on
-/// this machine (push profile tokens, Git's saved login, gh/glab) and keep the first the host accepts.
+/// Check a new token before saving it, or the saved one; otherwise look for Git/CLI credentials
+/// after the user explicitly chooses to check them.
 pub async fn connect(
     secrets: &dyn SecretStore,
     kind: HostKind,
     host: &str,
     entered: Option<String>,
-    pushed: Vec<String>,
 ) -> Result<ConnectResult> {
     check_host(kind, host)?;
     let key = token_key(kind, host);
@@ -406,7 +406,7 @@ pub async fn connect(
         }
         tried.push("saved access token".into());
     }
-    for (source, token) in candidates(kind, host, pushed).await {
+    for (source, token) in candidates(kind, host).await {
         tried.push(source.clone());
         if let Some(account) = verify(kind, host, &token).await {
             secrets.set(&key, Some(&token))?;

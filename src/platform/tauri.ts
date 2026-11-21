@@ -160,8 +160,6 @@ export async function createTauriApi(): Promise<PlatformApi> {
           kind,
           host,
           token: options?.token ?? null,
-          repo: options?.repo ?? null,
-          profileIds: options?.profileIds ?? [],
         }),
     },
     stateStorage: {

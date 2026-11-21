@@ -20,17 +20,26 @@ const COMMAND: Record<string, string> = {
 
 // navigator is missing in older Node (tests); the app always has it
 const windows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform);
-/** Quote one argument for the terminal's shell. */
-export const shellQuote = (text: string) =>
-  windows ? `"${text.replace(/"/g, '\\"')}"` : `'${text.replace(/'/g, `'\\''`)}'`;
+/**
+ * Quote one argument for the terminal's shell, or null when it cannot be passed safely.
+ * On Windows the shell may be cmd (expands %VAR% and !VAR!, and has no escape for `"`) or PowerShell
+ * (expands $… and `…` in double quotes), so a task with any of those characters is never typed into
+ * the terminal; the caller hands it over on the clipboard instead.
+ */
+export function shellQuote(text: string, win = windows): string | null {
+  if (!win) return `'${text.replace(/'/g, `'\\''`)}'`;
+  return /["%!$`\r\n\0]/.test(text) ? null : `"${text}"`;
+}
 
-export function agentCommand(agent: string, task: string): { command: string; clipboard: boolean } {
+export function agentCommand(agent: string, task: string, win = windows): { command: string; clipboard: boolean } {
   const bin = COMMAND[agent];
   if (!bin) throw new Error('Unknown agent.');
   const style = PROMPT[agent] ?? 'clipboard';
-  if (style === 'arg' && task.trim()) return { command: `${bin} ${shellQuote(task.trim())}`, clipboard: false };
-  if (style === 'flag-i' && task.trim()) return { command: `${bin} -i ${shellQuote(task.trim())}`, clipboard: false };
-  return { command: bin, clipboard: !!task.trim() };
+  const text = task.trim();
+  const quoted = text && style !== 'clipboard' ? shellQuote(text, win) : null;
+  if (quoted && style === 'arg') return { command: `${bin} ${quoted}`, clipboard: false };
+  if (quoted && style === 'flag-i') return { command: `${bin} -i ${quoted}`, clipboard: false };
+  return { command: bin, clipboard: !!text };
 }
 
 /** `agent/fix-login-crash` from the task text. */

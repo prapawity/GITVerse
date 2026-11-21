@@ -448,17 +448,8 @@ pub async fn hosting_connect(
     kind: hosting::HostKind,
     host: String,
     token: Option<String>,
-    repo: Option<String>,
-    profile_ids: Vec<String>,
 ) -> Result<hosting::ConnectResult, gitverse_core::AppError> {
-    let pushed = match repo {
-        Some(repo) => profile_ids
-            .iter()
-            .filter_map(|id| app.secrets.get(&push_token_key(&repo, id)))
-            .collect(),
-        None => vec![],
-    };
-    hosting::connect(app.secrets.as_ref(), kind, &host, token, pushed).await
+    hosting::connect(app.secrets.as_ref(), kind, &host, token).await
 }
 
 #[tauri::command]

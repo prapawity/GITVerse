@@ -8,6 +8,16 @@ import type { Commit, FileChangeCount, FileStatus, RefLabel, StashDetail, StashR
 
 const run = promisify(execFile);
 
+/** Only HTTPS and SSH transports, whatever the URL or the user's git config says. */
+const CLONE_PROTOCOLS = [
+  '-c',
+  'protocol.allow=never',
+  '-c',
+  'protocol.https.allow=always',
+  '-c',
+  'protocol.ssh.allow=always',
+];
+
 export async function clone(
   url: string,
   destination: string,
@@ -18,7 +28,8 @@ export async function clone(
   const depth = options.depth ?? null;
   if (depth !== null && (!Number.isInteger(depth) || depth < 1 || depth > 1_000_000))
     throw new Error('Clone depth must be a whole number of commits.');
-  if (typeof url !== 'string' || /[\s\0]/.test(url) || !url || url.startsWith('-'))
+  // `::` is git's `<transport>::<address>` remote-helper syntax (ext::, fd::, …), never a plain URL.
+  if (typeof url !== 'string' || /[\s\0]/.test(url) || !url || url.startsWith('-') || url.includes('::'))
     throw new Error('Enter a valid HTTPS or SSH repository URL.');
   // A Windows drive path (C:\repo, C:/repo) also looks like `host:path`; it is a local path, not SSH.
   if (/^[a-zA-Z]:[\\/]/.test(url)) throw new Error('Enter a valid HTTPS or SSH repository URL.');
@@ -85,6 +96,7 @@ export async function clone(
         'git',
         [
           ...(credentials ? ['-c', 'credential.helper='] : []),
+          ...CLONE_PROTOCOLS,
           'clone',
           '--progress',
           ...(depth ? ['--depth', String(depth)] : []),
@@ -298,6 +310,7 @@ async function ensureTargetTreeSupported(cwd: string, ref: string, action: strin
 }
 
 export async function checkout(cwd: string, ref: string) {
+  assertNotOption('reference', ref);
   if (process.platform === 'win32') {
     const target = (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])).trim();
     await ensureTargetTreeSupported(cwd, target, 'check out');
@@ -727,6 +740,7 @@ export async function historyPosition(cwd: string, hash: string, sort = 'topo', 
 }
 
 export async function commitDetail(cwd: string, hash: string) {
+  assertNotOption('commit', hash);
   const body = (await git(cwd, ['show', '-s', '--format=%B', hash])).trim();
   const out = await git(cwd, ['show', '--name-status', '-z', '--format=', '--first-parent', hash]);
   const parts = out.split('\0').filter(Boolean);
@@ -1063,7 +1077,11 @@ export async function pushBranch(
     if (dir) await rm(dir, { recursive: true, force: true });
   }
 }
-export const createBranch = (cwd: string, name: string, from = 'HEAD') => git(cwd, ['checkout', '-b', name, from]);
+export const createBranch = (cwd: string, name: string, from = 'HEAD') => (
+  assertNotOption('branch name', name),
+  assertNotOption('start point', from),
+  git(cwd, ['checkout', '-b', name, from])
+);
 export const stash = (cwd: string, message?: string) =>
   git(cwd, ['stash', 'push', '--include-untracked', ...(message ? ['-m', message] : [])]);
 export const stashPop = (cwd: string) => git(cwd, ['stash', 'pop']);
@@ -1110,6 +1128,7 @@ export async function stashRename(cwd: string, id: string, message: string) {
 }
 
 export async function reset(cwd: string, hash: string, mode: 'soft' | 'mixed' | 'hard') {
+  assertNotOption('commit', hash);
   if (mode !== 'soft') {
     const target = (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${hash}^{commit}`])).trim();
     await ensureTargetTreeSupported(cwd, target, `${mode} reset to`);
@@ -1161,7 +1180,10 @@ export async function squashCommits(cwd: string, hashes: string[], message: stri
     await rm(dir, { recursive: true, force: true });
   }
 }
-export const cherryPick = (cwd: string, hash: string) => git(cwd, ['cherry-pick', hash]);
+export const cherryPick = (cwd: string, hash: string) => (
+  assertNotOption('commit', hash),
+  git(cwd, ['cherry-pick', hash])
+);
 export async function cherryPickMany(cwd: string, hashes: string[]) {
   if (
     !Array.isArray(hashes) ||
@@ -1246,8 +1268,11 @@ export async function stashFileAt(cwd: string, id: string, filePath: string): Pr
   if (!file || file.status === 'D') throw new Error('This file is not available in the selected stash.');
   return git(cwd, ['show', `${detail.hash}${file.untracked ? '^3' : ''}:${file.path}`]);
 }
-export const revert = (cwd: string, hash: string) => git(cwd, ['revert', '--no-edit', hash]);
-export const rebaseOnto = (cwd: string, hash: string) => git(cwd, ['rebase', hash]);
+export const revert = (cwd: string, hash: string) => (
+  assertNotOption('commit', hash),
+  git(cwd, ['revert', '--no-edit', hash])
+);
+export const rebaseOnto = (cwd: string, hash: string) => (assertNotOption('commit', hash), git(cwd, ['rebase', hash]));
 export async function rebasePreview(cwd: string, base: string) {
   if (typeof base !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(base))
     throw new Error('Select a valid commit as the base.');
@@ -1291,15 +1316,25 @@ export async function rebasePreview(cwd: string, base: string) {
     throw new Error('The branch changed while preparing the preview. Try again.');
   return { branch, head, base, upstream, commits };
 }
-export const createTag = (cwd: string, name: string, hash: string) => git(cwd, ['tag', name, hash]);
+export const createTag = (cwd: string, name: string, hash: string) => (
+  assertNotOption('tag name', name),
+  assertNotOption('commit', hash),
+  git(cwd, ['tag', name, hash])
+);
 export async function branchAt(cwd: string, name: string, hash: string) {
+  assertNotOption('branch name', name);
+  assertNotOption('commit', hash);
   await ensureTargetTreeSupported(cwd, hash, 'create a branch from');
   return git(cwd, ['checkout', '-b', name, hash]);
 }
-export const fileAt = (cwd: string, hash: string, path: string) => git(cwd, ['show', `${hash}:${path}`]);
+export const fileAt = (cwd: string, hash: string, path: string) => (
+  assertNotOption('commit', hash),
+  git(cwd, ['show', `${hash}:${path}`])
+);
 
 const MAX_BLOB_BYTES = 50 * 1024 * 1024;
 export async function fileBlobAt(cwd: string, hash: string, filePath: string): Promise<string> {
+  assertNotOption('commit', hash);
   const { stdout } = await run('git', ['show', `${hash}:${filePath}`], {
     cwd,
     encoding: 'buffer',
@@ -1313,24 +1348,37 @@ export async function fileBlobAt(cwd: string, hash: string, filePath: string): P
   return stdout.toString('base64');
 }
 export async function workingFileBlob(cwd: string, filePath: string): Promise<string> {
-  const root = await realpath(cwd);
-  const full = path.resolve(root, filePath);
-  if (path.relative(root, full).startsWith('..') || path.isAbsolute(path.relative(root, full)))
-    throw new Error('File is outside the repository.');
+  // workPath resolves symlinked parent directories, so a repo symlink cannot reach outside it.
+  const { full } = await workPath(cwd, filePath).catch((e: Error) => {
+    throw e.message === 'Path is outside the repository' ? new Error('File is outside the repository.') : e;
+  });
   const info = await lstat(full);
   if (!info.isFile()) throw new Error('Only regular files can be previewed.');
   if (info.size > MAX_BLOB_BYTES) throw new Error('File is too large to preview (over 50 MB).');
   return (await readFile(full)).toString('base64');
 }
 
+// Values placed where git parses options must not look like one (e.g. "--upload-pack=…").
+function assertNotOption(label: string, value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !value || value.startsWith('-')) throw new Error(`Invalid ${label}`);
+}
+
 export async function worktreeAdd(cwd: string, path: string, hash: string) {
+  assertNotOption('worktree path', path);
+  assertNotOption('commit', hash);
   await ensureTargetTreeSupported(cwd, hash, 'create a worktree from');
   return git(cwd, ['worktree', 'add', '--detach', path, hash]);
 }
 export const remoteUrl = async (cwd: string) => (await git(cwd, ['remote', 'get-url', 'origin'])).trim();
-export const formatPatch = (cwd: string, hash: string) => git(cwd, ['format-patch', '-1', '--stdout', hash]);
-export const createAnnotatedTag = (cwd: string, name: string, hash: string, message: string) =>
-  git(cwd, ['tag', '-a', name, '-m', message || name, hash]);
+export const formatPatch = (cwd: string, hash: string) => (
+  assertNotOption('commit', hash),
+  git(cwd, ['format-patch', '-1', '--stdout', hash])
+);
+export const createAnnotatedTag = (cwd: string, name: string, hash: string, message: string) => (
+  assertNotOption('tag name', name),
+  assertNotOption('commit', hash),
+  git(cwd, ['tag', '-a', name, '-m', message || name, hash])
+);
 
 export interface BlameLine {
   hash: string;
@@ -1338,6 +1386,7 @@ export interface BlameLine {
   time: number;
 }
 export async function fileBlame(cwd: string, hash: string, path: string): Promise<BlameLine[]> {
+  assertNotOption('commit', hash);
   const out = await git(cwd, ['blame', '--porcelain', hash, '--', path]);
   const meta = new Map<string, { author: string; time: number }>();
   const lines: BlameLine[] = [];
@@ -1526,8 +1575,10 @@ export async function writeWorkFile(cwd: string, rel: string, text: string) {
 }
 
 // GIT_EDITOR=true: accept the generated merge message instead of opening an editor we cannot show
-export const merge = (cwd: string, ref: string, noFf = true, ffOnly = false) =>
-  git(cwd, ['merge', ...(ffOnly ? ['--ff-only'] : noFf ? ['--no-ff'] : []), '--no-edit', ref], { GIT_EDITOR: 'true' });
+export const merge = (cwd: string, ref: string, noFf = true, ffOnly = false) => (
+  assertNotOption('reference', ref),
+  git(cwd, ['merge', ...(ffOnly ? ['--ff-only'] : noFf ? ['--no-ff'] : []), '--no-edit', ref], { GIT_EDITOR: 'true' })
+);
 /** Delete only when Git confirms the branch is merged locally or into a fetched remote tip. */
 export async function deleteBranch(cwd: string, name: string, force = false) {
   if (!name || name.startsWith('-') || name.includes('\0')) throw new Error('Invalid local branch name.');
@@ -2092,6 +2143,10 @@ export async function commitFiles(cwd: string, paths: string[], summary: string,
 export async function worktreeAddBranch(cwd: string, wtPath: string, branch: string, base: string) {
   if (typeof wtPath !== 'string' || !path.isAbsolute(wtPath) || wtPath.includes('\0'))
     throw new Error('Choose an absolute folder for the worktree.');
+  // Agent worktrees live only in `<parent>/<repo>.agents/` (agentWorktreePath), never anywhere else.
+  const agentsDir = path.join(path.dirname(path.resolve(cwd)), `${path.basename(path.resolve(cwd))}.agents`);
+  if (path.dirname(path.resolve(wtPath)) !== agentsDir)
+    throw new Error(`Agent worktrees must be created in ${agentsDir}.`);
   if (
     await access(wtPath).then(
       () => true,

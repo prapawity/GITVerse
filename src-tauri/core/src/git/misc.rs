@@ -7,7 +7,6 @@ use serde::Serialize;
 
 use super::log::is_object_id;
 use super::windows::ensure_target_tree_supported;
-use super::write::{canonical, within};
 use super::{op_state, stash_detail, status, GitRunner, RunOpts};
 use crate::error::{AppError, Result};
 
@@ -340,6 +339,7 @@ const MAX_BLOB_BYTES: usize = 50 * 1024 * 1024;
 
 /// A file's bytes at a commit, base64-encoded (images, media, binary previews).
 pub async fn file_blob_at(git: &GitRunner, cwd: &Path, hash: &str, path: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     let bytes = git
         .run_bytes(
             cwd,
@@ -354,23 +354,11 @@ pub async fn file_blob_at(git: &GitRunner, cwd: &Path, hash: &str, path: &str) -
 }
 
 pub fn working_file_blob(cwd: &Path, path: &str) -> Result<String> {
-    let root = canonical(cwd)?;
-    let full = root.join(path);
-    let normalized: std::path::PathBuf =
-        full.components()
-            .fold(std::path::PathBuf::new(), |mut acc, c| {
-                match c {
-                    std::path::Component::ParentDir => {
-                        acc.pop();
-                    }
-                    std::path::Component::CurDir => {}
-                    other => acc.push(other),
-                }
-                acc
-            });
-    if !within(&root, &normalized) {
-        return Err(invalid("File is outside the repository."));
-    }
+    // work_path canonicalises the parent, so a symlinked directory cannot reach outside the repo.
+    let (_, normalized) = super::write::work_path(cwd, path).map_err(|e| match e {
+        AppError::Invalid(_) => invalid("File is outside the repository."),
+        other => other,
+    })?;
     let meta = std::fs::symlink_metadata(&normalized)?;
     if !meta.is_file() {
         return Err(invalid("Only regular files can be previewed."));
@@ -382,6 +370,8 @@ pub fn working_file_blob(cwd: &Path, path: &str) -> Result<String> {
 }
 
 pub async fn worktree_add(git: &GitRunner, cwd: &Path, path: &str, hash: &str) -> Result<String> {
+    super::not_option("worktree path", path)?;
+    super::not_option("commit", hash)?;
     ensure_target_tree_supported(git, cwd, hash, "create a worktree from").await?;
     git.run(
         cwd,

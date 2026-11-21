@@ -462,6 +462,39 @@ pub async fn maintenance(git: &GitRunner, cwd: &Path) -> Result<MaintenanceResul
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn agent_worktrees_stay_in_the_agents_folder() {
+        let git = GitRunner::default();
+        // absolute on every platform (a leading `/` is not absolute on Windows)
+        let root = if cfg!(windows) {
+            "C:\\nonexistent"
+        } else {
+            "/nonexistent"
+        };
+        let repo = Path::new(root).join("gitverse").join("app");
+        for bad in [
+            Path::new(root).join("elsewhere").join("fix"),
+            Path::new(root)
+                .join("gitverse")
+                .join("app.agents")
+                .join("a")
+                .join("b"),
+            Path::new(root)
+                .join("gitverse")
+                .join("other.agents")
+                .join("fix"),
+        ] {
+            let bad = bad.to_str().unwrap();
+            let err = worktree_add_branch(&git, &repo, bad, "agent/x", "main")
+                .await
+                .unwrap_err();
+            assert!(
+                err.to_string().contains("must be created in"),
+                "{bad}: {err}"
+            );
+        }
+    }
+
     #[test]
     fn parses_submodule_status_lines() {
         let s = parse_submodule("-1234abcd libs/one").unwrap();
@@ -578,6 +611,17 @@ pub async fn worktree_add_branch(
     if !target.is_absolute() || path.contains('\0') {
         return Err(invalid("Choose an absolute folder for the worktree."));
     }
+    // Agent worktrees live only in `<parent>/<repo>.agents/` (agentWorktreePath), never anywhere else.
+    let agents_dir = match (cwd.parent(), cwd.file_name()) {
+        (Some(parent), Some(name)) => parent.join(format!("{}.agents", name.to_string_lossy())),
+        _ => return Err(invalid("Choose an absolute folder for the worktree.")),
+    };
+    if target.parent() != Some(agents_dir.as_path()) || target.file_name().is_none() {
+        return Err(invalid(format!(
+            "Agent worktrees must be created in {}.",
+            agents_dir.display()
+        )));
+    }
     if target.exists() {
         return Err(invalid(format!("{path} already exists.")));
     }
@@ -593,6 +637,8 @@ pub async fn worktree_add_branch(
     {
         return Err(invalid(format!("\"{branch}\" is not a valid branch name.")));
     }
+    super::not_option("worktree path", path)?;
+    super::not_option("base", base)?;
     let commit = format!("{base}^{{commit}}");
     if !git
         .succeeds(cwd, &["rev-parse", "--verify", "--quiet", &commit])

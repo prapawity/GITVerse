@@ -51,3 +51,11 @@ pub use stash::{
 pub use status::{parse_status, status, FileStatus};
 pub use windows::{windows_incompatible_paths, windows_unsupported_paths_for_ref};
 pub use write::*;
+
+/// Values placed where git parses options must not look like one (e.g. `--upload-pack=…`).
+pub(crate) fn not_option(label: &str, value: &str) -> crate::error::Result<()> {
+    if value.is_empty() || value.starts_with('-') || value.contains('\0') {
+        return Err(crate::error::AppError::Invalid(format!("Invalid {label}.")));
+    }
+    Ok(())
+}

@@ -14,7 +14,11 @@ fn invalid(m: &str) -> AppError {
 
 pub fn validate_clone_url(url: &str) -> Result<()> {
     let bad = || invalid("Enter a valid HTTPS or SSH repository URL.");
-    if url.is_empty() || url.starts_with('-') || url.chars().any(|c| c.is_whitespace() || c == '\0')
+    // `::` is git's `<transport>::<address>` remote-helper syntax (ext::, fd::, …), never a plain URL.
+    if url.is_empty()
+        || url.starts_with('-')
+        || url.contains("::")
+        || url.chars().any(|c| c.is_whitespace() || c == '\0')
     {
         return Err(bad());
     }
@@ -125,6 +129,15 @@ pub async fn clone_with_options(
             .env("GITVERSE_PUSH_TOKEN", password);
         _auth_dir = Some(dir);
     }
+    // Only HTTPS and SSH transports, whatever the URL or the user's git config says.
+    cmd.args([
+        "-c",
+        "protocol.allow=never",
+        "-c",
+        "protocol.https.allow=always",
+        "-c",
+        "protocol.ssh.allow=always",
+    ]);
     cmd.args(["clone", "--progress"]);
     if let Some(d) = &depth_arg {
         cmd.args(["--depth", d]);
@@ -211,6 +224,9 @@ mod tests {
             "/tmp/repo",
             "https://u:p@h/r",
             "a b",
+            "ext::/bin/evil",
+            "fd::3",
+            "git@h:a::b",
         ] {
             assert!(validate_clone_url(bad).is_err(), "{bad}");
         }

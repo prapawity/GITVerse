@@ -1,3 +1,4 @@
+import { isAppUrl } from './ipcGuard';
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -506,8 +507,35 @@ app.whenReady().then(async () => {
     width: 1500,
     height: 900,
     backgroundColor: '#1e1e2e',
-    webPreferences: { preload: path.join(__dirname, '../preload/preload.js'), contextIsolation: true },
+    webPreferences: { preload: path.join(__dirname, '../preload/preload.js'), contextIsolation: true, sandbox: true },
   });
+  lockDownNavigation(win);
   if (process.env.VITE_DEV_SERVER_URL) win.loadURL(process.env.VITE_DEV_SERVER_URL);
   else win.loadFile(path.join(__dirname, '../../dist/index.html'));
 });
+
+// The renderer holds the full gitApi bridge, so no other page may ever load into an app window:
+// links open in the system browser and in-window navigation away from the app is blocked.
+function openExternally(url: string): void {
+  try {
+    if (new URL(url).protocol === 'https:') void shell.openExternal(url);
+  } catch {
+    // malformed URL: ignore
+  }
+}
+
+function lockDownNavigation(win: BrowserWindow): void {
+  const wc = win.webContents;
+  wc.setWindowOpenHandler(({ url }) => {
+    openExternally(url);
+    return { action: 'deny' };
+  });
+  const guard = (event: { preventDefault(): void }, url: string) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    openExternally(url);
+  };
+  wc.on('will-navigate', guard);
+  wc.on('will-redirect', guard);
+  wc.on('will-attach-webview', (event) => event.preventDefault());
+}
