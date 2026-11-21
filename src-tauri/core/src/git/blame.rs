@@ -107,7 +107,7 @@ pub async fn file_history(
         .map(|record| {
             let mut lines = record.lines().filter(|l| !l.is_empty());
             let header = lines.next().unwrap_or_default();
-            let file = lines.last().unwrap_or(path).to_owned();
+            let file = lines.next_back().unwrap_or(path).to_owned();
             let mut f = header.split('\u{1f}');
             let mut next = || f.next().unwrap_or_default().to_owned();
             FileHistoryEntry {

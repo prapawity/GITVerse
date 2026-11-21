@@ -69,12 +69,20 @@ test('commit composer plans keep every file exactly once', async () => {
 
 test('agent sessions: command, quoting, branch and folder names', async () => {
   const { agentCommand, agentBranchName, agentWorktreePath, shellQuote } = await import('./agentCommands');
-  assert.equal(shellQuote("it's done"), `'it'\\''s done'`);
-  assert.deepEqual(agentCommand('claude', "Fix the user's login"), {
-    command: `claude 'Fix the user'\\''s login'`,
-    clipboard: false,
-  });
-  assert.deepEqual(agentCommand('gemini', 'Add tests'), { command: `gemini -i 'Add tests'`, clipboard: false });
+  // quoting follows the shell of the platform the app runs on (cmd / PowerShell on Windows)
+  const windows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform);
+  if (windows) {
+    assert.equal(shellQuote('say "hi"'), '"say \\"hi\\""');
+    assert.deepEqual(agentCommand('claude', 'Fix it'), { command: 'claude "Fix it"', clipboard: false });
+  } else {
+    assert.equal(shellQuote("it's done"), `'it'\\''s done'`);
+    assert.deepEqual(agentCommand('claude', "Fix the user's login"), {
+      command: `claude 'Fix the user'\\''s login'`,
+      clipboard: false,
+    });
+    assert.deepEqual(agentCommand('gemini', 'Add tests'), { command: `gemini -i 'Add tests'`, clipboard: false });
+  }
+
   assert.deepEqual(agentCommand('copilot', 'Add tests'), { command: 'copilot', clipboard: true });
   assert.equal(
     agentBranchName('Add input validation to the login form!', 'claude'),

@@ -18,7 +18,8 @@ const COMMAND: Record<string, string> = {
   opencode: 'opencode',
 };
 
-const windows = /Win/.test(navigator.platform);
+// navigator is missing in older Node (tests); the app always has it
+const windows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform);
 /** Quote one argument for the terminal's shell. */
 export const shellQuote = (text: string) =>
   windows ? `"${text.replace(/"/g, '\\"')}"` : `'${text.replace(/'/g, `'\\''`)}'`;
