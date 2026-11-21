@@ -310,11 +310,12 @@ button {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateX(16px);
+    translate: 16px 0;
   }
   to {
     opacity: 1;
-    transform: none;
+    translate: 0 0;
+    scale: 1;
   }
 }
 @keyframes fade-in {
@@ -420,34 +421,40 @@ select option {
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: translateY(-4px) scale(0.98);
+    translate: 0 -4px;
+    scale: 0.98;
   }
   to {
     opacity: 1;
-    transform: none;
+    translate: 0 0;
+    scale: 1;
   }
 }
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.97);
+    translate: 0 8px;
+    scale: 0.97;
   }
   to {
     opacity: 1;
-    transform: none;
+    translate: 0 0;
+    scale: 1;
   }
 }
 @keyframes slide-down {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    translate: 0 -6px;
   }
   to {
     opacity: 1;
-    transform: none;
+    translate: 0 0;
+    scale: 1;
   }
 }
-/* menus, dropdowns, popovers */
+/* menus, dropdowns, popovers. The keyframes animate translate / scale (not transform), so they add to an
+   element's own positioning transform (e.g. -translate-x-1/2) instead of replacing it mid-animation. */
 .pop-in {
   animation: pop-in 140ms ease-out;
   transform-origin: top;
@@ -493,19 +500,21 @@ a,
 @keyframes dialog-out {
   to {
     opacity: 0;
-    transform: translateY(6px) scale(0.97);
+    translate: 0 6px;
+    scale: 0.97;
   }
 }
 @keyframes pop-out {
   to {
     opacity: 0;
-    transform: translateY(-4px) scale(0.98);
+    translate: 0 -4px;
+    scale: 0.98;
   }
 }
 @keyframes toast-out {
   to {
     opacity: 0;
-    transform: translateX(16px);
+    translate: 16px 0;
   }
 }
 .exit-fade {
@@ -589,25 +598,25 @@ svg.lucide {
 @keyframes panel-in-left {
   from {
     opacity: 0;
-    transform: translateX(-24px);
+    translate: -24px 0;
   }
 }
 @keyframes panel-in-right {
   from {
     opacity: 0;
-    transform: translateX(24px);
+    translate: 24px 0;
   }
 }
 @keyframes panel-out-left {
   to {
     opacity: 0;
-    transform: translateX(-24px);
+    translate: -24px 0;
   }
 }
 @keyframes panel-out-right {
   to {
     opacity: 0;
-    transform: translateX(24px);
+    translate: 24px 0;
   }
 }
 .panel-enter-left {
