@@ -171,11 +171,18 @@ test('commitFiles commits exactly the chosen files and leaves other staged work 
 test('worktreeAddBranch creates a branch in a new folder and refuses bad input', async () => {
   const dir = repo();
   commit(dir, 'a.txt', 'a\n', 'first');
-  const wt = path.join(mkdtempSync(path.join(tmpdir(), 'gitverse-agent-')), 'fix-login');
+  const wt = path.join(`${dir}.agents`, 'fix-login');
   await git.worktreeAddBranch(dir, wt, 'agent/fix-login', 'main');
   assert.equal(run(wt, 'branch', '--show-current'), 'agent/fix-login');
   await assert.rejects(git.worktreeAddBranch(dir, wt, 'agent/other', 'main'), /already exists/);
   await assert.rejects(git.worktreeAddBranch(dir, `${wt}-2`, 'bad name', 'main'));
   await assert.rejects(git.worktreeAddBranch(dir, `${wt}-3`, 'agent/x', 'no-such-base'), /not found/);
   await assert.rejects(git.worktreeAddBranch(dir, 'relative/path', 'agent/y', 'main'));
+  // only `<repo>.agents/<leaf>` is accepted
+  const outside = path.join(mkdtempSync(path.join(tmpdir(), 'gitverse-agent-')), 'fix');
+  await assert.rejects(git.worktreeAddBranch(dir, outside, 'agent/z', 'main'), /must be created in/);
+  await assert.rejects(
+    git.worktreeAddBranch(dir, path.join(`${dir}.agents`, 'a', 'b'), 'agent/w', 'main'),
+    /must be created in/,
+  );
 });

@@ -2143,6 +2143,10 @@ export async function commitFiles(cwd: string, paths: string[], summary: string,
 export async function worktreeAddBranch(cwd: string, wtPath: string, branch: string, base: string) {
   if (typeof wtPath !== 'string' || !path.isAbsolute(wtPath) || wtPath.includes('\0'))
     throw new Error('Choose an absolute folder for the worktree.');
+  // Agent worktrees live only in `<parent>/<repo>.agents/` (agentWorktreePath), never anywhere else.
+  const agentsDir = path.join(path.dirname(path.resolve(cwd)), `${path.basename(path.resolve(cwd))}.agents`);
+  if (path.dirname(path.resolve(wtPath)) !== agentsDir)
+    throw new Error(`Agent worktrees must be created in ${agentsDir}.`);
   if (
     await access(wtPath).then(
       () => true,
