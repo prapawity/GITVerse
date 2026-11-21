@@ -1,6 +1,7 @@
 import { ipcMain, type WebContents } from 'electron';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
 import { homedir } from 'node:os';
 
 /**
@@ -73,8 +74,28 @@ try {
 const terms = new Map<number, Term>();
 let seq = 0;
 
+const KNOWN_SHELLS = new Set(['sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'tcsh', 'csh', 'nu', 'elvish', 'xonsh',
+  'pwsh', 'powershell', 'cmd', 'wsl', 'git-bash']);
+
+// A custom shell must be an absolute path to a regular file named like a shell, or listed in /etc/shells.
+function allowedShell(custom: string): boolean {
+  if (!path.isAbsolute(custom)) return false;
+  try {
+    if (!statSync(custom).isFile()) return false;
+  } catch {
+    return false;
+  }
+  const name = path.basename(custom).toLowerCase().replace(/\.exe$/, '');
+  if (KNOWN_SHELLS.has(name)) return true;
+  try {
+    return readFileSync('/etc/shells', 'utf8').split('\n').some((l) => l.trim() === custom);
+  } catch {
+    return false;
+  }
+}
+
 function shellPath(custom?: string) {
-  if (custom && existsSync(custom)) return custom;
+  if (typeof custom === 'string' && custom && allowedShell(custom)) return custom;
   if (process.platform === 'win32') return process.env.COMSPEC || 'powershell.exe';
   const s = process.env.SHELL;
   return s && existsSync(s) ? s : existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/bash';
@@ -179,11 +200,23 @@ function start(sender: WebContents, cwd: string, cols: number, rows: number, cus
   return id;
 }
 
+function isDir(p: string): boolean {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 export function registerTerminal() {
   ipcMain.handle('term:spawn', (e, cwd: string, cols: number, rows: number, shell?: string) =>
-    start(e.sender, cwd && existsSync(cwd) ? cwd : homedir(), Math.max(20, cols | 0), Math.max(5, rows | 0), shell),
+    start(
+      e.sender,
+      typeof cwd === 'string' && path.isAbsolute(cwd) && isDir(cwd) ? cwd : homedir(), Math.max(20, cols | 0), Math.max(5, rows | 0), shell),
   );
-  ipcMain.handle('term:write', (_e, id: number, data: string) => terms.get(id)?.write(data));
+  ipcMain.handle('term:write', (_e, id: number, data: string) => {
+    if (typeof data === 'string') terms.get(id)?.write(data);
+  });
   ipcMain.handle('term:resize', (_e, id: number, c: number, r: number) =>
     terms.get(id)?.resize(Math.max(20, c | 0), Math.max(5, r | 0)),
   );

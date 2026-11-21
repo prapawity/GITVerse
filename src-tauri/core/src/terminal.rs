@@ -34,9 +34,49 @@ fn clamp(cols: u16, rows: u16) -> PtySize {
     }
 }
 
-/// Same choice as shellPath() in TS: a custom shell if it exists, else the platform default.
+const KNOWN_SHELLS: &[&str] = &[
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "dash",
+    "ksh",
+    "tcsh",
+    "csh",
+    "nu",
+    "elvish",
+    "xonsh",
+    "pwsh",
+    "powershell",
+    "cmd",
+    "wsl",
+    "git-bash",
+];
+
+/// Same rule as allowedShell() in TS: a custom shell must be an absolute path to a regular file
+/// named like a shell, or listed in /etc/shells.
+fn allowed_shell(custom: &str) -> bool {
+    let p = Path::new(custom);
+    if !p.is_absolute() || !p.is_file() {
+        return false;
+    }
+    let name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let name = name.strip_suffix(".exe").unwrap_or(&name);
+    if KNOWN_SHELLS.contains(&name) {
+        return true;
+    }
+    std::fs::read_to_string("/etc/shells")
+        .map(|s| s.lines().any(|l| l.trim() == custom))
+        .unwrap_or(false)
+}
+
+/// Same choice as shellPath() in TS: an allowed custom shell, else the platform default.
 pub fn shell_path(custom: Option<&str>) -> PathBuf {
-    if let Some(c) = custom.filter(|c| !c.is_empty() && Path::new(c).exists()) {
+    if let Some(c) = custom.filter(|c| !c.is_empty() && allowed_shell(c)) {
         return PathBuf::from(c);
     }
     if cfg!(windows) {
@@ -104,7 +144,7 @@ impl Terminals {
         if !cfg!(windows) {
             cmd.arg("-l");
         }
-        let cwd = if cwd.is_dir() {
+        let cwd = if cwd.is_absolute() && cwd.is_dir() {
             cwd.to_path_buf()
         } else {
             home()
@@ -253,6 +293,17 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
     use std::time::Duration;
+
+    #[test]
+    fn custom_shell_must_be_an_absolute_known_shell() {
+        assert!(!allowed_shell("zsh"));
+        assert!(!allowed_shell("/definitely/missing/zsh"));
+        if cfg!(unix) {
+            assert!(allowed_shell("/bin/sh"));
+            assert!(!allowed_shell("/usr/bin/env"));
+            assert_eq!(shell_path(Some("/usr/bin/env")), shell_path(None));
+        }
+    }
 
     #[test]
     fn utf8_stream_keeps_split_characters_together() {

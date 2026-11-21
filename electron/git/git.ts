@@ -1323,14 +1323,24 @@ export async function workingFileBlob(cwd: string, filePath: string): Promise<st
   return (await readFile(full)).toString('base64');
 }
 
+// Values placed where git parses options must not look like one (e.g. "--upload-pack=…").
+function assertNotOption(label: string, value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !value || value.startsWith('-')) throw new Error(`Invalid ${label}`);
+}
+
 export async function worktreeAdd(cwd: string, path: string, hash: string) {
+  assertNotOption('worktree path', path);
+  assertNotOption('commit', hash);
   await ensureTargetTreeSupported(cwd, hash, 'create a worktree from');
   return git(cwd, ['worktree', 'add', '--detach', path, hash]);
 }
 export const remoteUrl = async (cwd: string) => (await git(cwd, ['remote', 'get-url', 'origin'])).trim();
-export const formatPatch = (cwd: string, hash: string) => git(cwd, ['format-patch', '-1', '--stdout', hash]);
-export const createAnnotatedTag = (cwd: string, name: string, hash: string, message: string) =>
-  git(cwd, ['tag', '-a', name, '-m', message || name, hash]);
+export const formatPatch = (cwd: string, hash: string) => (assertNotOption('commit', hash), git(cwd, ['format-patch', '-1', '--stdout', hash]));
+export const createAnnotatedTag = (cwd: string, name: string, hash: string, message: string) => (
+  assertNotOption('tag name', name),
+  assertNotOption('commit', hash),
+  git(cwd, ['tag', '-a', name, '-m', message || name, hash])
+);
 
 export interface BlameLine {
   hash: string;
