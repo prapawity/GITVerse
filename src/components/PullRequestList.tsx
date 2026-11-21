@@ -9,6 +9,7 @@ import {
   type HostedRepo,
   type HostKind,
 } from '../shared/pullRequests';
+import { CiBadge } from './CiBadge';
 import { HostError, openRequests, REQUESTS_CHANGED, savedKindKey, type OpenRequest } from '../lib/pullRequests';
 import { locateRef, openRef } from '../lib/refActions';
 import { useRepo } from '../store/repoStore';
@@ -227,6 +228,9 @@ export function PullRequestList({
                         <span className="block truncate text-2xs text-sub">
                           #{r.number} · {r.head} → {r.base} · {r.author} · {ago(r.updated)}
                         </span>
+                      </span>
+                      <span className="mt-0.5">
+                        <CiBadge repo={hosted} sha={r.sha} />
                       </span>
                     </button>
                   );

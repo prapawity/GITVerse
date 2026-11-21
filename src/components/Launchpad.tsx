@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CiBadge } from './CiBadge';
 import {
   CircleDot,
   ExternalLink,
@@ -261,6 +262,7 @@ export function Launchpad() {
                           #{r.number} {r.head} → {r.base}, by {r.author}, {ago(r.updated)}
                         </span>
                       </button>
+                      <CiBadge repo={s.hosted} sha={r.sha} fallbackUrl={r.url} onOpen={(url) => openUrl(s, url)} />
                       {reason && (
                         <span
                           className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${reason === 'Yours' ? 'bg-surface text-sub' : 'bg-warning/15 text-warning'}`}
