@@ -24,6 +24,7 @@ import {
   Command,
   ChevronLeft,
   ChevronRight,
+  Rocket,
 } from 'lucide-react';
 import { Panel, Group, Separator, usePanelRef } from 'react-resizable-panels';
 import { CommitGraph } from './components/CommitGraph';
@@ -49,6 +50,8 @@ import { PullRequestDialog } from './components/PullRequestDialog';
 import { GraphFilterBar } from './components/GraphFilterBar';
 import { ExplainDialog } from './components/ExplainDialog';
 import { ComposerDialog } from './components/ComposerDialog';
+import { Launchpad } from './components/Launchpad';
+import { useLaunchpad } from './lib/launchpad';
 import { useComposer } from './lib/composer';
 import { runAiTask, useExplain, workingMaterial, commitMaterial } from './lib/aiTask';
 import { ToolGroup } from './components/ToolGroup';
@@ -647,7 +650,10 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
-      if (e.key.toLowerCase() === 'p') {
+      if (e.key.toLowerCase() === 'l' && !e.shiftKey) {
+        e.preventDefault();
+        useLaunchpad.getState().toggle();
+      } else if (e.key.toLowerCase() === 'p') {
         e.preventDefault();
         setShortcutsOpen(false);
         setPaletteOpen((v) => !v);
@@ -665,6 +671,7 @@ export default function App() {
     [`${shortcutModifier}/`, 'Keyboard shortcuts'],
     [`${shortcutModifier}F`, 'Search commits'],
     [`${shortcutModifier}J`, 'Ask AI'],
+    [`${shortcutModifier}L`, 'Launchpad'],
     [`${shortcutModifier}B`, 'Show / hide branches sidebar'],
     [`${shortcutModifier}⌥B`, 'Show / hide details panel'],
     [`${shortcutModifier}Z / ${shortcutModifier}⇧Z`, 'Undo / redo the last action or staging change'],
@@ -855,6 +862,14 @@ export default function App() {
             : 'Explain selected commit with AI',
         disabled: noRepo || !selectedHash,
         run: explainSelected,
+      },
+      {
+        id: 'launchpad',
+        group: 'View',
+        title: 'Launchpad',
+        keywords: 'pull requests issues work in progress review',
+        shortcut: `${shortcutModifier}L`,
+        run: () => useLaunchpad.getState().show(),
       },
       {
         id: 'compose',
@@ -1645,6 +1660,13 @@ export default function App() {
               icon={<Wrench size={21} />}
               children={[
                 {
+                  id: 'launchpad',
+                  label: 'Launchpad',
+                  hint: `Pull requests, issues and work in progress across repositories (${shortcutModifier}L)`,
+                  icon: <Rocket />,
+                  onClick: () => useLaunchpad.getState().show(),
+                },
+                {
                   id: 'recovery',
                   label: 'Recovery history',
                   icon: <History />,
@@ -2218,6 +2240,7 @@ export default function App() {
       {pushRepo && <PushDialog repo={pushRepo} onClose={() => setPushRepo(null)} />}
       <ExplainDialog />
       <ComposerDialog />
+      <Launchpad />
       {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
       {shortcutsOpen && <ShortcutList shortcuts={shortcuts} onClose={() => setShortcutsOpen(false)} />}
       {pullRequestRepo && !pushRepo && (
