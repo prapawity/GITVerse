@@ -47,6 +47,7 @@ pub fn parse_name_status(out: &str) -> Vec<ChangedFile> {
 }
 
 pub async fn commit_detail(git: &GitRunner, cwd: &Path, hash: &str) -> Result<CommitDetail> {
+    super::not_option("commit", hash)?;
     let body = git
         .run(
             cwd,

@@ -116,6 +116,7 @@ pub async fn commit(
 }
 
 pub async fn checkout(git: &GitRunner, cwd: &Path, reference: &str) -> Result<String> {
+    super::not_option("reference", reference)?;
     preflight(git, cwd, reference, "check out").await?;
     git.run(cwd, &["checkout", reference], RunOpts::default())
         .await
@@ -127,6 +128,10 @@ pub async fn create_branch(
     name: &str,
     from: Option<&str>,
 ) -> Result<String> {
+    super::not_option("branch name", name)?;
+    if let Some(f) = from {
+        super::not_option("start point", f)?;
+    }
     git.run(
         cwd,
         &["checkout", "-b", name, from.unwrap_or("HEAD")],
@@ -136,6 +141,8 @@ pub async fn create_branch(
 }
 
 pub async fn branch_at(git: &GitRunner, cwd: &Path, name: &str, hash: &str) -> Result<String> {
+    super::not_option("branch name", name)?;
+    super::not_option("commit", hash)?;
     ensure_target_tree_supported(git, cwd, hash, "create a branch from").await?;
     git.run(cwd, &["checkout", "-b", name, hash], RunOpts::default())
         .await
@@ -150,6 +157,7 @@ pub enum ResetMode {
 }
 
 pub async fn reset(git: &GitRunner, cwd: &Path, hash: &str, mode: ResetMode) -> Result<String> {
+    super::not_option("commit", hash)?;
     let name = match mode {
         ResetMode::Soft => "soft",
         ResetMode::Mixed => "mixed",
@@ -167,16 +175,19 @@ pub async fn reset(git: &GitRunner, cwd: &Path, hash: &str, mode: ResetMode) -> 
 }
 
 pub async fn cherry_pick(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(cwd, &["cherry-pick", hash], RunOpts::default())
         .await
 }
 
 pub async fn revert(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(cwd, &["revert", "--no-edit", hash], RunOpts::default())
         .await
 }
 
 pub async fn rebase_onto(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(cwd, &["rebase", hash], RunOpts::default()).await
 }
 
@@ -188,6 +199,7 @@ pub async fn merge(
     no_ff: bool,
     ff_only: bool,
 ) -> Result<String> {
+    super::not_option("reference", reference)?;
     let mut args = vec!["merge"];
     if ff_only {
         args.push("--ff-only");
@@ -200,6 +212,8 @@ pub async fn merge(
 }
 
 pub async fn create_tag(git: &GitRunner, cwd: &Path, name: &str, hash: &str) -> Result<String> {
+    super::not_option("tag name", name)?;
+    super::not_option("commit", hash)?;
     git.run(cwd, &["tag", name, hash], RunOpts::default()).await
 }
 
@@ -234,6 +248,7 @@ pub async fn tag_commit(git: &GitRunner, cwd: &Path, name: &str) -> Result<Strin
 }
 
 pub async fn file_at(git: &GitRunner, cwd: &Path, hash: &str, path: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(
         cwd,
         &["show", &format!("{hash}:{path}")],

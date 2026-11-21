@@ -57,6 +57,7 @@ pub async fn file_blame(
     hash: &str,
     path: &str,
 ) -> Result<Vec<BlameLine>> {
+    super::not_option("commit", hash)?;
     Ok(parse_blame(
         &git.run(
             cwd,

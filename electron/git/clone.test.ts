@@ -18,7 +18,8 @@ test(
 [ "$1" = "-c" ] && [ "$2" = "credential.helper=" ] || exit 1
 [ "$("$GIT_ASKPASS" Username)" = "test-user" ] || exit 2
 [ "$("$GIT_ASKPASS" Password)" = "test-token" ] || exit 3
-[ "$6" = "https://example.com/repo.git" ] || exit 4
+[ "$4" = "protocol.allow=never" ] || exit 5
+[ "\${12}" = "https://example.com/repo.git" ] || exit 4
 `,
         { mode: 0o700 },
       );
@@ -40,3 +41,13 @@ test(
     }
   },
 );
+
+test('clone refuses git remote-helper (transport::address) URLs', async () => {
+  for (const url of ['ext::/bin/evil', 'fd::3', 'git@h:a::b']) {
+    await assert.rejects(
+      clone(url, '/tmp/gitverse-never-created', () => {}),
+      /valid HTTPS or SSH/,
+      url,
+    );
+  }
+});
