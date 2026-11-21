@@ -81,11 +81,10 @@ export function PullRequestDialog({
   onPush: () => void;
 }) {
   const refs = useRepo((s) => s.refs);
-  const pushProfiles = useSettings((s) => s.pushProfiles[cwd]);
   const [remote, setRemote] = useState<string | null>(null);
   const [override, setOverride] = useState<HostKind | null>(null);
   const [error, setError] = useState('');
-  const [connection, setConnection] = useState<Connection>({ state: 'checking' });
+  const [connection, setConnection] = useState<Connection>({ state: 'needed', tried: [] });
   const [token, setToken] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [base, setBase] = useState('');
@@ -105,7 +104,7 @@ export function PullRequestDialog({
   const touched = useRef({ title: false, body: false });
   const typing = useRef(0);
   const aiBusy = aiPhase !== 'idle' && aiPhase !== 'done';
-  const busy = creating || aiBusy || verifying;
+  const busy = creating || aiBusy || verifying || connection.state === 'checking';
 
   // the origin remote decides the provider
   useEffect(() => {
@@ -152,12 +151,7 @@ export function PullRequestDialog({
     if (!entered) setConnection({ state: 'checking' });
     setError('');
     try {
-      const result = await connectHost(
-        hosted,
-        cwd,
-        (pushProfiles ?? []).map((p) => p.id),
-        entered,
-      );
+      const result = await connectHost(hosted, entered);
       if (result.connected) {
         setConnection({ state: 'ok', ...result });
         setToken('');
@@ -170,10 +164,6 @@ export function PullRequestDialog({
       if (!entered) setConnection({ state: 'needed', tried: [] });
     }
   };
-  useEffect(() => {
-    if (hosted) void connect();
-  }, [hosted]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // default branches once connected
   useEffect(() => {
     if (!hosted || !connected) return;
@@ -455,7 +445,7 @@ export function PullRequestDialog({
           {hosted && connection.state === 'checking' && (
             <div className="fade-in flex items-center gap-3 py-10 text-sm text-sub">
               <Loader2 size={18} className="animate-spin" aria-hidden />
-              Connecting to {hosted.host}… checking your saved login, push profile and CLI tokens.
+              Checking credentials saved for {hosted.host}…
             </div>
           )}
           {hosted && connection.state === 'needed' && (
@@ -474,6 +464,18 @@ export function PullRequestDialog({
                   )}
                 </div>
               </div>
+              <p className="text-xs text-sub">
+                Saved hosting, Git, CLI, and configured environment credentials are checked only when you choose this
+                action. Push-profile tokens are never used to connect to hosting services.
+              </p>
+              <button
+                onClick={() => void connect()}
+                disabled={verifying}
+                className="btn-secondary flex w-full items-center justify-center gap-2 px-4 py-2"
+              >
+                {verifying && <Loader2 size={15} className="animate-spin" aria-hidden />}
+                Check saved credentials for {hosted.host}
+              </button>
               <button
                 onClick={() => open(tokenPageUrl(hosted.kind, hosted.host))}
                 className="btn-secondary flex w-full items-center justify-center gap-2 px-4 py-2"
@@ -501,10 +503,7 @@ export function PullRequestDialog({
                 </button>
               </div>
               <p className="text-xs text-sub">
-                Stored in the system keychain and only sent to {hosted.host}.{' '}
-                <button onClick={() => void connect()} className="text-accent hover:underline">
-                  Check saved logins again
-                </button>
+                Your entered token is stored in the system keychain and only sent to {hosted.host}.
               </p>
             </div>
           )}

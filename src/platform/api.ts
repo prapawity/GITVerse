@@ -98,12 +98,8 @@ export interface PlatformApi extends Record<GitMethodName, AnyAsync> {
     request(request: HostRequest): Promise<HostResponse>;
     /** Open a page on the repository's own host in the browser. */
     open(kind: HostKind, host: string, url: string): Promise<void>;
-    /** Verify a new token (then save it) or the saved one, else try credentials already on this machine. */
-    connect(
-      kind: HostKind,
-      host: string,
-      options?: { token?: string; repo?: string; profileIds?: string[] },
-    ): Promise<ConnectResult>;
+    /** Verify a new token (then save it), or credentials the user explicitly chose to check. */
+    connect(kind: HostKind, host: string, options?: { token?: string }): Promise<ConnectResult>;
   };
   stateStorage: StateStorage;
 }

@@ -6,7 +6,6 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ipcMain, net, shell } from 'electron';
 import { isSessionOnly, readSecret, writeSecret } from './ai/common';
-import { pushTokenKey } from './pushTokens';
 import {
   accountName,
   apiBase,
@@ -93,15 +92,12 @@ function run(file: string, args: string[], input?: string): Promise<string> {
 async function candidates(
   kind: HostKind,
   host: string,
-  repo: string | null,
-  profileIds: string[],
 ): Promise<{ source: string; token: string }[]> {
   const found: { source: string; token: string }[] = [];
   const add = (source: string, token: string | null | undefined) => {
     const value = token?.trim();
     if (value && !found.some((f) => f.token === value)) found.push({ source, token: value });
   };
-  if (repo) for (const id of profileIds) add('push profile token', readSecret(pushTokenKey(repo, id)));
   const git = findTool('git') ?? 'git';
   const filled = await run(git, ['credential', 'fill'], `protocol=https\nhost=${host}\n\n`);
   const fields: Record<string, string> = {};
@@ -139,8 +135,8 @@ export function registerHosting() {
     writeSecret(hostTokenKey(kind, host), token?.trim() || null);
   });
   /**
-   * Check a new token before saving it, or the saved one; otherwise look for credentials already on
-   * this machine (push profile, Git's saved login, gh/glab) and keep the first the host accepts.
+   * Check a new token before saving it, or the saved one; otherwise check local Git/CLI credentials
+   * only when the user explicitly requests it.
    */
   ipcMain.handle(
     'hosting:connect',
@@ -148,7 +144,7 @@ export function registerHosting() {
       _e,
       kind: HostKind,
       host: string,
-      options: { token?: string; repo?: string; profileIds?: string[] } = {},
+      options: { token?: string } = {},
     ): Promise<ConnectResult> => {
       const problem = invalid(kind, host);
       if (problem) throw new Error(problem);
@@ -171,7 +167,7 @@ export function registerHosting() {
           };
       }
       const tried: string[] = saved ? ['saved access token'] : [];
-      for (const candidate of await candidates(kind, host, options.repo ?? null, options.profileIds ?? [])) {
+      for (const candidate of await candidates(kind, host)) {
         tried.push(candidate.source);
         const account = await verify(kind, host, candidate.token);
         if (account) {

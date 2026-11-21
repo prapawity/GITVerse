@@ -10,14 +10,12 @@ import {
   type HostKind,
 } from '../shared/pullRequests';
 import {
-  connectHost,
   HostError,
   openRequests,
   REQUESTS_CHANGED,
   savedKindKey,
   type OpenRequest,
 } from '../lib/pullRequests';
-import { useSettings } from '../store/settingsStore';
 import { locateRef, openRef } from '../lib/refActions';
 import { useRepo } from '../store/repoStore';
 import { ContextMenu } from './ContextMenu';
@@ -75,7 +73,6 @@ export function PullRequestList({
 
   const loading = useRef(false);
   const lastLoad = useRef(0);
-  const triedConnect = useRef(false);
   /** `background`: an automatic refresh; a failure keeps the list already shown */
   const load = useCallback(
     async (background = false) => {
@@ -90,16 +87,7 @@ export function PullRequestList({
           setState({ kind: 'none', message: 'No GitHub, GitLab or Bitbucket origin remote.' });
           return;
         }
-        try {
-          setState({ kind: 'ready', items: await openRequests(repo) });
-        } catch (e) {
-          // no working token yet: try saved logins / CLI tokens once, then list again
-          if (!(e instanceof HostError && e.needsToken) || triedConnect.current) throw e;
-          triedConnect.current = true;
-          const profileIds = (useSettings.getState().pushProfiles[repoPath] ?? []).map((p) => p.id);
-          if (!(await connectHost(repo, repoPath, profileIds)).connected) throw e;
-          setState({ kind: 'ready', items: await openRequests(repo) });
-        }
+        setState({ kind: 'ready', items: await openRequests(repo) });
       } catch (e) {
         const failed: State = {
           kind: 'error',
@@ -117,10 +105,7 @@ export function PullRequestList({
   useEffect(() => {
     setState({ kind: 'loading' });
     void load();
-    const reload = () => {
-      triedConnect.current = false;
-      void load();
-    };
+    const reload = () => void load();
     window.addEventListener(REQUESTS_CHANGED, reload);
     // automatic refresh: on a timer while the app is visible, and when it comes back into focus
     const tick = () => {

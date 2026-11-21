@@ -498,9 +498,9 @@ export const savedKindKey = (host: string) => `hosting.kind.${host.toLowerCase()
 /** Fired after a request is created so lists refresh. */
 export const REQUESTS_CHANGED = 'gitverse:pull-requests-changed';
 
-/** Connect to the host: the saved token, else credentials already on this machine (push profiles, Git login, CLIs). */
-export function connectHost(repo: HostedRepo, cwd: string, profileIds: string[], token?: string) {
-  return desktopApi().hosting.connect(repo.kind, repo.host, { token, repo: cwd, profileIds });
+/** Connect to the host using an entered token or credentials explicitly requested by the user. */
+export function connectHost(repo: HostedRepo, token?: string) {
+  return desktopApi().hosting.connect(repo.kind, repo.host, { token });
 }
 
 /** A readable title from a branch name: `feature/ABC-123-add-login` → `ABC-123 Add login`. */
