@@ -382,6 +382,8 @@ pub fn working_file_blob(cwd: &Path, path: &str) -> Result<String> {
 }
 
 pub async fn worktree_add(git: &GitRunner, cwd: &Path, path: &str, hash: &str) -> Result<String> {
+    super::not_option("worktree path", path)?;
+    super::not_option("commit", hash)?;
     ensure_target_tree_supported(git, cwd, hash, "create a worktree from").await?;
     git.run(
         cwd,

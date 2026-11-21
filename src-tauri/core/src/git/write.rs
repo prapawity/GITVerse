@@ -210,6 +210,8 @@ pub async fn create_annotated_tag(
     hash: &str,
     message: &str,
 ) -> Result<String> {
+    super::not_option("tag name", name)?;
+    super::not_option("commit", hash)?;
     let message = if message.is_empty() { name } else { message };
     git.run(
         cwd,
@@ -241,6 +243,7 @@ pub async fn file_at(git: &GitRunner, cwd: &Path, hash: &str, path: &str) -> Res
 }
 
 pub async fn format_patch(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(
         cwd,
         &["format-patch", "-1", "--stdout", hash],

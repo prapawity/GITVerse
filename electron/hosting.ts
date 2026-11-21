@@ -99,6 +99,8 @@ async function candidates(
     if (value && !found.some((f) => f.token === value)) found.push({ source, token: value });
   };
   const git = findTool('git') ?? 'git';
+  // The host goes into git's line-based credential protocol: never let it add lines.
+  if (!host || /[\r\n\0=]/.test(host)) return found;
   const filled = await run(git, ['credential', 'fill'], `protocol=https\nhost=${host}\n\n`);
   const fields: Record<string, string> = {};
   for (const line of filled.split('\n')) {

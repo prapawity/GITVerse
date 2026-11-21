@@ -307,6 +307,10 @@ async fn candidates(kind: HostKind, host: &str) -> Vec<(String, String)> {
             }
         }
     };
+    // The host goes into git's line-based credential protocol: never let it add lines.
+    if host.is_empty() || host.contains(['\n', '\r', '\0', '=']) {
+        return found;
+    }
     let git = find_tool("git").unwrap_or_else(|| "git".into());
     let filled = run(
         &git,

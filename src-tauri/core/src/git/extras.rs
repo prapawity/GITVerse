@@ -593,6 +593,8 @@ pub async fn worktree_add_branch(
     {
         return Err(invalid(format!("\"{branch}\" is not a valid branch name.")));
     }
+    super::not_option("worktree path", path)?;
+    super::not_option("base", base)?;
     let commit = format!("{base}^{{commit}}");
     if !git
         .succeeds(cwd, &["rev-parse", "--verify", "--quiet", &commit])
