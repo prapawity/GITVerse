@@ -99,6 +99,7 @@ export const GIT_METHODS = [
   'branchDiff',
   'workingDiff',
   'commitFiles',
+  'worktreeAddBranch',
 ] as const;
 
 export type GitMethodName = (typeof GIT_METHODS)[number];

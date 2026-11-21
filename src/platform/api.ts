@@ -35,6 +35,8 @@ export interface PlatformApi extends Record<GitMethodName, AnyAsync> {
   openFile: AnyAsync;
   /** Editors / IDEs found on this computer */
   editors(): Promise<{ id: string; name: string }[]>;
+  /** Command-line coding agents installed on this computer (Agent Sessions) */
+  agents(): Promise<{ id: string; name: string }[]>;
   /** Open a folder or file in one of `editors()` */
   openIn(editor: string, target: string): Promise<void>;
   /** Whole-app zoom (1 = 100%) */

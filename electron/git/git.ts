@@ -2085,3 +2085,27 @@ export async function commitFiles(cwd: string, paths: string[], summary: string,
   if (description.trim()) args.push('-m', description.trim());
   return git(cwd, [...args, '--', ...list]);
 }
+
+// ---- Agent Sessions: a worktree on a new branch ----
+
+/** Create `branch` at `base` and check it out in a new worktree at `path` (which must not exist yet). */
+export async function worktreeAddBranch(cwd: string, wtPath: string, branch: string, base: string) {
+  if (typeof wtPath !== 'string' || !path.isAbsolute(wtPath) || wtPath.includes('\0'))
+    throw new Error('Choose an absolute folder for the worktree.');
+  if (
+    await access(wtPath).then(
+      () => true,
+      () => false,
+    )
+  )
+    throw new Error(`${wtPath} already exists.`);
+  if (typeof base !== 'string' || !base || base.startsWith('-')) throw new Error('Choose a base branch.');
+  if (typeof branch !== 'string' || !branch.trim() || branch.startsWith('-')) throw new Error('Enter a branch name.');
+  await git(cwd, ['check-ref-format', '--branch', branch]).catch(() => {
+    throw new Error(`"${branch}" is not a valid branch name.`);
+  });
+  await git(cwd, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`]).catch(() => {
+    throw new Error(`Base "${base}" was not found.`);
+  });
+  return git(cwd, ['worktree', 'add', '-b', branch, wtPath, base]);
+}

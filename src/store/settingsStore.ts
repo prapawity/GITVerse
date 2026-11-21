@@ -11,6 +11,7 @@ export interface Settings {
   leftPanelOpen: boolean; // branches / tags sidebar
   rightPanelOpen: boolean; // details / changes panel
   leftPanelSize: number; // % of the window, restored when the panel opens
+  agentSetup: string; // commands run in a new agent worktree before the agent starts, e.g. npm install
   rightPanelSize: number;
   graphSort: 'topo' | 'date' | 'author-date';
   graphColumns: { branch: boolean; graph: boolean; message: boolean; author: boolean; date: boolean; sha: boolean };
@@ -45,6 +46,17 @@ export interface FlowConfig {
   main: string; // long-lived branch names
 }
 
+export interface AgentSession {
+  id: string;
+  agent: string; // id from the installed agents list (claude, codex, …)
+  agentName: string;
+  task: string;
+  branch: string;
+  base: string;
+  path: string; // worktree folder
+  created: number;
+}
+
 export interface PushProfile {
   id: string;
   name: string;
@@ -72,6 +84,7 @@ export const DEFAULTS: Settings = {
   leftPanelOpen: true,
   rightPanelOpen: true,
   leftPanelSize: 20,
+  agentSetup: '',
   rightPanelSize: 25,
   fontSize: 14,
   graphSort: 'topo',
@@ -123,6 +136,9 @@ interface Store extends Settings {
   repoGroups: Record<string, string>;
   repoGroupRoots: Record<string, string>;
   /** graph visibility per repository: ref keys like `local:main`, `remote:origin/x`, `tag:v1` */
+  /** Agent Sessions started from the app, per repository */
+  agentSessions: Record<string, AgentSession[]>;
+  setAgentSessions: (repo: string, sessions: AgentSession[]) => void;
   graphHidden: Record<string, string[]>;
   graphSolo: Record<string, string[]>;
   setRefVisibility: (repo: string, key: string, mode: 'hide' | 'show' | 'solo' | 'unsolo') => void;
@@ -162,6 +178,8 @@ export const useSettings = create<Store>()(
       activeIdentityProfile: '',
       repoGroups: {},
       repoGroupRoots: {},
+      agentSessions: {},
+      setAgentSessions: (repo, sessions) => set((s) => ({ agentSessions: { ...s.agentSessions, [repo]: sessions } })),
       graphHidden: {},
       graphSolo: {},
       setRefVisibility: (repo, key, mode) =>

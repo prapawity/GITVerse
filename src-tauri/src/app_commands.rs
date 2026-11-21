@@ -349,3 +349,30 @@ pub fn app_open_in(editor: String, target: String) -> Result<(), AppError> {
         .map(|_| ())
         .map_err(|err| AppError::Invalid(format!("Could not open {}: {err}", e.name)))
 }
+
+/// Command-line coding agents an Agent Session can start (`AGENTS` in electron/editors.ts).
+const AGENTS: &[(&str, &str, &str)] = &[
+    ("claude", "Claude Code", "claude"),
+    ("codex", "Codex CLI", "codex"),
+    ("gemini", "Gemini CLI", "gemini"),
+    ("copilot", "Copilot CLI", "copilot"),
+    ("opencode", "OpenCode", "opencode"),
+    ("cursor", "Cursor CLI", "cursor-agent"),
+];
+
+#[tauri::command]
+pub fn app_agents() -> Vec<EditorInfo> {
+    AGENTS
+        .iter()
+        .filter(|(_, _, command)| {
+            locate_editor(&EditorDef {
+                id: "",
+                name: "",
+                apps: &[],
+                cli: std::slice::from_ref(command),
+            })
+            .is_some()
+        })
+        .map(|(id, name, _)| EditorInfo { id, name })
+        .collect()
+}

@@ -51,7 +51,18 @@ function locate(editor: Editor): { mac?: string; cli?: string } | null {
   return cli ? { cli } : null;
 }
 
+/** Command-line coding agents an Agent Session can start (the Rust side keeps the same list). */
+const AGENTS = [
+  { id: 'claude', name: 'Claude Code', command: 'claude' },
+  { id: 'codex', name: 'Codex CLI', command: 'codex' },
+  { id: 'gemini', name: 'Gemini CLI', command: 'gemini' },
+  { id: 'copilot', name: 'Copilot CLI', command: 'copilot' },
+  { id: 'opencode', name: 'OpenCode', command: 'opencode' },
+  { id: 'cursor', name: 'Cursor CLI', command: 'cursor-agent' },
+];
+
 export function registerEditors() {
+  ipcMain.handle('app:agents', () => AGENTS.filter((a) => onPath(a.command)).map(({ id, name }) => ({ id, name })));
   ipcMain.handle('app:editors', () => EDITORS.filter((e) => locate(e)).map(({ id, name }) => ({ id, name })));
   ipcMain.handle('app:openIn', (_e, id: string, target: string) => {
     const editor = EDITORS.find((e) => e.id === id);

@@ -66,6 +66,7 @@ export async function createTauriApi(): Promise<PlatformApi> {
       options?: { depth?: number | null },
     ) => call('repo_clone', { url, destination, credentials, depth: options?.depth ?? null }),
     editors: () => call('app_editors'),
+    agents: () => call('app_agents'),
     openIn: (editor: string, target: string) => call('app_open_in', { editor, target }),
     setZoom: async (factor: number) => {
       await getCurrentWebview().setZoom(factor);

@@ -66,3 +66,20 @@ test('commit composer plans keep every file exactly once', async () => {
   );
   assert.throws(() => parsePlan('no json', ['a.ts']));
 });
+
+test('agent sessions: command, quoting, branch and folder names', async () => {
+  const { agentCommand, agentBranchName, agentWorktreePath, shellQuote } = await import('./agentCommands');
+  assert.equal(shellQuote("it's done"), `'it'\\''s done'`);
+  assert.deepEqual(agentCommand('claude', "Fix the user's login"), {
+    command: `claude 'Fix the user'\\''s login'`,
+    clipboard: false,
+  });
+  assert.deepEqual(agentCommand('gemini', 'Add tests'), { command: `gemini -i 'Add tests'`, clipboard: false });
+  assert.deepEqual(agentCommand('copilot', 'Add tests'), { command: 'copilot', clipboard: true });
+  assert.equal(
+    agentBranchName('Add input validation to the login form!', 'claude'),
+    'agent/add-input-validation-to-the',
+  );
+  assert.equal(agentWorktreePath('/Users/me/work/app', 'agent/fix-login'), '/Users/me/work/app.agents/fix-login');
+  assert.throws(() => agentCommand('rm', 'x'));
+});

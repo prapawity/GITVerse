@@ -68,6 +68,7 @@ pub const PORTED: &[&str] = &[
     "branchDiff",
     "workingDiff",
     "commitFiles",
+    "worktreeAddBranch",
     "lfsStatus",
     "lfsAction",
     "submodules",
@@ -281,6 +282,9 @@ pub async fn git_call(
         "commitPeople" => json(git::commit_people(&git, &a.repo()?, a.str(1)?).await?),
         "branchDiff" => json(git::branch_diff(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
         "workingDiff" => json(git::working_diff(&git, &a.repo()?).await?),
+        "worktreeAddBranch" => {
+            json(git::worktree_add_branch(&git, &a.repo()?, a.str(1)?, a.str(2)?, a.str(3)?).await?)
+        }
         "commitFiles" => json(
             git::commit_files(
                 &git,

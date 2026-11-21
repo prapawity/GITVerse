@@ -167,3 +167,15 @@ test('commitFiles commits exactly the chosen files and leaves other staged work 
   await assert.rejects(git.commitFiles(dir, ['nope.txt'], 'x'));
   await assert.rejects(git.commitFiles(dir, ['keep.txt'], '  '));
 });
+
+test('worktreeAddBranch creates a branch in a new folder and refuses bad input', async () => {
+  const dir = repo();
+  commit(dir, 'a.txt', 'a\n', 'first');
+  const wt = path.join(mkdtempSync(path.join(tmpdir(), 'gitverse-agent-')), 'fix-login');
+  await git.worktreeAddBranch(dir, wt, 'agent/fix-login', 'main');
+  assert.equal(run(wt, 'branch', '--show-current'), 'agent/fix-login');
+  await assert.rejects(git.worktreeAddBranch(dir, wt, 'agent/other', 'main'), /already exists/);
+  await assert.rejects(git.worktreeAddBranch(dir, `${wt}-2`, 'bad name', 'main'));
+  await assert.rejects(git.worktreeAddBranch(dir, `${wt}-3`, 'agent/x', 'no-such-base'), /not found/);
+  await assert.rejects(git.worktreeAddBranch(dir, 'relative/path', 'agent/y', 'main'));
+});

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Archive,
+  Bot,
   Check,
   CircleDot,
   Cloud,
@@ -26,6 +27,7 @@ import { desktopApi } from '../platform/api';
 import { Chevron, Collapse } from './Motion';
 import { PullRequestList } from './PullRequestList';
 import { IssueList } from './IssueList';
+import { AgentSessionList } from './AgentSessionList';
 import { TagMenu } from './TagMenu';
 import { openRef } from '../lib/refActions';
 
@@ -287,8 +289,11 @@ export function Sidebar({
   onStash,
   selectedStashHash,
   onCreatePullRequest,
+  onOpenPullRequest,
 }: {
   onCreatePullRequest: () => void;
+  /** open the PR / MR form for another folder of this repository (an agent worktree) */
+  onOpenPullRequest: (path: string) => void;
   onNavigate: (kind: 'local' | 'remote', name: string) => void;
   onContext: (kind: 'local' | 'remote', name: string, x: number, y: number) => void;
   onTag: (name: string) => void;
@@ -303,6 +308,7 @@ export function Sidebar({
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [pullRequestCount, setPullRequestCount] = useState(0);
   const [issueCount, setIssueCount] = useState(0);
+  const [agentCount, setAgentCount] = useState(0);
   const toggle = (key: string) =>
     setOpen((s) => {
       const n = new Set(s);
@@ -467,6 +473,16 @@ export function Sidebar({
           hideRoot={new Set(refs.remote.map((branch) => branch.name.split('/')[0])).size === 1}
         />
       </Section>
+      {repoPath && (
+        <Section icon={<Bot />} title="Agents" count={agentCount} always filtering={filtering}>
+          <AgentSessionList
+            key={repoPath}
+            repoPath={repoPath}
+            onCount={setAgentCount}
+            onPullRequest={onOpenPullRequest}
+          />
+        </Section>
+      )}
       {repoPath && (
         <Section icon={<GitPullRequest />} title="Pull Requests" count={pullRequestCount} always filtering={filtering}>
           <PullRequestList

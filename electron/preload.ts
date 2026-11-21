@@ -9,6 +9,7 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   cloneRepo: (url: unknown, destination: unknown, credentials?: unknown, options?: unknown) =>
     ipcRenderer.invoke('repo:clone', url, destination, credentials, options),
   editors: () => ipcRenderer.invoke('app:editors'),
+  agents: () => ipcRenderer.invoke('app:agents'),
   openIn: (editor: unknown, target: unknown) => ipcRenderer.invoke('app:openIn', editor, target),
   setZoom: (factor: unknown) => ipcRenderer.invoke('app:setZoom', factor),
   openFile: (...a) => ipcRenderer.invoke('repo:openFile', ...a),

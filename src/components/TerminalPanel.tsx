@@ -98,7 +98,7 @@ const THEME = {
   brightWhite: '#a6adc8',
 };
 
-async function create(cwd: string | null): Promise<Session> {
+async function create(cwd: string | null, title?: string): Promise<Session> {
   wire();
   const el = document.createElement('div');
   el.style.height = '100%';
@@ -126,8 +126,8 @@ async function create(cwd: string | null): Promise<Session> {
     }
     return true;
   });
-  const title = cwd?.split(/[\\/]/).filter(Boolean).pop() || 'Terminal';
-  const s: Session = { key: ++keySeq, id: null, title, term, fit, el, ended: false };
+  const name = title || cwd?.split(/[\\/]/).filter(Boolean).pop() || 'Terminal';
+  const s: Session = { key: ++keySeq, id: null, title: name, term, fit, el, ended: false };
   sessions.push(s);
   notify();
   if (!api()) {
@@ -149,6 +149,45 @@ async function create(cwd: string | null): Promise<Session> {
   return s;
 }
 
+/** Ask the app to show the terminal panel (and select `key`). */
+export const SHOW_TERMINAL = 'gitverse:show-terminal';
+let requestedActive: number | null = null;
+
+/**
+ * Open a terminal tab in `cwd` and run `command` in it (Agent Sessions). Returns the tab's key, which
+ * stays valid for `terminalAlive` / `focusTerminal` while the tab is open.
+ */
+export async function runInTerminal(cwd: string, command: string, title: string): Promise<number> {
+  const s = await create(cwd, title);
+  if (s.id != null) await desktopApi().term.write(s.id, `${command}\r`);
+  requestedActive = s.key;
+  notify();
+  window.dispatchEvent(new CustomEvent(SHOW_TERMINAL));
+  return s.key;
+}
+
+/** 'running' while the tab's process is alive, 'exited' after it ended, 'closed' once the tab is gone. */
+export function terminalState(key: number | undefined): 'running' | 'exited' | 'closed' {
+  const s = sessions.find((x) => x.key === key);
+  return !s ? 'closed' : s.ended ? 'exited' : 'running';
+}
+
+export function focusTerminal(key: number) {
+  if (!sessions.some((x) => x.key === key)) return false;
+  requestedActive = key;
+  notify();
+  window.dispatchEvent(new CustomEvent(SHOW_TERMINAL));
+  return true;
+}
+
+/** Re-render when terminal tabs open, end or close. */
+export function onTerminalsChanged(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 function destroy(s: Session) {
   if (s.id != null && !s.ended) api()?.kill(s.id);
   if (s.id != null) byId.delete(s.id);
@@ -163,9 +202,19 @@ export function TerminalPanel({ cwd, onHide }: { cwd: string | null; onHide: () 
   const host = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const l = () => force((v) => v + 1);
+    const l = () => {
+      // a tab opened elsewhere (an agent session) asked to be shown
+      if (requestedActive != null) {
+        setActive(requestedActive);
+        requestedActive = null;
+      }
+      force((v) => v + 1);
+    };
     listeners.add(l);
-    if (!sessions.length) create(cwd).then((s) => setActive(s.key));
+    if (requestedActive != null) {
+      setActive(requestedActive);
+      requestedActive = null;
+    } else if (!sessions.length) create(cwd).then((s) => setActive(s.key));
     return () => {
       listeners.delete(l);
     };

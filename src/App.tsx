@@ -37,7 +37,7 @@ import { ConflictPanel, ConflictRow } from './components/ConflictPanel';
 import { MergeTool } from './components/MergeTool';
 import { SettingsPage, type Section } from './components/Settings';
 import { AiPanel } from './components/AiPanel';
-import { TerminalPanel } from './components/TerminalPanel';
+import { SHOW_TERMINAL, TerminalPanel } from './components/TerminalPanel';
 import { useSettings } from './store/settingsStore';
 import { storage } from './lib/storage';
 import { reorderRepoTabs } from './lib/reorderRepoTabs';
@@ -51,6 +51,7 @@ import { GraphFilterBar } from './components/GraphFilterBar';
 import { ExplainDialog } from './components/ExplainDialog';
 import { ComposerDialog } from './components/ComposerDialog';
 import { Launchpad } from './components/Launchpad';
+import { NewAgentSession, useNewAgentSession } from './components/NewAgentSession';
 import { useLaunchpad } from './lib/launchpad';
 import { useComposer } from './lib/composer';
 import { runAiTask, useExplain, workingMaterial, commitMaterial } from './lib/aiTask';
@@ -184,6 +185,11 @@ export default function App() {
   const navigationSeq = useRef(0);
   const openedHead = useRef<string | null>(null);
   const [termOpen, setTermOpen] = useState(false);
+  useEffect(() => {
+    const show = () => setTermOpen(true);
+    window.addEventListener(SHOW_TERMINAL, show);
+    return () => window.removeEventListener(SHOW_TERMINAL, show);
+  }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [workspaceInspectionOpen, setWorkspaceInspectionOpen] = useState(false);
@@ -903,6 +909,14 @@ export default function App() {
             : 'Explain selected commit with AI',
         disabled: noRepo || !selectedHash,
         run: explainSelected,
+      },
+      {
+        id: 'agent-session',
+        group: 'AI',
+        title: 'New agent session…',
+        keywords: 'claude code codex gemini copilot worktree agent',
+        disabled: noRepo,
+        run: () => useNewAgentSession.getState().show(),
       },
       {
         id: 'launchpad',
@@ -1862,6 +1876,7 @@ export default function App() {
                 {repoPath && (
                   <Sidebar
                     onCreatePullRequest={() => repoPath && setPullRequestRepo(repoPath)}
+                    onOpenPullRequest={(path) => setPullRequestRepo(path)}
                     onNavigate={navigateBranch}
                     onTag={(name) => void navigateTag(name)}
                     onStash={showStash}
@@ -2284,6 +2299,7 @@ export default function App() {
       <ExplainDialog />
       <ComposerDialog />
       <Launchpad />
+      <NewAgentSession />
       {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
       {shortcutsOpen && <ShortcutList shortcuts={shortcuts} onClose={() => setShortcutsOpen(false)} />}
       {pullRequestRepo && !pushRepo && (

@@ -188,6 +188,7 @@ pub fn run() {
             app_commands::app_open_runtime_notice,
             app_commands::app_editors,
             app_commands::app_open_in,
+            app_commands::app_agents,
             ai_commands::ai_status,
             ai_commands::ai_copilot_status,
             ai_commands::ai_set_key,

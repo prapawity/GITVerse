@@ -565,3 +565,40 @@ pub async fn working_diff(git: &GitRunner, cwd: &Path) -> Result<WorkingDiff> {
         untracked,
     })
 }
+
+/// Create `branch` at `base` and check it out in a new worktree at `path` (`worktreeAddBranch` in git.ts).
+pub async fn worktree_add_branch(
+    git: &GitRunner,
+    cwd: &Path,
+    path: &str,
+    branch: &str,
+    base: &str,
+) -> Result<String> {
+    let target = Path::new(path);
+    if !target.is_absolute() || path.contains('\0') {
+        return Err(invalid("Choose an absolute folder for the worktree."));
+    }
+    if target.exists() {
+        return Err(invalid(format!("{path} already exists.")));
+    }
+    if base.is_empty() || base.starts_with('-') {
+        return Err(invalid("Choose a base branch."));
+    }
+    if branch.trim().is_empty() || branch.starts_with('-') {
+        return Err(invalid("Enter a branch name."));
+    }
+    if !git
+        .succeeds(cwd, &["check-ref-format", "--branch", branch])
+        .await
+    {
+        return Err(invalid(format!("\"{branch}\" is not a valid branch name.")));
+    }
+    let commit = format!("{base}^{{commit}}");
+    if !git
+        .succeeds(cwd, &["rev-parse", "--verify", "--quiet", &commit])
+        .await
+    {
+        return Err(invalid(format!("Base \"{base}\" was not found.")));
+    }
+    run(git, cwd, &["worktree", "add", "-b", branch, path, base]).await
+}

@@ -78,6 +78,7 @@ const handlers = {
   branchDiff: git.branchDiff,
   workingDiff: git.workingDiff,
   commitFiles: git.commitFiles,
+  worktreeAddBranch: git.worktreeAddBranch,
   refs: git.refs,
   reflog,
   inspectWorkspace,
