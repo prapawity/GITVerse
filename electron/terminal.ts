@@ -74,8 +74,24 @@ try {
 const terms = new Map<number, Term>();
 let seq = 0;
 
-const KNOWN_SHELLS = new Set(['sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'tcsh', 'csh', 'nu', 'elvish', 'xonsh',
-  'pwsh', 'powershell', 'cmd', 'wsl', 'git-bash']);
+const KNOWN_SHELLS = new Set([
+  'sh',
+  'bash',
+  'zsh',
+  'fish',
+  'dash',
+  'ksh',
+  'tcsh',
+  'csh',
+  'nu',
+  'elvish',
+  'xonsh',
+  'pwsh',
+  'powershell',
+  'cmd',
+  'wsl',
+  'git-bash',
+]);
 
 // A custom shell must be an absolute path to a regular file named like a shell, or listed in /etc/shells.
 function allowedShell(custom: string): boolean {
@@ -85,10 +101,15 @@ function allowedShell(custom: string): boolean {
   } catch {
     return false;
   }
-  const name = path.basename(custom).toLowerCase().replace(/\.exe$/, '');
+  const name = path
+    .basename(custom)
+    .toLowerCase()
+    .replace(/\.exe$/, '');
   if (KNOWN_SHELLS.has(name)) return true;
   try {
-    return readFileSync('/etc/shells', 'utf8').split('\n').some((l) => l.trim() === custom);
+    return readFileSync('/etc/shells', 'utf8')
+      .split('\n')
+      .some((l) => l.trim() === custom);
   } catch {
     return false;
   }
@@ -212,7 +233,11 @@ export function registerTerminal() {
   ipcMain.handle('term:spawn', (e, cwd: string, cols: number, rows: number, shell?: string) =>
     start(
       e.sender,
-      typeof cwd === 'string' && path.isAbsolute(cwd) && isDir(cwd) ? cwd : homedir(), Math.max(20, cols | 0), Math.max(5, rows | 0), shell),
+      typeof cwd === 'string' && path.isAbsolute(cwd) && isDir(cwd) ? cwd : homedir(),
+      Math.max(20, cols | 0),
+      Math.max(5, rows | 0),
+      shell,
+    ),
   );
   ipcMain.handle('term:write', (_e, id: number, data: string) => {
     if (typeof data === 'string') terms.get(id)?.write(data);

@@ -465,13 +465,27 @@ mod tests {
     #[tokio::test]
     async fn agent_worktrees_stay_in_the_agents_folder() {
         let git = GitRunner::default();
-        let repo = Path::new("/nonexistent/gitverse/app");
+        // absolute on every platform (a leading `/` is not absolute on Windows)
+        let root = if cfg!(windows) {
+            "C:\\nonexistent"
+        } else {
+            "/nonexistent"
+        };
+        let repo = Path::new(root).join("gitverse").join("app");
         for bad in [
-            "/tmp/elsewhere/fix",
-            "/nonexistent/gitverse/app.agents/a/b",
-            "/nonexistent/gitverse/other.agents/fix",
+            Path::new(root).join("elsewhere").join("fix"),
+            Path::new(root)
+                .join("gitverse")
+                .join("app.agents")
+                .join("a")
+                .join("b"),
+            Path::new(root)
+                .join("gitverse")
+                .join("other.agents")
+                .join("fix"),
         ] {
-            let err = worktree_add_branch(&git, repo, bad, "agent/x", "main")
+            let bad = bad.to_str().unwrap();
+            let err = worktree_add_branch(&git, &repo, bad, "agent/x", "main")
                 .await
                 .unwrap_err();
             assert!(

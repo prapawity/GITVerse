@@ -89,10 +89,7 @@ function run(file: string, args: string[], input?: string): Promise<string> {
 }
 
 /** Credentials already on this machine that might work as an API token, most likely first. */
-async function candidates(
-  kind: HostKind,
-  host: string,
-): Promise<{ source: string; token: string }[]> {
+async function candidates(kind: HostKind, host: string): Promise<{ source: string; token: string }[]> {
   const found: { source: string; token: string }[] = [];
   const add = (source: string, token: string | null | undefined) => {
     const value = token?.trim();
@@ -142,12 +139,7 @@ export function registerHosting() {
    */
   ipcMain.handle(
     'hosting:connect',
-    async (
-      _e,
-      kind: HostKind,
-      host: string,
-      options: { token?: string } = {},
-    ): Promise<ConnectResult> => {
+    async (_e, kind: HostKind, host: string, options: { token?: string } = {}): Promise<ConnectResult> => {
       const problem = invalid(kind, host);
       if (problem) throw new Error(problem);
       const entered = options.token?.trim();

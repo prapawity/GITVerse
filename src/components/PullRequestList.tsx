@@ -9,13 +9,7 @@ import {
   type HostedRepo,
   type HostKind,
 } from '../shared/pullRequests';
-import {
-  HostError,
-  openRequests,
-  REQUESTS_CHANGED,
-  savedKindKey,
-  type OpenRequest,
-} from '../lib/pullRequests';
+import { HostError, openRequests, REQUESTS_CHANGED, savedKindKey, type OpenRequest } from '../lib/pullRequests';
 import { locateRef, openRef } from '../lib/refActions';
 import { useRepo } from '../store/repoStore';
 import { ContextMenu } from './ContextMenu';
