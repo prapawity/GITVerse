@@ -231,6 +231,23 @@ export function DiffView({
   );
 
   const parsed = useMemo(() => (diff?.data == null ? null : parseDiff(diff.data)), [diff]);
+  // lines picked for line-level stage / unstage / discard: one hunk at a time, indices into its lines
+  const [picked, setPicked] = useState<{ hunk: number; lines: Set<number>; anchor: number } | null>(null);
+  useEffect(() => setPicked(null), [parsed]);
+  const pickLine = (hunk: number, line: number, range: boolean) => {
+    const lines = parsed?.hunks[hunk]?.lines;
+    if (!lines || lines[line]?.type === 'ctx') return;
+    setPicked((prev) => {
+      const same = prev?.hunk === hunk ? prev : null;
+      const next = new Set(same?.lines ?? []);
+      if (range && same) {
+        const [from, to] = same.anchor < line ? [same.anchor, line] : [line, same.anchor];
+        for (let i = from; i <= to; i++) if (lines[i].type !== 'ctx') next.add(i);
+      } else if (next.has(line)) next.delete(line);
+      else next.add(line);
+      return next.size ? { hunk, lines: next, anchor: line } : null;
+    });
+  };
   const staleWorkingFile =
     !!area && /This file is no longer (?:untracked|in the working changes|available)/i.test(diff?.error ?? '');
   const canDiscardFile = (area === 'unstaged' || area === 'untracked') && !!onRefresh;
@@ -248,12 +265,12 @@ export function DiffView({
     !/^(?:new file mode|deleted file mode|old mode|new mode|rename from|rename to|copy from|copy to|Binary files|GIT binary patch)/m.test(
       diff?.data ?? '',
     );
-  const stageHunk = async (hunk: number) => {
+  const stageHunk = async (hunk: number, lines?: number[]) => {
     if (!canStageHunks || !area || discarding || working || operation || diff?.data == null) return;
     setDiscarding(true);
     setDiscardError('');
     try {
-      await api().stageWorkingHunk(repoPath, file.path, area, diff.data, hunk);
+      await api().stageWorkingHunk(repoPath, file.path, area, diff.data, hunk, lines ?? null);
       useActionHistory.getState().markStaging();
       if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
         setDiscardRevision((value) => value + 1);
@@ -270,7 +287,7 @@ export function DiffView({
       setDiscarding(false);
     }
   };
-  const discard = async (hunk?: number) => {
+  const discard = async (hunk?: number, lines?: number[]) => {
     if (!canDiscardFile || discarding || working || operation || diff?.data == null) return;
     const snapshot = diff.data;
     setDiscarding(true);
@@ -278,18 +295,27 @@ export function DiffView({
     try {
       if (
         !(await askConfirm(
-          hunk == null ? 'Discard file changes?' : 'Discard this hunk?',
+          hunk == null
+            ? 'Discard file changes?'
+            : lines
+              ? `Discard ${lines.length} selected line${lines.length === 1 ? '' : 's'}?`
+              : 'Discard this hunk?',
           `${file.path}\n\n${hunk == null && area === 'untracked' ? 'This untracked file will be permanently deleted.' : 'These unstaged changes will be permanently lost. Staged changes are kept.'}`,
-          { label: hunk == null ? 'Discard file' : 'Discard hunk', danger: true },
+          { label: hunk == null ? 'Discard file' : lines ? 'Discard lines' : 'Discard hunk', danger: true },
         ))
       )
         return;
       if (useRepo.getState().repoPath !== repoPath || activeContext.current !== context) return;
       if (hunk == null) await api().discardWorkingFiles(repoPath, [{ path: file.path, area, diff: snapshot }]);
-      else await api().discardWorkingHunk(repoPath, file.path, snapshot, hunk);
+      else await api().discardWorkingHunk(repoPath, file.path, snapshot, hunk, lines ?? null);
       useRepo
         .getState()
-        .recordActivity('success', hunk == null ? 'Discarded file changes' : 'Discarded hunk', file.path, repoPath);
+        .recordActivity(
+          'success',
+          hunk == null ? 'Discarded file changes' : lines ? 'Discarded selected lines' : 'Discarded hunk',
+          file.path,
+          repoPath,
+        );
       if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
         setDiscardRevision((value) => value + 1);
         await onRefresh?.();
@@ -340,8 +366,37 @@ export function DiffView({
       </div>
     );
 
-  const unified = (l: DiffLine, k: number) => (
-    <div key={k} className={`grid grid-cols-[52px_52px_16px_1fr] ${BG[l.type]}`}>
+  const canPickLines = canStageHunks || canDiscardHunks;
+  /** Gutter toggle that picks a changed line; shift-click picks the range from the last pick. */
+  const pick = (hi: number, li: number, l: DiffLine) => {
+    if (!canPickLines) return null;
+    if (l.type === 'ctx') return <span aria-hidden />;
+    const on = picked?.hunk === hi && picked.lines.has(li);
+    return (
+      <button
+        type="button"
+        aria-pressed={on}
+        aria-label={`Select ${l.type === 'add' ? 'added' : 'removed'} line ${(l.type === 'add' ? l.newNo : l.oldNo) ?? ''}`}
+        title="Select line (Shift-click selects a range)"
+        disabled={discarding || !!working || !!operation}
+        onClick={(e) => pickLine(hi, li, e.shiftKey)}
+        className="flex items-center justify-center hover:bg-white/10 disabled:opacity-40"
+      >
+        <span
+          className={`h-3 w-3 rounded-sm border ${on ? 'border-accent bg-accent' : 'border-[#6c7a89]'}`}
+          aria-hidden
+        />
+      </button>
+    );
+  };
+  const pickedRow = (hi: number, li: number) =>
+    picked?.hunk === hi && picked.lines.has(li) ? ' shadow-[inset_3px_0_0_rgb(var(--accent))]' : '';
+  const unified = (hi: number) => (l: DiffLine, k: number) => (
+    <div
+      key={k}
+      className={`grid ${canPickLines ? 'grid-cols-[20px_52px_52px_16px_1fr]' : 'grid-cols-[52px_52px_16px_1fr]'} ${BG[l.type]}${pickedRow(hi, k)}`}
+    >
+      {pick(hi, k, l)}
       <span className={NUM}>{l.oldNo ?? ''}</span>
       <span className={NUM}>{l.newNo ?? ''}</span>
       <span className="select-none text-[#8b96a8]">{SIGN[l.type]}</span>
@@ -350,8 +405,12 @@ export function DiffView({
       </span>
     </div>
   );
-  const half = (l: DiffLine | null, side: 'old' | 'new', k: string) => (
-    <div key={k} className={`grid grid-cols-[52px_1fr] ${l ? BG[l.type] : 'bg-white/[0.03]'}`}>
+  const half = (hi: number) => (l: DiffLine | null, side: 'old' | 'new', k: string) => (
+    <div
+      key={k}
+      className={`grid ${canPickLines ? 'grid-cols-[20px_52px_1fr]' : 'grid-cols-[52px_1fr]'} ${l ? BG[l.type] : 'bg-white/[0.03]'}${l ? pickedRow(hi, parsed!.hunks[hi].lines.indexOf(l)) : ''}`}
+    >
+      {canPickLines && (l ? pick(hi, parsed!.hunks[hi].lines.indexOf(l), l) : <span aria-hidden />)}
       <span className={NUM}>{l ? (side === 'old' ? l.oldNo : l.newNo) : ''}</span>
       <span className="whitespace-pre pr-2">
         {l ? <Code text={l.text} plain={isMd} change={showWhitespace ? inlineChanges.get(l) : undefined} /> : ' '}
@@ -549,7 +608,51 @@ export function DiffView({
               <section key={hi} className="mb-3 min-w-0">
                 <div className="sticky top-0 z-10 flex min-h-[32px] items-center gap-3 border-y border-surface bg-[#232a35] px-4 text-xs text-[#8b96a8]">
                   <span className="min-w-0 flex-1 truncate">{h.header}</span>
-                  {canStageHunks && (
+                  {picked?.hunk === hi && (
+                    <>
+                      <span className="shrink-0 font-sans text-[#a9e5ff]" aria-live="polite">
+                        {picked.lines.size} line{picked.lines.size === 1 ? '' : 's'} selected
+                      </span>
+                      {canStageHunks && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void stageHunk(
+                              hi,
+                              [...picked.lines].sort((a, b) => a - b),
+                            )
+                          }
+                          disabled={discarding || !!working || !!operation}
+                          className="shrink-0 rounded border border-accent/60 bg-accent/15 px-2 py-1 font-sans text-[#a9e5ff] hover:bg-accent/25 disabled:opacity-40"
+                        >
+                          {area === 'staged' ? 'Unstage lines' : 'Stage lines'}
+                        </button>
+                      )}
+                      {canDiscardHunks && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void discard(
+                              hi,
+                              [...picked.lines].sort((a, b) => a - b),
+                            )
+                          }
+                          disabled={discarding || !!working || !!operation}
+                          className="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 font-sans text-danger hover:bg-danger/15 disabled:opacity-40"
+                        >
+                          <Trash2 size={13} aria-hidden /> Discard lines
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setPicked(null)}
+                        className="shrink-0 rounded px-2 py-1 font-sans hover:bg-white/10"
+                      >
+                        Clear
+                      </button>
+                    </>
+                  )}
+                  {picked?.hunk !== hi && canStageHunks && (
                     <button
                       type="button"
                       onClick={() => void stageHunk(hi)}
@@ -560,7 +663,7 @@ export function DiffView({
                       {area === 'staged' ? 'Unstage hunk' : 'Stage hunk'}
                     </button>
                   )}
-                  {canDiscardHunks && (
+                  {picked?.hunk !== hi && canDiscardHunks && (
                     <button
                       onClick={() => void discard(hi)}
                       disabled={discarding || !!working || !!operation}
@@ -573,10 +676,10 @@ export function DiffView({
                   )}
                 </div>
                 {split ? (
-                  <SplitHunk lines={h.lines} side={half} />
+                  <SplitHunk lines={h.lines} side={half(hi)} />
                 ) : (
                   <div className="overflow-x-auto">
-                    <div className="min-w-max">{h.lines.map(unified)}</div>
+                    <div className="min-w-max">{h.lines.map(unified(hi))}</div>
                   </div>
                 )}
               </section>

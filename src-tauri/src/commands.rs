@@ -442,6 +442,7 @@ pub async fn git_call(
                 a.parse(2)?,
                 a.opt_str(3).unwrap_or(""),
                 a.i64(4)?,
+                a.parse_or_default::<Option<Vec<i64>>>(5)?.as_deref(),
             )
             .await?,
         ),
@@ -452,6 +453,7 @@ pub async fn git_call(
                 a.str(1)?,
                 a.opt_str(2).unwrap_or(""),
                 a.i64(3)?,
+                a.parse_or_default::<Option<Vec<i64>>>(4)?.as_deref(),
             )
             .await?,
         ),

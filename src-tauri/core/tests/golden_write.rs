@@ -534,27 +534,27 @@ scenario_b!(b_moveIndexHistoryWithoutHistory, |g, p, h| h
     .await);
 scenario_b!(b_stageWorkingHunk, |g, p, h| async {
     let diff = git::working_file_diff(&g, p, "app.txt", Area::Unstaged).await?;
-    git::stage_working_hunk(&g, &h, p, "app.txt", Area::Unstaged, &diff, 0).await?;
+    git::stage_working_hunk(&g, &h, p, "app.txt", Area::Unstaged, &diff, 0, None).await?;
     h.state(&g, p).await
 }
 .await);
 scenario_b!(b_unstageWorkingHunk, |g, p, h| async {
     let diff = git::working_file_diff(&g, p, "login.txt", Area::Staged).await?;
-    git::stage_working_hunk(&g, &h, p, "login.txt", Area::Staged, &diff, 0).await
+    git::stage_working_hunk(&g, &h, p, "login.txt", Area::Staged, &diff, 0, None).await
 }
 .await);
 scenario_b!(b_stageWorkingHunkRejectsStaleDiff, |g, p, h| {
-    git::stage_working_hunk(&g, &h, p, "app.txt", Area::Unstaged, "old", 0).await
+    git::stage_working_hunk(&g, &h, p, "app.txt", Area::Unstaged, "old", 0, None).await
 });
 scenario_b!(b_stageWorkingHunkRejectsNewFile, |g, p, h| async {
     git::stage(&g, p, &strings(&["notes.md"])).await?;
     let diff = git::working_file_diff(&g, p, "notes.md", Area::Staged).await?;
-    git::stage_working_hunk(&g, &h, p, "notes.md", Area::Staged, &diff, 0).await
+    git::stage_working_hunk(&g, &h, p, "notes.md", Area::Staged, &diff, 0, None).await
 }
 .await);
 scenario_b!(b_discardWorkingHunk, |g, p, _h| async {
     let diff = git::working_file_diff(&g, p, "app.txt", Area::Unstaged).await?;
-    git::discard_working_hunk(&g, p, "app.txt", &diff, 0).await
+    git::discard_working_hunk(&g, p, "app.txt", &diff, 0, None).await
 }
 .await);
 scenario_b!(b_discardWorkingFiles, |g, p, _h| async {
