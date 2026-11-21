@@ -13,7 +13,11 @@ export async function clone(
   destination: string,
   progress: (message: string) => void,
   credentials?: { username: string; password: string },
+  options: { depth?: number | null } = {},
 ): Promise<void> {
+  const depth = options.depth ?? null;
+  if (depth !== null && (!Number.isInteger(depth) || depth < 1 || depth > 1_000_000))
+    throw new Error('Clone depth must be a whole number of commits.');
   if (typeof url !== 'string' || /[\s\0]/.test(url) || !url || url.startsWith('-'))
     throw new Error('Enter a valid HTTPS or SSH repository URL.');
   // A Windows drive path (C:\repo, C:/repo) also looks like `host:path`; it is a local path, not SSH.
@@ -79,7 +83,15 @@ export async function clone(
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         'git',
-        [...(credentials ? ['-c', 'credential.helper='] : []), 'clone', '--progress', '--', url, destination],
+        [
+          ...(credentials ? ['-c', 'credential.helper='] : []),
+          'clone',
+          '--progress',
+          ...(depth ? ['--depth', String(depth)] : []),
+          '--',
+          url,
+          destination,
+        ],
         {
           env,
           stdio: ['ignore', 'ignore', 'pipe'],
@@ -176,25 +188,30 @@ const historyOrder = (sort: string) => {
   return `--${sort}-order`;
 };
 
-export async function log(cwd: string, limit = 400, skip = 0, sort = 'topo'): Promise<Commit[]> {
+export async function log(
+  cwd: string,
+  limit = 400,
+  skip = 0,
+  sort = 'topo',
+  scope?: HistoryScope | null,
+): Promise<Commit[]> {
   const fmt = ['%H', '%P', '%D', '%an', '%ae', '%aI', '%s', '%b'].join('%x1f') + '%x1e';
   const bases = (await stashEntries(cwd)).map((stash) => stash.baseHash).filter((hash): hash is string => !!hash);
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
     () => true,
     () => false,
   );
+  const solo = !!scope?.solo?.length;
   const out = await git(cwd, [
     'log',
-    '--branches',
-    '--remotes',
-    '--tags',
+    ...scopeRevisions(scope),
     historyOrder(sort),
     '--decorate=full',
     `--skip=${skip}`,
     `-n${limit}`,
     `--format=${fmt}`,
-    ...(hasHead ? ['HEAD'] : []),
-    ...bases,
+    ...(hasHead && !solo && !(await headHidden(cwd, scope)) ? ['HEAD'] : []),
+    ...(solo || hiding(scope) ? [] : bases),
   ]);
   return out
     .split(R)
@@ -235,7 +252,7 @@ export async function commit(
   cwd: string,
   summary: string,
   description = '',
-  opts: { amend?: boolean; signoff?: boolean; gpgSign?: boolean } = {},
+  opts: { amend?: boolean; signoff?: boolean; gpgSign?: boolean; noVerify?: boolean } = {},
 ) {
   const args =
     opts.amend && !summary.trim() && !description.trim() ? ['commit', '--no-edit'] : ['commit', '-m', summary];
@@ -243,6 +260,7 @@ export async function commit(
   if (opts.amend) args.push('--amend');
   if (opts.signoff) args.push('--signoff');
   if (opts.gpgSign) args.push('-S');
+  if (opts.noVerify) args.push('--no-verify');
   return git(cwd, args);
 }
 
@@ -688,21 +706,20 @@ export async function agentCheckpoints(cwd: string) {
     });
 }
 
-export async function historyPosition(cwd: string, hash: string, sort = 'topo') {
+export async function historyPosition(cwd: string, hash: string, sort = 'topo', scope?: HistoryScope | null) {
   if (!/^[0-9a-f]{40,64}$/i.test(hash)) throw new Error('Invalid commit ID.');
   const bases = (await stashEntries(cwd)).map((stash) => stash.baseHash).filter((base): base is string => !!base);
   const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
     () => true,
     () => false,
   );
+  const solo = !!scope?.solo?.length;
   const out = await git(cwd, [
     'rev-list',
-    '--branches',
-    '--remotes',
-    '--tags',
+    ...scopeRevisions(scope),
     historyOrder(sort),
-    ...(hasHead ? ['HEAD'] : []),
-    ...bases,
+    ...(hasHead && !solo && !(await headHidden(cwd, scope)) ? ['HEAD'] : []),
+    ...(solo || hiding(scope) ? [] : bases),
   ]);
   const index = out.split('\n').indexOf(hash);
   if (index < 0) throw new Error('This commit is no longer in the repository history. Refresh and try again.');
@@ -1342,13 +1359,25 @@ export async function fileBlame(cwd: string, hash: string, path: string): Promis
 }
 
 export async function fileHistory(cwd: string, hash: string, path: string) {
-  const out = await git(cwd, ['log', '--follow', '-n200', '--format=%H%x1f%an%x1f%aI%x1f%s', hash, '--', path]);
+  // --name-only gives the file's path in each commit, which differs before a rename (--follow)
+  const out = await git(cwd, [
+    'log',
+    '--follow',
+    '--name-only',
+    '-n200',
+    '--format=%x1e%H%x1f%an%x1f%aI%x1f%s',
+    hash,
+    '--',
+    path,
+  ]);
   return out
-    .split('\n')
+    .split('\x1e')
+    .map((record) => record.trim())
     .filter(Boolean)
-    .map((l) => {
-      const [h, author, date, subject] = l.split('\x1f');
-      return { hash: h, author, date, subject };
+    .map((record) => {
+      const [header, ...files] = record.split('\n').filter(Boolean);
+      const [h, author, date, subject] = header.split('\x1f');
+      return { hash: h, author, date, subject, path: files[files.length - 1] ?? path };
     });
 }
 
@@ -1548,3 +1577,535 @@ export const deleteRemoteBranch = async (cwd: string, name: string) => {
   await git(cwd, ['check-ref-format', '--branch', branch]);
   await git(cwd, ['push', '--delete', '--', remote, branch]);
 };
+
+// ---- history scope (hide / solo on the graph) ----
+
+/** Which refs the graph shows. `hide` names are short (branch, origin/branch, tag); `solo` names are full refs. */
+export interface HistoryScope {
+  hide?: { branches?: string[]; remotes?: string[]; tags?: string[] };
+  solo?: string[];
+}
+// a ref name as Git allows it: no spaces, control characters, glob characters or leading dash
+const refPartOk = (name: string) =>
+  !!name &&
+  !name.startsWith('-') &&
+  !name.includes('..') &&
+  ![...name].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 || /[\s~^:?*[\\]/.test(c));
+function checkRefs(names: unknown, full = false): string[] {
+  if (!Array.isArray(names)) return [];
+  if (names.length > 500) throw new Error('Too many refs in the history filter.');
+  return names.map((name) => {
+    if (typeof name !== 'string' || !refPartOk(name) || (full && !name.startsWith('refs/')))
+      throw new Error('Invalid ref in the history filter.');
+    return name;
+  });
+}
+const hiding = (scope?: HistoryScope | null) =>
+  !!(scope?.hide?.branches?.length || scope?.hide?.remotes?.length || scope?.hide?.tags?.length);
+/** HEAD would bring a hidden checked-out branch back into the graph, so leave it out then. */
+async function headHidden(cwd: string, scope?: HistoryScope | null) {
+  if (!scope?.hide?.branches?.length) return false;
+  const current = (await git(cwd, ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')).trim();
+  return !!current && scope.hide.branches.includes(current);
+}
+/** Revision arguments for log / rev-list: everything, minus hidden refs, or only the solo refs. */
+export function scopeRevisions(scope?: HistoryScope | null): string[] {
+  const solo = checkRefs(scope?.solo, true);
+  if (solo.length) return solo;
+  const hide = scope?.hide ?? {};
+  // --exclude applies to the next --branches / --remotes / --tags, with names relative to that namespace
+  return [
+    ...checkRefs(hide.branches).map((n) => `--exclude=${n}`),
+    '--branches',
+    ...checkRefs(hide.remotes).map((n) => `--exclude=${n}`),
+    '--remotes',
+    ...checkRefs(hide.tags).map((n) => `--exclude=${n}`),
+    '--tags',
+  ];
+}
+
+// ---- branches, tags and remotes ----
+
+async function checkBranchName(cwd: string, name: string) {
+  if (typeof name !== 'string' || !name.trim() || name.startsWith('-')) throw new Error('Enter a branch name.');
+  await git(cwd, ['check-ref-format', '--branch', name]).catch(() => {
+    throw new Error(`"${name}" is not a valid branch name.`);
+  });
+}
+async function checkRemote(cwd: string, remote: string) {
+  const remotes = (await git(cwd, ['remote'])).split('\n').map((r) => r.trim());
+  if (!remote || !remotes.includes(remote)) throw new Error(`There is no remote named "${remote}".`);
+}
+async function checkTag(cwd: string, tag: string) {
+  if (typeof tag !== 'string' || !tag || tag.startsWith('-')) throw new Error('Invalid tag name.');
+  await git(cwd, ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`]).catch(() => {
+    throw new Error(`Tag "${tag}" does not exist.`);
+  });
+}
+
+export async function renameBranch(cwd: string, from: string, to: string) {
+  if (typeof from !== 'string' || !from || from.startsWith('-')) throw new Error('Invalid branch.');
+  await checkBranchName(cwd, to);
+  await git(cwd, ['rev-parse', '--verify', '--quiet', `refs/heads/${from}`]).catch(() => {
+    throw new Error(`Branch "${from}" does not exist.`);
+  });
+  return git(cwd, ['branch', '-m', from, to]);
+}
+
+/** Push one tag, or every tag when `tag` is null. */
+export async function pushTag(cwd: string, remote: string, tag: string | null) {
+  await checkRemote(cwd, remote);
+  if (tag === null) return git(cwd, ['push', remote, '--tags']);
+  await checkTag(cwd, tag);
+  return git(cwd, ['push', remote, `refs/tags/${tag}`]);
+}
+
+/** Delete a tag locally and, when `remote` is given, on that remote too. */
+export async function deleteTag(cwd: string, tag: string, remote?: string | null) {
+  await checkTag(cwd, tag);
+  if (remote) {
+    await checkRemote(cwd, remote);
+    await git(cwd, ['push', remote, `:refs/tags/${tag}`]);
+  }
+  return git(cwd, ['tag', '-d', tag]);
+}
+
+export async function addRemote(cwd: string, name: string, url: string) {
+  if (typeof name !== 'string' || !name || name.startsWith('-')) throw new Error('Enter a remote name.');
+  await git(cwd, ['check-ref-format', `refs/remotes/${name}/x`]).catch(() => {
+    throw new Error(`"${name}" is not a valid remote name.`);
+  });
+  if (typeof url !== 'string' || !url.trim() || url.startsWith('-') || /[\s\0]/.test(url.trim()))
+    throw new Error('Enter a valid remote URL.');
+  return git(cwd, ['remote', 'add', name, url.trim()]);
+}
+
+export async function removeRemote(cwd: string, name: string) {
+  await checkRemote(cwd, name);
+  return git(cwd, ['remote', 'remove', name]);
+}
+
+// ---- .gitignore ----
+
+/** Append `pattern` to the repository's root .gitignore; optionally stop tracking `untrackPath`. */
+export async function ignorePath(cwd: string, pattern: string, untrackPath?: string | null) {
+  if (typeof pattern !== 'string' || !pattern.trim() || /[\r\n\0]/.test(pattern))
+    throw new Error('Invalid ignore pattern.');
+  const root = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim();
+  const file = path.join(root, '.gitignore');
+  const current = await readFile(file, 'utf8').catch(() => '');
+  const lines = current.split(/\r?\n/);
+  if (!lines.includes(pattern.trim())) {
+    const prefix = current && !current.endsWith('\n') ? '\n' : '';
+    await writeFile(file, `${current}${prefix}${pattern.trim()}\n`);
+  }
+  if (untrackPath) {
+    if (/[\0]/.test(untrackPath) || untrackPath.startsWith('-')) throw new Error('Invalid path.');
+    await git(cwd, ['--literal-pathspecs', 'rm', '-r', '--cached', '--ignore-unmatch', '--', untrackPath]);
+  }
+  return '';
+}
+
+// ---- commit template and signing ----
+
+/** Contents of the configured commit.template (resolved like Git does), or null. */
+export async function commitTemplate(cwd: string): Promise<string | null> {
+  const configured = (await git(cwd, ['config', '--path', '--get', 'commit.template']).catch(() => '')).trim();
+  if (!configured) return null;
+  const root = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim();
+  const file = path.isAbsolute(configured) ? configured : path.join(root, configured);
+  const handle = await open(file, fsConstants.O_RDONLY).catch(() => null);
+  if (!handle) return null;
+  try {
+    const text = (await handle.readFile('utf8')).slice(0, 64 * 1024);
+    // Git drops comment lines from the final message; leave them out of the prefill too
+    return text
+      .split(/\r?\n/)
+      .filter((line) => !line.startsWith('#'))
+      .join('\n')
+      .trim();
+  } finally {
+    await handle.close();
+  }
+}
+
+export interface SigningConfig {
+  format: 'openpgp' | 'ssh' | 'x509';
+  key: string;
+  commits: boolean;
+  tags: boolean;
+  /** where the effective values come from */
+  scope: 'local' | 'global' | 'none';
+}
+
+export async function signingConfig(cwd: string): Promise<SigningConfig> {
+  const get = (key: string) =>
+    git(cwd, ['config', '--get', key]).then(
+      (v) => v.trim(),
+      () => '',
+    );
+  const [format, key, commits, tags, local] = await Promise.all([
+    get('gpg.format'),
+    get('user.signingkey'),
+    get('commit.gpgsign'),
+    get('tag.gpgsign'),
+    git(cwd, ['config', '--local', '--get', 'commit.gpgsign']).then(
+      (v) => v.trim(),
+      () => '',
+    ),
+  ]);
+  return {
+    format: format === 'ssh' || format === 'x509' ? format : 'openpgp',
+    key,
+    commits: commits === 'true',
+    tags: tags === 'true',
+    scope: local ? 'local' : commits || key ? 'global' : 'none',
+  };
+}
+
+/** Write signing settings for this repository (`local`) or for every repository (`global`). */
+export async function setSigningConfig(cwd: string, config: Omit<SigningConfig, 'scope'>, scope: 'local' | 'global') {
+  if (!['openpgp', 'ssh', 'x509'].includes(config.format)) throw new Error('Unknown signing format.');
+  if (/[\r\n\0]/.test(config.key ?? '') || (config.key ?? '').startsWith('-')) throw new Error('Invalid signing key.');
+  if (scope !== 'local' && scope !== 'global') throw new Error('Invalid scope.');
+  const where = `--${scope}`;
+  const put = (key: string, value: string | null) =>
+    value === null || value === ''
+      ? git(cwd, ['config', where, '--unset-all', key]).catch(() => '')
+      : git(cwd, ['config', where, key, value]);
+  await put('gpg.format', config.format === 'openpgp' ? null : config.format);
+  await put('user.signingkey', config.key?.trim() || null);
+  await put('commit.gpgsign', config.commits ? 'true' : 'false');
+  await put('tag.gpgsign', config.tags ? 'true' : 'false');
+  return '';
+}
+
+// ---- Git LFS ----
+
+export interface LfsStatus {
+  /** git-lfs is installed on this computer */
+  installed: boolean;
+  /** the repository uses LFS (filter=lfs in .gitattributes) */
+  used: boolean;
+  /** tracked patterns from .gitattributes */
+  patterns: string[];
+  /** paths stored in LFS at HEAD */
+  files: string[];
+}
+
+export async function lfsStatus(cwd: string): Promise<LfsStatus> {
+  const installed = await git(cwd, ['lfs', 'version']).then(
+    () => true,
+    () => false,
+  );
+  if (!installed) return { installed, used: false, patterns: [], files: [] };
+  const tracked = await git(cwd, ['lfs', 'track']).catch(() => '');
+  // "Listing tracked patterns\n    *.psd (.gitattributes)"
+  const patterns = tracked
+    .split('\n')
+    .map((line) => /^\s+(.+?) \(/.exec(line)?.[1])
+    .filter((p): p is string => !!p);
+  const files = (await git(cwd, ['lfs', 'ls-files', '--name-only']).catch(() => ''))
+    .split('\n')
+    .map((f) => f.trim())
+    .filter(Boolean)
+    .slice(0, 5000);
+  return { installed, used: patterns.length > 0 || files.length > 0, patterns, files };
+}
+
+/** `install` sets up the LFS hooks for this repository; `pull` downloads LFS files; `track` adds a pattern. */
+export async function lfsAction(cwd: string, action: 'install' | 'pull' | 'track' | 'untrack', pattern?: string) {
+  if (action === 'install') return git(cwd, ['lfs', 'install', '--local']);
+  if (action === 'pull') return git(cwd, ['lfs', 'pull']);
+  if (action !== 'track' && action !== 'untrack') throw new Error('Unknown LFS action.');
+  if (typeof pattern !== 'string' || !pattern.trim() || pattern.startsWith('-') || /[\r\n\0]/.test(pattern))
+    throw new Error('Enter a file pattern such as *.psd.');
+  return git(cwd, ['lfs', action, '--', pattern.trim()]);
+}
+
+// ---- submodules ----
+
+export interface Submodule {
+  path: string;
+  hash: string;
+  /** ' ' up to date, '-' not initialised, '+' checked out at a different commit, 'U' conflicts */
+  state: 'ok' | 'uninitialized' | 'modified' | 'conflict';
+  describe?: string;
+}
+
+export async function submodules(cwd: string): Promise<Submodule[]> {
+  const out = await git(cwd, ['submodule', 'status', '--recursive']).catch(() => '');
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const m = /^([ +\-U])([0-9a-f]+) (.+?)(?: \((.+)\))?$/.exec(line);
+      if (!m) return null;
+      const state = m[1] === '-' ? 'uninitialized' : m[1] === '+' ? 'modified' : m[1] === 'U' ? 'conflict' : 'ok';
+      return { state, hash: m[2], path: m[3], describe: m[4] } as Submodule;
+    })
+    .filter((s): s is Submodule => !!s);
+}
+
+/** Initialise and update one submodule (or all when `path` is null), recursively. */
+export async function submoduleUpdate(cwd: string, path: string | null) {
+  if (path !== null && (typeof path !== 'string' || !path || path.startsWith('-') || path.includes('\0')))
+    throw new Error('Invalid submodule path.');
+  return git(cwd, ['submodule', 'update', '--init', '--recursive', ...(path ? ['--', path] : [])]);
+}
+
+// ---- worktrees ----
+
+async function checkWorktree(cwd: string, wt: string) {
+  const list = await git(cwd, ['worktree', 'list', '--porcelain']);
+  const paths = list
+    .split('\n')
+    .filter((l) => l.startsWith('worktree '))
+    .map((l) => l.slice(9));
+  if (typeof wt !== 'string' || !paths.includes(wt)) throw new Error('That worktree is not part of this repository.');
+  if (paths[0] === wt) throw new Error('The main worktree cannot be removed or locked here.');
+}
+
+/** Remove a linked worktree; optionally delete the branch it had checked out. */
+export async function worktreeRemove(cwd: string, wt: string, force = false, deleteBranch: string | null = null) {
+  await checkWorktree(cwd, wt);
+  await git(cwd, ['worktree', 'remove', ...(force ? ['--force'] : []), wt]);
+  if (deleteBranch) {
+    if (deleteBranch.startsWith('-')) throw new Error('Invalid branch.');
+    await git(cwd, ['branch', force ? '-D' : '-d', deleteBranch]);
+  }
+  return '';
+}
+
+export async function worktreeLock(cwd: string, wt: string, lock: boolean) {
+  await checkWorktree(cwd, wt);
+  return git(cwd, ['worktree', lock ? 'lock' : 'unlock', wt]);
+}
+
+// ---- patches ----
+
+/**
+ * Apply patch text. `am` keeps author and message from a format-patch mail; `apply` changes the
+ * working tree (with a 3-way fallback). `check` only reports whether it would apply.
+ */
+export async function applyPatch(cwd: string, patch: string, mode: 'apply' | 'am' | 'check') {
+  if (typeof patch !== 'string' || !patch.trim()) throw new Error('The patch is empty.');
+  if (patch.length > 20 * 1024 * 1024) throw new Error('The patch is too large.');
+  if (mode === 'check') return gitWithInput(cwd, ['apply', '--check', '-'], patch);
+  if (mode === 'am')
+    return gitWithInput(cwd, ['am', '--3way'], patch).catch(async (error: Error) => {
+      // never leave the repository in the middle of an am the app cannot continue
+      await git(cwd, ['am', '--abort']).catch(() => '');
+      throw new Error(`${error.message}\nNothing was applied.`);
+    });
+  if (mode === 'apply') return gitWithInput(cwd, ['apply', '--3way', '-'], patch);
+  throw new Error('Unknown patch mode.');
+}
+
+// ---- combined diff of a commit range ----
+
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+async function rangeBase(cwd: string, oldest: string) {
+  if (!/^[0-9a-f]{7,64}$/i.test(oldest)) throw new Error('Invalid commit ID.');
+  return git(cwd, ['rev-parse', '--verify', '--quiet', `${oldest}^`]).then(
+    (h) => h.trim(),
+    () => EMPTY_TREE,
+  );
+}
+
+/** Files changed from the parent of `oldest` to `newest`, like one commit. */
+export async function rangeFiles(cwd: string, oldest: string, newest: string) {
+  if (!/^[0-9a-f]{7,64}$/i.test(newest)) throw new Error('Invalid commit ID.');
+  const base = await rangeBase(cwd, oldest);
+  const out = await git(cwd, ['diff', '--name-status', '-z', '--find-renames', base, newest]);
+  const parts = out.split('\0').filter(Boolean);
+  const files: { status: string; path: string; oldPath?: string }[] = [];
+  for (let i = 0; i < parts.length;) {
+    const status = parts[i++][0];
+    const first = parts[i++];
+    if (status === 'R' || status === 'C') files.push({ status, oldPath: first, path: parts[i++] });
+    else files.push({ status, path: first });
+  }
+  return files;
+}
+
+export async function rangeFileDiff(cwd: string, oldest: string, newest: string, file: string, oldPath?: string) {
+  if (!/^[0-9a-f]{7,64}$/i.test(newest)) throw new Error('Invalid commit ID.');
+  const base = await rangeBase(cwd, oldest);
+  return git(cwd, [
+    '--literal-pathspecs',
+    'diff',
+    '--no-ext-diff',
+    '--no-color',
+    '--find-renames',
+    base,
+    newest,
+    '--',
+    ...(oldPath ? [oldPath] : []),
+    file,
+  ]);
+}
+
+/** Patch text for a range (for "Create patch" from several commits). */
+export async function rangePatch(cwd: string, oldest: string, newest: string) {
+  if (!/^[0-9a-f]{7,64}$/i.test(newest)) throw new Error('Invalid commit ID.');
+  const base = await rangeBase(cwd, oldest);
+  return git(cwd, ['diff', '--no-ext-diff', '--no-color', '--binary', base, newest]);
+}
+
+// ---- external tools and maintenance ----
+
+/** Open the configured `git difftool` / `git mergetool` for one file (does not wait for it to close). */
+export async function externalTool(cwd: string, tool: 'diff' | 'merge', file: string, staged = false) {
+  if (typeof file !== 'string' || !file || file.startsWith('-') || file.includes('\0'))
+    throw new Error('Invalid file.');
+  const configured = (
+    await git(cwd, ['config', '--get', tool === 'diff' ? 'diff.tool' : 'merge.tool']).catch(() => '')
+  ).trim();
+  if (!configured)
+    throw new Error(
+      `No external ${tool} tool is configured. Choose one in Settings → External tools (git config ${tool}.tool).`,
+    );
+  const args =
+    tool === 'diff'
+      ? ['difftool', '-y', '--no-prompt', ...(staged ? ['--cached'] : []), '--', file]
+      : ['mergetool', '--no-prompt', '--', file];
+  const child = spawn('git', args, { cwd, env: process.env, stdio: 'ignore', detached: true });
+  child.on('error', () => {});
+  child.unref();
+  return '';
+}
+
+export async function externalToolConfig(cwd: string) {
+  const get = (key: string) =>
+    git(cwd, ['config', '--get', key]).then(
+      (v) => v.trim(),
+      () => '',
+    );
+  const [diff, merge] = await Promise.all([get('diff.tool'), get('merge.tool')]);
+  return { diff, merge };
+}
+
+const TOOL_NAME = /^[A-Za-z0-9._-]{1,40}$/;
+export async function setExternalToolConfig(cwd: string, config: { diff: string; merge: string }) {
+  for (const [key, value] of [
+    ['diff.tool', config.diff],
+    ['merge.tool', config.merge],
+  ] as const) {
+    if (!value) await git(cwd, ['config', '--global', '--unset-all', key]).catch(() => '');
+    else if (!TOOL_NAME.test(value)) throw new Error(`"${value}" is not a valid tool name.`);
+    else await git(cwd, ['config', '--global', key, value]);
+  }
+  return '';
+}
+
+/** Housekeeping: pack objects, prune unreachable ones Git already considers expired, write the commit-graph. */
+export async function maintenance(cwd: string) {
+  const size = async () => {
+    const out = await git(cwd, ['count-objects', '-v']);
+    const n = (key: string) => Number(new RegExp(`^${key}: (\\d+)`, 'm').exec(out)?.[1] ?? 0);
+    return n('size') + n('size-pack');
+  };
+  const before = await size();
+  await git(cwd, ['gc', '--quiet']);
+  await git(cwd, ['commit-graph', 'write', '--reachable']).catch(() => '');
+  const after = await size();
+  return { beforeKiB: before, afterKiB: after };
+}
+
+// ---- author / committer of a commit (commit details) ----
+
+export interface Person {
+  name: string;
+  email: string;
+  date: string;
+}
+export async function commitPeople(cwd: string, hash: string): Promise<{ author: Person; committer: Person }> {
+  if (!/^[0-9a-f]{7,64}$/i.test(hash) && hash !== 'HEAD') throw new Error('Invalid commit ID.');
+  const out = await git(cwd, ['show', '-s', '--format=%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI', hash]);
+  const [an, ae, ad, cn, ce, cd] = out.trim().split('\x1f');
+  return { author: { name: an, email: ae, date: ad }, committer: { name: cn, email: ce, date: cd } };
+}
+
+// ---- material for AI explanations ----
+
+const AI_LIMIT = 140_000;
+const clip = (text: string) => (text.length > AI_LIMIT ? `${text.slice(0, AI_LIMIT)}\n… (truncated)` : text);
+
+/** Commits and diff of `branch` since it left `base` (what a merge of it would bring). */
+export async function branchDiff(cwd: string, base: string, branch: string) {
+  for (const ref of [base, branch])
+    if (typeof ref !== 'string' || !ref || ref.startsWith('-') || /\s/.test(ref)) throw new Error('Invalid branch.');
+  const [log, diff] = await Promise.all([
+    git(cwd, ['log', '--no-merges', '--format=- %s', `${base}..${branch}`, '--']),
+    git(cwd, ['diff', '--no-ext-diff', '--no-color', '--find-renames', `${base}...${branch}`, '--']),
+  ]);
+  return { commits: log.trim(), diff: clip(diff) };
+}
+
+/** Every uncommitted change (staged and not), plus untracked file names. */
+export async function workingDiff(cwd: string) {
+  const hasHead = await git(cwd, ['rev-parse', '--verify', 'HEAD']).then(
+    () => true,
+    () => false,
+  );
+  const [diff, untracked] = await Promise.all([
+    hasHead
+      ? git(cwd, ['diff', '--no-ext-diff', '--no-color', '--find-renames', 'HEAD', '--'])
+      : git(cwd, ['diff', '--no-ext-diff', '--no-color', '--cached', '--']),
+    git(cwd, ['ls-files', '--others', '--exclude-standard']),
+  ]);
+  return { diff: clip(diff), untracked: untracked.split('\n').filter(Boolean).slice(0, 200) };
+}
+
+// ---- Commit Composer: commit exactly a set of files ----
+
+/**
+ * Stage and commit only `paths` (deletions and both sides of renames included). Other staged changes
+ * stay staged and are not part of this commit (`git commit --only`).
+ */
+export async function commitFiles(cwd: string, paths: string[], summary: string, description = '') {
+  if (!Array.isArray(paths) || !paths.length) throw new Error('Choose at least one file for this commit.');
+  if (typeof summary !== 'string' || !summary.trim()) throw new Error('Each commit needs a summary.');
+  const files = await status(cwd);
+  if (files.some(conflicted)) throw new Error('Resolve conflicts before composing commits.');
+  const names = new Set<string>();
+  const unstaged = new Set<string>();
+  for (const p of paths) {
+    const f = files.find((x) => x.path === p);
+    if (!f) throw new Error(`${p} has no uncommitted changes any more. Refresh and try again.`);
+    names.add(f.path);
+    if (f.oldPath) names.add(f.oldPath);
+    // only changes not yet in the index need adding; staged deletions / renames are already there
+    if (f.worktree !== ' ') unstaged.add(f.path);
+  }
+  const list = [...names];
+  if (unstaged.size) await git(cwd, ['--literal-pathspecs', 'add', '-A', '--', ...unstaged]);
+  const args = ['--literal-pathspecs', 'commit', '--only', '-m', summary.trim()];
+  if (description.trim()) args.push('-m', description.trim());
+  return git(cwd, [...args, '--', ...list]);
+}
+
+// ---- Agent Sessions: a worktree on a new branch ----
+
+/** Create `branch` at `base` and check it out in a new worktree at `path` (which must not exist yet). */
+export async function worktreeAddBranch(cwd: string, wtPath: string, branch: string, base: string) {
+  if (typeof wtPath !== 'string' || !path.isAbsolute(wtPath) || wtPath.includes('\0'))
+    throw new Error('Choose an absolute folder for the worktree.');
+  if (
+    await access(wtPath).then(
+      () => true,
+      () => false,
+    )
+  )
+    throw new Error(`${wtPath} already exists.`);
+  if (typeof base !== 'string' || !base || base.startsWith('-')) throw new Error('Choose a base branch.');
+  if (typeof branch !== 'string' || !branch.trim() || branch.startsWith('-')) throw new Error('Enter a branch name.');
+  await git(cwd, ['check-ref-format', '--branch', branch]).catch(() => {
+    throw new Error(`"${branch}" is not a valid branch name.`);
+  });
+  await git(cwd, ['rev-parse', '--verify', '--quiet', `${base}^{commit}`]).catch(() => {
+    throw new Error(`Base "${base}" was not found.`);
+  });
+  return git(cwd, ['worktree', 'add', '-b', branch, wtPath, base]);
+}

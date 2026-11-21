@@ -63,6 +63,34 @@ pub const PORTED: &[&str] = &[
     "unstage",
     "commit",
     "checkout",
+    "renameBranch",
+    "commitPeople",
+    "branchDiff",
+    "workingDiff",
+    "commitFiles",
+    "worktreeAddBranch",
+    "lfsStatus",
+    "lfsAction",
+    "submodules",
+    "submoduleUpdate",
+    "worktreeRemove",
+    "worktreeLock",
+    "applyPatch",
+    "rangeFiles",
+    "rangeFileDiff",
+    "rangePatch",
+    "externalTool",
+    "externalToolConfig",
+    "setExternalToolConfig",
+    "maintenance",
+    "pushTag",
+    "deleteTag",
+    "addRemote",
+    "removeRemote",
+    "ignorePath",
+    "commitTemplate",
+    "signingConfig",
+    "setSigningConfig",
     "createBranch",
     "branchAt",
     "deleteBranch",
@@ -190,26 +218,94 @@ pub async fn git_call(
     match method.as_str() {
         "status" => json(git::status(&git, &a.repo()?).await?),
         "log" => json(
-            git::log_sorted(
+            git::log_scoped(
                 &git,
                 &a.repo()?,
                 a.u64_or(1, 400)?,
                 a.u64_or(2, 0)?,
                 a.opt_str(3).unwrap_or("topo"),
+                &a.parse_or_default::<git::HistoryScope>(4)?,
             )
             .await?,
         ),
         "refs" => json(git::refs(&git, &a.repo()?).await?),
         "reflog" => json(git::reflog(&git, &a.repo()?).await?),
         "historyPosition" => json(
-            git::history_position_sorted(
+            git::history_position_scoped(
                 &git,
                 &a.repo()?,
                 a.str(1)?,
                 a.opt_str(2).unwrap_or("topo"),
+                &a.parse_or_default::<git::HistoryScope>(3)?,
             )
             .await?,
         ),
+        "lfsStatus" => json(git::lfs_status(&git, &a.repo()?).await?),
+        "lfsAction" => json(git::lfs_action(&git, &a.repo()?, a.str(1)?, a.opt_str(2)).await?),
+        "submodules" => json(git::submodules(&git, &a.repo()?).await?),
+        "submoduleUpdate" => json(git::submodule_update(&git, &a.repo()?, a.opt_str(1)).await?),
+        "worktreeRemove" => json(
+            git::worktree_remove(
+                &git,
+                &a.repo()?,
+                a.str(1)?,
+                a.bool_or(2, false),
+                a.opt_str(3),
+            )
+            .await?,
+        ),
+        "worktreeLock" => {
+            json(git::worktree_lock(&git, &a.repo()?, a.str(1)?, a.bool_or(2, true)).await?)
+        }
+        "applyPatch" => json(git::apply_patch(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "rangeFiles" => json(git::range_files(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "rangeFileDiff" => json(
+            git::range_file_diff(
+                &git,
+                &a.repo()?,
+                a.str(1)?,
+                a.str(2)?,
+                a.str(3)?,
+                a.opt_str(4),
+            )
+            .await?,
+        ),
+        "rangePatch" => json(git::range_patch(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "externalTool" => json(
+            git::external_tool(&git, &a.repo()?, a.str(1)?, a.str(2)?, a.bool_or(3, false)).await?,
+        ),
+        "externalToolConfig" => json(git::external_tool_config(&git, &a.repo()?).await?),
+        "setExternalToolConfig" => {
+            json(git::set_external_tool_config(&git, &a.repo()?, a.parse(1)?).await?)
+        }
+        "maintenance" => json(git::maintenance(&git, &a.repo()?).await?),
+        "commitPeople" => json(git::commit_people(&git, &a.repo()?, a.str(1)?).await?),
+        "branchDiff" => json(git::branch_diff(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "workingDiff" => json(git::working_diff(&git, &a.repo()?).await?),
+        "worktreeAddBranch" => {
+            json(git::worktree_add_branch(&git, &a.repo()?, a.str(1)?, a.str(2)?, a.str(3)?).await?)
+        }
+        "commitFiles" => json(
+            git::commit_files(
+                &git,
+                &a.repo()?,
+                &a.strings(1)?,
+                a.str(2)?,
+                a.opt_str(3).unwrap_or(""),
+            )
+            .await?,
+        ),
+        "renameBranch" => json(git::rename_branch(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "pushTag" => json(git::push_tag(&git, &a.repo()?, a.str(1)?, a.opt_str(2)).await?),
+        "deleteTag" => json(git::delete_tag(&git, &a.repo()?, a.str(1)?, a.opt_str(2)).await?),
+        "addRemote" => json(git::add_remote(&git, &a.repo()?, a.str(1)?, a.str(2)?).await?),
+        "removeRemote" => json(git::remove_remote(&git, &a.repo()?, a.str(1)?).await?),
+        "ignorePath" => json(git::ignore_path(&git, &a.repo()?, a.str(1)?, a.opt_str(2)).await?),
+        "commitTemplate" => json(git::commit_template(&git, &a.repo()?).await?),
+        "signingConfig" => json(git::signing_config(&git, &a.repo()?).await?),
+        "setSigningConfig" => {
+            json(git::set_signing_config(&git, &a.repo()?, a.parse(1)?, a.str(2)?).await?)
+        }
         "commitDetail" => json(git::commit_detail(&git, &a.repo()?, a.str(1)?).await?),
         "commitFileDiff" => {
             json(git::commit_file_diff(&git, &a.repo()?, a.str(1)?, a.str(2)?, a.opt_str(3)).await?)
@@ -465,14 +561,16 @@ pub async fn repo_clone(
     url: String,
     destination: String,
     credentials: Option<PushCredentials>,
+    depth: Option<u32>,
 ) -> CmdResult<()> {
     use tauri::Emitter;
-    git::clone_with_credentials(
+    git::clone_with_options(
         &url,
         &destination,
         credentials
             .as_ref()
             .map(|c| (c.username.as_str(), c.password.as_str())),
+        depth,
         |line| {
             let _ = handle.emit("repo:cloneProgress", line);
         },

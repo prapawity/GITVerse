@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles,
   Settings as GearIcon,
   SquareTerminal,
+  GitPullRequest,
   ArchiveRestore,
   Archive,
   ArrowDownToLine,
@@ -19,9 +20,14 @@ import {
   Upload,
   X,
   ListOrdered,
+  Wrench,
+  Command,
+  ChevronLeft,
+  ChevronRight,
+  Rocket,
 } from 'lucide-react';
-import { Panel, Group, Separator } from 'react-resizable-panels';
-import { CommitGraph } from './components/CommitGraph';
+import { Panel, Group, Separator, usePanelRef } from 'react-resizable-panels';
+import { CommitGraph, type WorktreeWip } from './components/CommitGraph';
 import { CommitMenu } from './components/CommitMenu';
 import { askConfirm, askFlow, askText, DialogHost } from './components/Dialogs';
 import { DetailsPanel, type ChangedFile } from './components/DetailsPanel';
@@ -31,23 +37,38 @@ import { ConflictPanel, ConflictRow } from './components/ConflictPanel';
 import { MergeTool } from './components/MergeTool';
 import { SettingsPage, type Section } from './components/Settings';
 import { AiPanel } from './components/AiPanel';
-import { TerminalPanel } from './components/TerminalPanel';
+import { SHOW_TERMINAL, TerminalPanel } from './components/TerminalPanel';
 import { useSettings } from './store/settingsStore';
 import { storage } from './lib/storage';
 import { reorderRepoTabs } from './lib/reorderRepoTabs';
-import { checkoutRemoteWithSparseRecovery } from './lib/checkoutRemoteFlow';
 import { ActivityBar, GraphSkeleton, Spinner } from './components/Loading';
 import { FileRail } from './components/FileRail';
 import { Sidebar } from './components/Sidebar';
 import { RepoBranchDropdown } from './components/RepoBranchDropdown';
 import { PushDialog } from './components/PushDialog';
+import { PullRequestDialog } from './components/PullRequestDialog';
+import { GraphFilterBar } from './components/GraphFilterBar';
+import { ExplainDialog } from './components/ExplainDialog';
+import { ComposerDialog } from './components/ComposerDialog';
+import { Launchpad } from './components/Launchpad';
+import { NewAgentSession, useNewAgentSession } from './components/NewAgentSession';
+import { useLaunchpad } from './lib/launchpad';
+import { useComposer } from './lib/composer';
+import { runAiTask, useExplain, workingMaterial, commitMaterial } from './lib/aiTask';
+import { ToolGroup } from './components/ToolGroup';
+import { CombinedChanges, consecutiveRange } from './components/CombinedChanges';
+import { CommandPalette, ShortcutList, type PaletteCommand } from './components/CommandPalette';
 import { CloneDialog } from './components/CloneDialog';
 import { RepoGroup } from './components/RepoGroup';
 import { ActivityLog } from './components/ActivityLog';
 import { StashView } from './components/StashView';
 import { ProfilePicker } from './components/ProfilePicker';
 import { WorkingChangesPanel, type WorkingFile } from './components/WorkingChangesPanel';
-import { useRepo } from './store/repoStore';
+import { OPEN_PUSH_DIALOG, OPEN_REQUEST_AFTER_PUSH, useRepo } from './store/repoStore';
+import { useResolvedTheme } from './lib/theme';
+import { stepZoom, useAppZoom } from './lib/zoom';
+import { replay, snapshot, useActionHistory } from './lib/actionHistory';
+import { locateRef, openRef, registerLocator } from './lib/refActions';
 import { AgentCheckpoints } from './components/AgentCheckpoints';
 import { RecoveryPanel } from './components/RecoveryPanel';
 import { RebasePreview } from './components/RebasePreview';
@@ -59,6 +80,35 @@ import { platformApi, desktopApi } from './platform/api';
 let restored = false;
 const shortcutModifier = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const Handle = () => <Separator className="w-px bg-surface transition-colors hover:bg-accent" />;
+
+/**
+ * Divider between a side panel and the graph, with a small tab that shows or hides the panel.
+ * The tab sits on the graph side of the line, appears on hover / keyboard focus, and stays
+ * visible while the panel is closed so it can always be reopened from the screen edge.
+ */
+function EdgeHandle({ side, open, onToggle }: { side: 'left' | 'right'; open: boolean; onToggle: () => void }) {
+  const name = side === 'left' ? 'branches sidebar' : 'details panel';
+  const keys = `${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+'}${side === 'right' ? '⌥' : ''}B`;
+  const pointsLeft = side === 'left' ? open : !open;
+  const Chevron = pointsLeft ? ChevronLeft : ChevronRight;
+  return (
+    <Separator
+      className={`edge-handle relative w-px bg-surface transition-colors hover:bg-accent ${open ? '' : 'is-closed'}`}
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={`${open ? 'Hide' : 'Show'} ${name}`}
+        title={`${open ? 'Hide' : 'Show'} ${name} (${keys})`}
+        className={`edge-tab absolute top-1/2 z-20 flex h-14 w-4 -translate-y-1/2 items-center justify-center border border-surface bg-mantle text-sub hover:bg-accent/15 hover:text-accent focus-visible:opacity-100 ${side === 'left' ? 'left-0 rounded-r-md border-l-0' : 'right-0 rounded-l-md border-r-0'}`}
+      >
+        <Chevron size={12} aria-hidden />
+      </button>
+    </Separator>
+  );
+}
 
 function ToolBtn({
   icon,
@@ -80,10 +130,10 @@ function ToolBtn({
       aria-label={label}
       aria-busy={busy}
       title={label}
-      className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[60px] items-center justify-center gap-1 rounded-md text-xs ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
+      className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[60px] items-center justify-center gap-1 rounded-md text-xs ${disabled ? 'text-sub/40' : 'hover:bg-surface/60'}`}
     >
       {busy ? <Spinner size={22} className="text-accent" /> : icon}
-      <span className="hidden min-[1400px]:block">{label}</span>
+      <span className="ui-label hidden min-[1400px]:block">{label}</span>
     </button>
   );
 }
@@ -111,7 +161,6 @@ export default function App() {
     closeRepo,
     select,
     setSearch,
-    checkout,
     action,
     exec,
     refreshStatus,
@@ -125,6 +174,8 @@ export default function App() {
     ref?: { name: string; kind: 'local' | 'remote' };
   } | null>(null);
   const [selectedHashes, setSelectedHashes] = useState<string[]>([]);
+  // two or more consecutive commits selected: show their combined changes
+  const range = useMemo(() => consecutiveRange(selectedHashes, graph.rows), [selectedHashes, graph.rows]);
   const [file, setFile] = useState<ChangedFile | null>(null);
   const [workingView, setWorkingView] = useState(true);
   const [stashView, setStashView] = useState<StashRef | null>(null);
@@ -134,6 +185,11 @@ export default function App() {
   const navigationSeq = useRef(0);
   const openedHead = useRef<string | null>(null);
   const [termOpen, setTermOpen] = useState(false);
+  useEffect(() => {
+    const show = () => setTermOpen(true);
+    window.addEventListener(SHOW_TERMINAL, show);
+    return () => window.removeEventListener(SHOW_TERMINAL, show);
+  }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [workspaceInspectionOpen, setWorkspaceInspectionOpen] = useState(false);
@@ -183,11 +239,35 @@ export default function App() {
   const [groupMenu, setGroupMenu] = useState<{ repo: string; x: number; y: number } | null>(null);
   const [newGroup, setNewGroup] = useState<string | null>(null);
   const [pushRepo, setPushRepo] = useState<string | null>(null);
+  const [pullRequestRepo, setPullRequestRepo] = useState<string | null>(null);
+  // reload history when refs are hidden / soloed for the open repository
+  const graphHiddenKey = useSettings((s) => (repoPath ? (s.graphHidden[repoPath] ?? []).join('\n') : ''));
+  const graphSoloKey = useSettings((s) => (repoPath ? (s.graphSolo[repoPath] ?? []).join('\n') : ''));
+  const firstScope = useRef(true);
+  useEffect(() => {
+    if (firstScope.current) {
+      firstScope.current = false;
+      return;
+    }
+    if (repoPath) void useRepo.getState().refresh(true);
+  }, [graphHiddenKey, graphSoloKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const openAfterPush = (event: Event) => setPullRequestRepo((event as CustomEvent<string>).detail);
+    const openPush = (event: Event) => setPushRepo((event as CustomEvent<string>).detail);
+    window.addEventListener(OPEN_REQUEST_AFTER_PUSH, openAfterPush);
+    window.addEventListener(OPEN_PUSH_DIALOG, openPush);
+    return () => {
+      window.removeEventListener(OPEN_REQUEST_AFTER_PUSH, openAfterPush);
+      window.removeEventListener(OPEN_PUSH_DIALOG, openPush);
+    };
+  }, []);
   const autoFetchMinutes = useSettings((s) => s.autoFetchMinutes);
   const fetchMode = useSettings((s) => s.fetchMode);
   const { indexUndo, indexRedo, moveIndexHistory } = useRepo();
-  const theme = useSettings((s) => s.theme);
+  const theme = useResolvedTheme();
+  useAppZoom();
   const fontSize = useSettings((s) => s.fontSize);
+  const uiMode = useSettings((s) => s.uiMode);
   const repoGroups = useSettings((s) => s.repoGroups);
   const syncingGroups = useRepo((s) => s.syncingGroups);
   const repoGroupRoots = useSettings((s) => s.repoGroupRoots);
@@ -196,6 +276,9 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.dataset.ui = uiMode;
+  }, [uiMode]);
   useEffect(() => {
     document.documentElement.style.setProperty('--ui-font-scale', String(fontSize / 14));
   }, [fontSize]);
@@ -258,6 +341,16 @@ export default function App() {
   useEffect(() => {
     setFile(null);
   }, [repoPath, selectedHash]);
+  // History / Blame in a diff: go to that commit and keep showing the same file there
+  const pendingFile = useRef<{ hash: string; path: string } | null>(null);
+  const loadedDetail = useRepo((s) => s.detail);
+  useEffect(() => {
+    const want = pendingFile.current;
+    if (!want || !loadedDetail || loadedDetail.hash !== want.hash || selectedHash !== want.hash) return;
+    pendingFile.current = null;
+    const files = (loadedDetail.files ?? []) as ChangedFile[];
+    setFile(files.find((f) => f.path === want.path || f.oldPath === want.path) ?? { status: 'M', path: want.path });
+  }, [loadedDetail, selectedHash]);
   useEffect(() => {
     setWorkingView(true);
     setWorkingFile(null);
@@ -336,6 +429,10 @@ export default function App() {
     branch ?? (operation?.head && operation.head !== 'HEAD' ? operation.head : detached ? 'Detached HEAD' : '—');
   const dis = !repoPath;
 
+  const openFileAt = async (hash: string, path: string) => {
+    pendingFile.current = { hash, path };
+    if (!(await navigateToHash(hash))) pendingFile.current = null;
+  };
   const navigateToHash = async (hash: string) => {
     const stash = useRepo.getState().refs.stashes.find((entry) => entry.hash === hash);
     if (stash) {
@@ -372,31 +469,15 @@ export default function App() {
     });
   }, [repoPath, loading, loadingMore, headHash, graph.rows, ensureCommitVisible]);
 
-  const navigateBranch = (kind: 'local' | 'remote', name: string) => {
-    const ref = refs[kind].find((item) => item.name === name);
-    const hash =
-      ref?.hash ??
-      graph.rows.find((row) => row.commit.refs.some((item) => item.kind === kind && item.name === name))?.commit.hash;
-    if (hash) void navigateToHash(hash);
-    else useRepo.getState().notify('error', 'Could not locate branch', 'Refresh the repository and try again.');
-  };
-
-  const navigateTag = async (name: string) => {
-    const cwd = repoPath;
-    if (!cwd) return;
-    try {
-      const hash: string = await desktopApi().tagCommit(cwd, name);
-      if (useRepo.getState().repoPath === cwd) await navigateToHash(hash);
-    } catch (error: any) {
-      useRepo
-        .getState()
-        .notify(
-          'error',
-          'Could not locate tag',
-          String(error?.message ?? error).replace(/^Error invoking remote method '[^']*': (Error: )?/, ''),
-        );
-    }
-  };
+  // clicks on branches and tags go through one shared module (sidebar, graph, palette)
+  const navigateBranch = (kind: 'local' | 'remote', name: string) => void locateRef(kind, name);
+  const navigateTag = (name: string) => locateRef('tag', name);
+  const locatorRef = useRef(navigateToHash);
+  locatorRef.current = navigateToHash;
+  useEffect(() => {
+    registerLocator((hash) => locatorRef.current(hash));
+    return () => registerLocator(null);
+  }, []);
 
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -428,6 +509,597 @@ export default function App() {
       current === '—' ? 'the current checkout' : current,
     );
     if (name) exec('createBranch', name);
+  };
+
+  const rightPanelKind = recoveryOpen
+    ? 'recovery'
+    : workspaceInspectionOpen
+      ? 'workspace'
+      : operation && conflictView
+        ? 'conflict'
+        : stashView
+          ? 'stash'
+          : workingView
+            ? 'working'
+            : range
+              ? 'combined'
+              : 'details';
+
+  // other worktrees of this repository with uncommitted work: one WIP row each in the graph
+  const [worktreeWips, setWorktreeWips] = useState<WorktreeWip[]>([]);
+  useEffect(() => {
+    if (!repoPath) return setWorktreeWips([]);
+    const cwd = repoPath;
+    let active = true;
+    const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
+    const load = async () => {
+      const api = platformApi();
+      if (!api?.inspectWorkspace || document.visibilityState !== 'visible') return;
+      try {
+        const info: { worktrees: { path: string; head: string; branch?: string; bare: boolean; prunable: boolean }[] } =
+          await api.inspectWorkspace(cwd);
+        const others = info.worktrees.filter((w) => !w.bare && !w.prunable && norm(w.path) !== norm(cwd) && w.head);
+        const withChanges = await Promise.all(
+          others.map(async (w) => {
+            const files: unknown[] = await api.status(w.path).catch(() => []);
+            return {
+              path: w.path,
+              name: w.path.split(/[\\/]/).filter(Boolean).pop() ?? w.path,
+              branch: w.branch ? w.branch.replace(/^refs\/heads\//, '') : null,
+              head: w.head,
+              changes: files.length,
+            };
+          }),
+        );
+        if (active && useRepo.getState().repoPath === cwd) setWorktreeWips(withChanges.filter((w) => w.changes > 0));
+      } catch {
+        if (active) setWorktreeWips([]);
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 30_000);
+    window.addEventListener('focus', load);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener('focus', load);
+    };
+  }, [repoPath, status.length]);
+
+  // ---- show / hide the side panels to give the graph more room (Cmd+B, Cmd+Alt+B) ----
+  const leftOpen = useSettings((s) => s.leftPanelOpen);
+  const rightOpen = useSettings((s) => s.rightPanelOpen);
+  const leftPanel = usePanelRef();
+  const rightPanel = usePanelRef();
+  const leftEl = useRef<HTMLDivElement | null>(null);
+  const rightEl = useRef<HTMLDivElement | null>(null);
+  /**
+   * Only transform and opacity animate (GPU, no re-layout): closing slides the content out, then the
+   * panel collapses once; opening expands once, then slides the content in. The graph resizes a single
+   * time and React state changes only once, so nothing re-renders mid-animation.
+   */
+  useEffect(() => {
+    const persist = () => {
+      savePanelSize('left');
+      savePanelSize('right');
+    };
+    window.addEventListener('beforeunload', persist);
+    return () => window.removeEventListener('beforeunload', persist);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const togglePanel = (side: 'left' | 'right') => {
+    const key = side === 'left' ? 'leftPanelOpen' : 'rightPanelOpen';
+    const el = (side === 'left' ? leftEl : rightEl).current;
+    const open = useSettings.getState()[key];
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const play = (name: string, done?: () => void) => {
+      if (!el || reduced) return done?.();
+      el.classList.remove('panel-enter-left', 'panel-enter-right', 'panel-leave-left', 'panel-leave-right');
+      void el.offsetWidth; // restart the animation if it is toggled again quickly
+      el.classList.add(name);
+      el.addEventListener(
+        'animationend',
+        () => {
+          el.classList.remove(name);
+          done?.();
+        },
+        { once: true },
+      );
+    };
+    if (open) {
+      savePanelSize(side);
+      play(`panel-leave-${side}`, () => useSettings.getState().set(key, false));
+    } else {
+      useSettings.getState().set(key, true);
+      requestAnimationFrame(() => play(`panel-enter-${side}`));
+    }
+  };
+  // the last open width of each panel, kept in a ref while dragging (no re-render per frame)
+  const panelSizes = useRef({
+    left: useSettings.getState().leftPanelSize,
+    right: useSettings.getState().rightPanelSize,
+  });
+  const savePanelSize = (side: 'left' | 'right') =>
+    useSettings.getState().set(side === 'left' ? 'leftPanelSize' : 'rightPanelSize', panelSizes.current[side]);
+  // dragging a panel closed (or open again) updates the saved state too
+  /**
+   * The panel API throws for a panel that is not mounted (the left panel is swapped for the file rail
+   * while a file is open), so every call checks the panel is on screen and never lets an error escape.
+   */
+  const livePanel = (side: 'left' | 'right') => {
+    const el = (side === 'left' ? leftEl : rightEl).current;
+    const panel = (side === 'left' ? leftPanel : rightPanel).current;
+    return el?.isConnected && panel ? panel : null;
+  };
+  const syncPanelSetting = (side: 'left' | 'right') => {
+    const ref = { current: livePanel(side) };
+    let collapsed: boolean | undefined;
+    try {
+      collapsed = ref.current?.isCollapsed();
+    } catch {
+      return;
+    }
+    if (collapsed === undefined) return;
+    if (!collapsed) {
+      let size: number;
+      try {
+        size = ref.current!.getSize().asPercentage;
+      } catch {
+        return;
+      }
+      if (size > 1) panelSizes.current[side] = Math.round(size * 10) / 10;
+    }
+    const key = side === 'left' ? 'leftPanelOpen' : 'rightPanelOpen';
+    if (useSettings.getState()[key] === collapsed) useSettings.getState().set(key, !collapsed);
+  };
+  useEffect(() => {
+    // after the layout settles, so a panel that was just mounted is registered with its group
+    const frame = requestAnimationFrame(() => {
+      for (const [side, open] of [
+        ['left', leftOpen],
+        ['right', rightOpen],
+      ] as const) {
+        const panel = livePanel(side);
+        if (!panel) continue;
+        try {
+          // reopen at exactly the width it had, not the minimum the library falls back to
+          if (open && panel.isCollapsed()) panel.resize(`${panelSizes.current[side]}%`);
+          else if (!open && !panel.isCollapsed()) panel.collapse();
+        } catch {
+          /* panel left the layout in the meantime */
+        }
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [leftOpen, rightOpen, file, workingFile, conflictFile, repoPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'b' || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"], .xterm')) return;
+      e.preventDefault();
+      togglePanel(e.altKey ? 'right' : 'left');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- command palette (Cmd/Ctrl+P) and shortcut list (Cmd/Ctrl+/) ----
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [editorList, setEditorList] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    if (paletteOpen)
+      void platformApi()
+        ?.editors?.()
+        .then(setEditorList)
+        .catch(() => {});
+  }, [paletteOpen]);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key.toLowerCase() === 'l' && !e.shiftKey) {
+        e.preventDefault();
+        useLaunchpad.getState().toggle();
+      } else if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setShortcutsOpen(false);
+        setPaletteOpen((v) => !v);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        setPaletteOpen(false);
+        setShortcutsOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const shortcuts: [string, string][] = [
+    [`${shortcutModifier}P`, 'Command palette'],
+    [`${shortcutModifier}/`, 'Keyboard shortcuts'],
+    [`${shortcutModifier}F`, 'Search commits'],
+    [`${shortcutModifier}J`, 'Ask AI'],
+    [`${shortcutModifier}L`, 'Launchpad'],
+    [`${shortcutModifier}B`, 'Show / hide branches sidebar'],
+    [`${shortcutModifier}⌥B`, 'Show / hide details panel'],
+    [`${shortcutModifier}Z / ${shortcutModifier}⇧Z`, 'Undo / redo the last action or staging change'],
+    [`${shortcutModifier}= / ${shortcutModifier}- / ${shortcutModifier}0`, 'Zoom in / out / actual size'],
+    ['Ctrl+`', 'Toggle terminal'],
+    ['Enter / Shift+Enter', 'Locate / check out the focused branch in the sidebar'],
+    ['Esc', 'Close menus and side panels'],
+  ];
+  const openSettingsAt = (section: Section) => {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  };
+  // Undo / Redo: the most recent of a Git action (commit, checkout, reset…) or a staging change
+  const actionStacks = useActionHistory((s) => (repoPath ? s.stacks[repoPath] : undefined));
+  const lastStagingAt = useActionHistory((s) => s.lastStagingAt);
+  const gitUndo = actionStacks?.undo.at(-1);
+  const gitRedo = actionStacks?.redo.at(-1);
+  const preferGit = (entry: { at: number } | undefined, index: boolean) =>
+    !!entry && (!index || entry.at > lastStagingAt);
+  const undoTarget = preferGit(gitUndo, indexUndo) ? gitUndo!.label : indexUndo ? 'staging' : null;
+  const redoTarget = preferGit(gitRedo, indexRedo) ? gitRedo!.label : indexRedo ? 'staging' : null;
+  const runUndo = async (direction: 'undo' | 'redo') => {
+    const entry = direction === 'undo' ? gitUndo : gitRedo;
+    const index = direction === 'undo' ? indexUndo : indexRedo;
+    // never reset or check out underneath another running Git action
+    if (!repoPath || useRepo.getState().working || useRepo.getState().busy) return;
+    if (!preferGit(entry, index)) {
+      await moveIndexHistory(direction);
+      setWorkingFile(null);
+      return;
+    }
+    const state = useRepo.getState();
+    try {
+      const label = await replay(repoPath, direction, snapshot(state.refs), state.status.length > 0);
+      await state.refresh();
+      state.notify('success', `${direction === 'undo' ? 'Undid' : 'Redid'} ${label}`);
+    } catch (error) {
+      state.notify('error', `Could not ${direction}`, String((error as Error)?.message ?? error));
+    }
+  };
+  // subscribe once; the latest runUndo is read through a ref
+  const runUndoRef = useRef(runUndo);
+  runUndoRef.current = runUndo;
+  useEffect(() => {
+    // native Edit menu (Electron): undo text in a focused field, otherwise the last action
+    const stop = platformApi()?.onEditKey?.((key) => {
+      const focused = document.activeElement as HTMLElement | null;
+      if (focused?.closest('input, textarea, [contenteditable="true"]')) {
+        document.execCommand(key);
+        return;
+      }
+      if (!document.querySelector('[role="dialog"]')) void runUndoRef.current(key);
+    });
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'z') return;
+      const target = e.target as HTMLElement | null;
+      // text fields keep their own undo
+      if (target && (target.closest('input, textarea, [contenteditable="true"]') || target.closest('.xterm'))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      void runUndoRef.current(e.shiftKey ? 'redo' : 'undo');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      stop?.();
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  const stashWithAiName = async () => {
+    if (!repoPath) return;
+    const cwd = repoPath;
+    const state = useRepo.getState();
+    let suggestion = '';
+    try {
+      const material = await workingMaterial(cwd);
+      if (material) suggestion = (await runAiTask('stash', material)).split('\n')[0].slice(0, 80);
+    } catch (e) {
+      state.notify('warning', 'AI could not name the stash', String((e as Error)?.message ?? e));
+    }
+    const message = await askText('Name this stash', 'e.g. Before refactoring', suggestion);
+    if (message && useRepo.getState().repoPath === cwd) await action('stash', message);
+  };
+  const explainWorking = () =>
+    repoPath &&
+    useExplain.getState().open({
+      title: 'Explain working changes',
+      subtitle: `${status.length} changed file${status.length === 1 ? '' : 's'}`,
+      material: () => workingMaterial(repoPath),
+    });
+  const explainSelected = () => {
+    if (!repoPath || !selectedHash) return;
+    const hashes = selectedHashes.length > 1 ? selectedHashes : [selectedHash];
+    useExplain.getState().open({
+      title: hashes.length > 1 ? `Explain ${hashes.length} commits` : 'Explain commit',
+      subtitle: hashes.length > 1 ? undefined : selectedHash.slice(0, 7),
+      material: () => commitMaterial(repoPath, hashes, range),
+    });
+  };
+  const paletteCommands = (): PaletteCommand[] => {
+    const noRepo = !repoPath;
+    const blocked = noRepo || !!working;
+    const settings = useSettings.getState();
+    const list: PaletteCommand[] = [
+      {
+        id: 'fetch',
+        group: 'Remote',
+        title: 'Fetch all remotes',
+        disabled: blocked,
+        run: () => void action('fetch', 'all'),
+      },
+      {
+        id: 'pull',
+        group: 'Remote',
+        title: 'Pull (fast-forward only)',
+        disabled: blocked,
+        run: () => void action('fetch', 'ff-only'),
+      },
+      {
+        id: 'pull-rebase',
+        group: 'Remote',
+        title: 'Pull (rebase)',
+        disabled: blocked,
+        run: () => void action('fetch', 'rebase'),
+      },
+      { id: 'push', group: 'Remote', title: 'Push…', disabled: blocked, run: () => repoPath && setPushRepo(repoPath) },
+      {
+        id: 'push-tags',
+        group: 'Remote',
+        title: 'Push all tags to origin',
+        disabled: blocked,
+        run: () => void exec('pushTag', 'origin', null),
+      },
+      {
+        id: 'pr',
+        group: 'Remote',
+        title: 'Create pull / merge request…',
+        keywords: 'pr mr',
+        disabled: noRepo,
+        run: () => repoPath && setPullRequestRepo(repoPath),
+      },
+      { id: 'branch', group: 'Branch', title: 'New branch…', disabled: blocked, run: () => void newBranch() },
+      {
+        id: 'stash',
+        group: 'Changes',
+        title: 'Stash changes…',
+        disabled: blocked,
+        run: async () => {
+          const m = await askText('Name this stash', 'e.g. Before refactoring');
+          if (m) await action('stash', m);
+        },
+      },
+      {
+        id: 'pop',
+        group: 'Changes',
+        title: 'Pop latest stash',
+        disabled: blocked || !refs.stashes.length,
+        run: () => void action('stashPop'),
+      },
+      {
+        id: 'undo',
+        group: 'Changes',
+        title: `Undo ${undoTarget ?? ''}`.trim(),
+        shortcut: `${shortcutModifier}Z`,
+        disabled: blocked || !undoTarget,
+        run: () => void runUndo('undo'),
+      },
+      {
+        id: 'redo',
+        group: 'Changes',
+        title: `Redo ${redoTarget ?? ''}`.trim(),
+        shortcut: `${shortcutModifier}⇧Z`,
+        disabled: blocked || !redoTarget,
+        run: () => void runUndo('redo'),
+      },
+      {
+        id: 'explain-working',
+        group: 'AI',
+        title: 'Explain working changes with AI',
+        disabled: noRepo || !status.length,
+        run: () => void explainWorking(),
+      },
+      {
+        id: 'explain-commit',
+        group: 'AI',
+        title:
+          selectedHashes.length > 1
+            ? `Explain ${selectedHashes.length} selected commits with AI`
+            : 'Explain selected commit with AI',
+        disabled: noRepo || !selectedHash,
+        run: explainSelected,
+      },
+      {
+        id: 'agent-session',
+        group: 'AI',
+        title: 'New agent session…',
+        keywords: 'claude code codex gemini copilot worktree agent',
+        disabled: noRepo,
+        run: () => useNewAgentSession.getState().show(),
+      },
+      {
+        id: 'launchpad',
+        group: 'View',
+        title: 'Launchpad',
+        keywords: 'pull requests issues work in progress review',
+        shortcut: `${shortcutModifier}L`,
+        run: () => useLaunchpad.getState().show(),
+      },
+      {
+        id: 'compose',
+        group: 'AI',
+        title: 'Compose commits with AI…',
+        keywords: 'split group commits composer',
+        disabled: blocked || status.length < 2 || !!operation,
+        run: () => useComposer.getState().show(),
+      },
+      {
+        id: 'stash-ai',
+        group: 'AI',
+        title: 'Stash with AI name…',
+        disabled: blocked || !status.length,
+        run: () => void stashWithAiName(),
+      },
+      {
+        id: 'maintenance',
+        group: 'Repository',
+        title: 'Run repository maintenance',
+        keywords: 'gc clean compact',
+        disabled: blocked,
+        run: () => setWorkspaceInspectionOpen(true),
+      },
+      {
+        id: 'lfs-pull',
+        group: 'Repository',
+        title: 'Git LFS: pull files',
+        disabled: blocked,
+        run: () => void exec('lfsAction', 'pull'),
+      },
+      {
+        id: 'submodules',
+        group: 'Repository',
+        title: 'Update all submodules',
+        disabled: blocked,
+        run: () => void exec('submoduleUpdate', null),
+      },
+      {
+        id: 'patch',
+        group: 'Repository',
+        title: 'Apply patch…',
+        disabled: blocked,
+        run: () => setWorkspaceInspectionOpen(true),
+      },
+      {
+        id: 'tools',
+        group: 'Settings',
+        title: 'External diff / merge tools',
+        disabled: noRepo,
+        run: () => openSettingsAt('tools'),
+      },
+      { id: 'zoom-in', group: 'View', title: 'Zoom in', shortcut: `${shortcutModifier}=`, run: () => stepZoom('in') },
+      {
+        id: 'zoom-out',
+        group: 'View',
+        title: 'Zoom out',
+        shortcut: `${shortcutModifier}-`,
+        run: () => stepZoom('out'),
+      },
+      {
+        id: 'zoom-reset',
+        group: 'View',
+        title: 'Actual size',
+        shortcut: `${shortcutModifier}0`,
+        run: () => stepZoom('reset'),
+      },
+      ...editorList.map((editor) => ({
+        id: `open-in-${editor.id}`,
+        group: 'Open in',
+        title: `Open repository in ${editor.name}`,
+        keywords: 'editor ide',
+        disabled: noRepo,
+        run: () =>
+          repoPath &&
+          void desktopApi()
+            .openIn(editor.id, repoPath)
+            .catch((e: Error) => useRepo.getState().notify('error', `Could not open ${editor.name}`, e.message)),
+      })),
+      {
+        id: 'show-all',
+        group: 'Graph',
+        title: 'Show all hidden branches and tags',
+        disabled: noRepo,
+        run: () => repoPath && settings.resetRefVisibility(repoPath),
+      },
+      {
+        id: 'search',
+        group: 'Graph',
+        title: 'Search commits',
+        shortcut: `${shortcutModifier}F`,
+        disabled: noRepo,
+        run: () => searchRef.current?.focus(),
+      },
+      {
+        id: 'terminal',
+        group: 'View',
+        title: 'Toggle terminal',
+        shortcut: 'Ctrl+`',
+        run: () => setTermOpen((v) => !v),
+      },
+      { id: 'ai', group: 'View', title: 'Ask AI', shortcut: `${shortcutModifier}J`, run: () => setAiOpen(true) },
+      { id: 'recovery', group: 'View', title: 'Recovery history', disabled: noRepo, run: () => setRecoveryOpen(true) },
+      {
+        id: 'workspace',
+        group: 'View',
+        title: 'Remotes and worktrees',
+        keywords: 'remote add remove',
+        disabled: noRepo,
+        run: () => setWorkspaceInspectionOpen(true),
+      },
+      {
+        id: 'shortcuts',
+        group: 'View',
+        title: 'Keyboard shortcuts',
+        shortcut: `${shortcutModifier}/`,
+        run: () => setShortcutsOpen(true),
+      },
+      { id: 'clone', group: 'Repository', title: 'Clone repository…', run: () => setCloneOpen(true) },
+      { id: 'open', group: 'Repository', title: 'Open / add repository…', run: () => openAddRepo() },
+      { id: 'settings', group: 'Settings', title: 'Settings', run: () => openSettingsAt('general') },
+      {
+        id: 'appearance',
+        group: 'Settings',
+        title: 'Appearance',
+        keywords: 'theme font',
+        run: () => openSettingsAt('appearance'),
+      },
+      {
+        id: 'signing',
+        group: 'Settings',
+        title: 'Commit signing',
+        keywords: 'gpg ssh sign',
+        disabled: noRepo,
+        run: () => openSettingsAt('signing'),
+      },
+      ...(['system', 'dark', 'light', 'midnight', 'graphite'] as const).map((theme) => ({
+        id: `theme-${theme}`,
+        group: 'Settings',
+        title: `Theme: ${theme[0].toUpperCase()}${theme.slice(1)}`,
+        run: () => settings.set('theme', theme),
+      })),
+      {
+        id: 'ui-minimal',
+        group: 'Settings',
+        title: 'Interface: Minimal',
+        run: () => settings.set('uiMode', 'minimal'),
+      },
+      {
+        id: 'ui-standard',
+        group: 'Settings',
+        title: 'Interface: Standard',
+        run: () => settings.set('uiMode', 'standard'),
+      },
+      ...refs.local
+        .filter((b) => !b.current)
+        .map((b) => ({
+          id: `checkout-${b.name}`,
+          group: 'Check out branch',
+          title: b.name,
+          keywords: 'checkout switch branch',
+          disabled: blocked,
+          run: () => void openRef('local', b.name),
+        })),
+      ...recentRepos
+        .filter((r) => r !== repoPath)
+        .map((r) => ({
+          id: `repo-${r}`,
+          group: 'Switch repository',
+          title: r.split(/[\\/]/).pop() || r,
+          keywords: `repository ${r}`,
+          run: () => void openRepo(r),
+        })),
+    ];
+    return list;
   };
 
   const importFolders = async (paths: string[]) => {
@@ -906,25 +1578,21 @@ export default function App() {
           <header className="glass-toolbar flex shrink-0 flex-wrap items-center gap-x-1 gap-y-1 border-b border-surface bg-mantle px-3 py-2 sm:px-5">
             <RepoBranchDropdown current={current} />
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block xl:mx-5" aria-hidden />
-            <div className="flex shrink-0" role="group" aria-label="Index history">
-              <span title="Undo the last stage or unstage action">
+            <div className="flex shrink-0" role="group" aria-label="Undo and redo">
+              <span title={undoTarget ? `Undo ${undoTarget}` : 'Nothing to undo'}>
                 <ToolBtn
                   icon={<Undo2 size={22} />}
                   label="Undo"
-                  disabled={!indexUndo || !!working}
-                  onClick={() => {
-                    void moveIndexHistory('undo').then(() => setWorkingFile(null));
-                  }}
+                  disabled={!undoTarget || !!working}
+                  onClick={() => void runUndo('undo')}
                 />
               </span>
-              <span title="Redo the last undone stage or unstage action">
+              <span title={redoTarget ? `Redo ${redoTarget}` : 'Nothing to redo'}>
                 <ToolBtn
                   icon={<Redo2 size={22} />}
                   label="Redo"
-                  disabled={!indexRedo || !!working}
-                  onClick={() => {
-                    void moveIndexHistory('redo').then(() => setWorkingFile(null));
-                  }}
+                  disabled={!redoTarget || !!working}
+                  onClick={() => void runUndo('redo')}
                 />
               </span>
             </div>
@@ -988,22 +1656,41 @@ export default function App() {
                 busy={working === 'Creating branch…'}
                 onClick={newBranch}
               />
-              <ToolBtn
-                icon={<Archive size={22} />}
+              <ToolGroup
                 label="Stash"
-                disabled={dis}
-                busy={busy === 'stash'}
-                onClick={async () => {
-                  const message = await askText('Name this stash', 'e.g. Before refactoring');
-                  if (message) await action('stash', message);
-                }}
-              />
-              <ToolBtn
-                icon={<ArchiveRestore size={22} />}
-                label="Pop"
-                disabled={dis || !refs.stashes.length}
-                busy={busy === 'stashPop'}
-                onClick={() => action('stashPop')}
+                icon={
+                  busy === 'stash' || busy === 'stashPop' ? (
+                    <Spinner size={22} className="text-accent" />
+                  ) : (
+                    <Archive size={22} />
+                  )
+                }
+                children={[
+                  {
+                    id: 'stash',
+                    label: 'Stash changes…',
+                    icon: <Archive />,
+                    disabled: dis,
+                    onClick: async () => {
+                      const message = await askText('Name this stash', 'e.g. Before refactoring');
+                      if (message) await action('stash', message);
+                    },
+                  },
+                  {
+                    id: 'stash-ai',
+                    label: 'Stash with AI name…',
+                    icon: <Sparkles />,
+                    disabled: dis || !status.length,
+                    onClick: () => void stashWithAiName(),
+                  },
+                  {
+                    id: 'pop',
+                    label: refs.stashes.length ? 'Pop latest stash' : 'Pop (no stashes)',
+                    icon: <ArchiveRestore />,
+                    disabled: dis || !refs.stashes.length,
+                    onClick: () => void action('stashPop'),
+                  },
+                ]}
               />
               <span
                 title={
@@ -1023,43 +1710,65 @@ export default function App() {
               </span>
             </div>
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block" aria-hidden />
-            <button
-              onClick={() => {
-                setWorkspaceInspectionOpen(false);
-                setAiOpen(false);
-                setRecoveryOpen((value) => !value);
-              }}
-              aria-pressed={recoveryOpen}
-              aria-label="Recovery"
-              title="Recovery history"
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${recoveryOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
-            >
-              <History size={21} aria-hidden />
-              <span className="hidden min-[1400px]:block">Recovery</span>
-            </button>
-            <button
-              onClick={() => {
-                setRecoveryOpen(false);
-                setAiOpen(false);
-                setWorkspaceInspectionOpen((value) => !value);
-              }}
-              aria-pressed={workspaceInspectionOpen}
-              aria-label="Workspace"
-              title="Remotes and worktrees"
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${workspaceInspectionOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
-            >
-              <GitFork size={21} aria-hidden />
-              <span className="hidden min-[1400px]:block">Workspace</span>
-            </button>
+            <ToolGroup
+              label="Tools"
+              icon={<Wrench size={21} />}
+              children={[
+                {
+                  id: 'launchpad',
+                  label: 'Launchpad',
+                  hint: `Pull requests, issues and work in progress across repositories (${shortcutModifier}L)`,
+                  icon: <Rocket />,
+                  onClick: () => useLaunchpad.getState().show(),
+                },
+                {
+                  id: 'recovery',
+                  label: 'Recovery history',
+                  icon: <History />,
+                  pressed: recoveryOpen,
+                  onClick: () => {
+                    setWorkspaceInspectionOpen(false);
+                    setAiOpen(false);
+                    setRecoveryOpen((value) => !value);
+                  },
+                },
+                {
+                  id: 'workspace',
+                  label: 'Workspace',
+                  hint: 'Remotes, worktrees, LFS, submodules, patches, maintenance',
+                  icon: <GitFork />,
+                  pressed: workspaceInspectionOpen,
+                  onClick: () => {
+                    setRecoveryOpen(false);
+                    setAiOpen(false);
+                    setWorkspaceInspectionOpen((value) => !value);
+                  },
+                },
+                {
+                  id: 'pr',
+                  label: 'Pull / merge request…',
+                  icon: <GitPullRequest />,
+                  disabled: !repoPath,
+                  onClick: () => repoPath && setPullRequestRepo(repoPath),
+                },
+                {
+                  id: 'palette',
+                  label: 'All commands…',
+                  hint: `${shortcutModifier}P`,
+                  icon: <Command />,
+                  onClick: () => setPaletteOpen(true),
+                },
+              ]}
+            />
             <button
               onClick={() => setTermOpen((v) => !v)}
               aria-pressed={termOpen}
               aria-label="Terminal"
               title="Terminal (Ctrl+`)"
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${termOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
+              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs ${termOpen ? 'bg-accent/15 text-accent' : 'hover:bg-surface/60'}`}
             >
               <SquareTerminal size={22} aria-hidden />
-              <span className="hidden min-[1400px]:block">Terminal</span>
+              <span className="ui-label hidden min-[1400px]:block">Terminal</span>
             </button>
             <div className="mx-2 hidden h-9 w-px shrink-0 bg-surface xl:block" aria-hidden />
             <button
@@ -1067,10 +1776,10 @@ export default function App() {
               aria-pressed={aiOpen}
               aria-label="Ask AI"
               title={`Ask AI (${shortcutModifier}J)`}
-              className={`flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs font-semibold text-ai hover:bg-ai/10 ${aiOpen ? 'bg-ai/15 ring-1 ring-ai/60' : ''}`}
+              className={`ui-tool flex min-h-[44px] w-10 flex-col min-[1400px]:min-h-[52px] min-[1400px]:w-[68px] items-center justify-center gap-1 rounded-md text-xs font-semibold text-ai hover:bg-ai/10 ${aiOpen ? 'bg-ai/15 ring-1 ring-ai/60' : ''}`}
             >
               <Sparkles size={22} aria-hidden />
-              <span className="hidden min-[1400px]:block">Ask AI</span>
+              <span className="ui-label hidden min-[1400px]:block">Ask AI</span>
             </button>
             <div className="relative ml-auto min-w-[120px] flex-1 sm:max-w-72">
               <Search size={13} className="absolute left-2.5 top-3 text-sub" aria-hidden />
@@ -1155,9 +1864,19 @@ export default function App() {
                 }}
               />
             ) : (
-              <Panel defaultSize="20%" minSize="12%">
+              <Panel
+                defaultSize={leftOpen ? `${useSettings.getState().leftPanelSize}%` : '0%'}
+                minSize="12%"
+                collapsible
+                collapsedSize={0}
+                panelRef={leftPanel}
+                elementRef={leftEl}
+                onResize={() => syncPanelSetting('left')}
+              >
                 {repoPath && (
                   <Sidebar
+                    onCreatePullRequest={() => repoPath && setPullRequestRepo(repoPath)}
+                    onOpenPullRequest={(path) => setPullRequestRepo(path)}
                     onNavigate={navigateBranch}
                     onTag={(name) => void navigateTag(name)}
                     onStash={showStash}
@@ -1174,7 +1893,9 @@ export default function App() {
                 )}
               </Panel>
             )}
-            {!file && !workingFile && !conflictFile && <Handle />}
+            {!file && !workingFile && !conflictFile && (
+              <EdgeHandle side="left" open={leftOpen} onToggle={() => togglePanel('left')} />
+            )}
             <Panel defaultSize="55%" minSize="30%">
               {/* center column: graph / diff / merge tool on top, terminal underneath */}
               <Group orientation="vertical">
@@ -1183,6 +1904,9 @@ export default function App() {
                     {!conflictFile && !file && <ConflictRow />}
                     {repoPath && !conflictFile && !file && !workingFile && !stashView && (
                       <AgentCheckpoints key={repoPath} repo={repoPath} />
+                    )}
+                    {repoPath && !conflictFile && !file && !workingFile && !stashView && (
+                      <GraphFilterBar repo={repoPath} />
                     )}
                     <div className="min-h-0 flex-1">
                       {conflictFile ? (
@@ -1199,13 +1923,25 @@ export default function App() {
                           onRefresh={refreshWorking}
                           onClose={() => setWorkingFile(null)}
                         />
+                      ) : file && repoPath && range ? (
+                        <DiffView
+                          key={`${range.oldest}..${range.newest}:${file.path}`}
+                          repoPath={repoPath}
+                          hash={range.newest}
+                          file={file}
+                          onClose={() => setFile(null)}
+                          loadDiff={() =>
+                            desktopApi().rangeFileDiff(repoPath, range.oldest, range.newest, file.path, file.oldPath)
+                          }
+                          readOnlySnapshot
+                        />
                       ) : file && repoPath && selectedHash ? (
                         <DiffView
                           repoPath={repoPath}
                           hash={selectedHash}
                           file={file}
                           onClose={() => setFile(null)}
-                          onJumpToCommit={select}
+                          onJumpToCommit={(hash, path) => void openFileAt(hash, path ?? file.path)}
                         />
                       ) : graph.rows.length ? (
                         <CommitGraph
@@ -1238,6 +1974,8 @@ export default function App() {
                           }
                           wipSelected={workingView}
                           onSelectWip={showWorking}
+                          worktreeWips={worktreeWips}
+                          onOpenWorktree={(path) => void openRepo(path)}
                           navigate={navigation}
                           onLocateCurrent={() => {
                             if (headHash) void navigateToHash(headHash);
@@ -1269,8 +2007,8 @@ export default function App() {
                             }
                           }}
                           onDoubleClick={(r) => {
-                            if (!r.current && r.kind === 'local') checkout(r.name);
-                            else if (r.kind === 'remote') void checkoutRemoteWithSparseRecovery(r.name);
+                            if (r.kind === 'local' || r.kind === 'remote' || r.kind === 'tag')
+                              void openRef(r.kind, r.name);
                           }}
                         />
                       ) : loading ? (
@@ -1303,51 +2041,67 @@ export default function App() {
                 )}
               </Group>
             </Panel>
-            <Handle />
-            <Panel defaultSize="25%" minSize="15%" className="glass-panel bg-mantle">
-              {recoveryOpen && repoPath ? (
-                <RecoveryPanel
-                  repoPath={repoPath}
-                  onClose={() => setRecoveryOpen(false)}
-                  onNavigate={async (hash) => {
-                    const found = await navigateToHash(hash);
-                    if (found) setRecoveryOpen(false);
-                    return !!found;
-                  }}
-                />
-              ) : workspaceInspectionOpen && repoPath ? (
-                <WorkspaceInspectionPanel repoPath={repoPath} onClose={() => setWorkspaceInspectionOpen(false)} />
-              ) : operation && conflictView ? (
-                <ConflictPanel />
-              ) : stashView ? (
-                <DetailsPanel stash={stashView} file={file} onSelectFile={setFile} />
-              ) : workingView && repoPath ? (
-                <WorkingChangesPanel
-                  selected={workingFile}
-                  onSelect={setWorkingFile}
-                  onClear={() => setWorkingFile(null)}
-                  onRefresh={refreshWorking}
-                />
-              ) : (
-                <div className="flex h-full min-h-0 flex-col">
-                  {repoPath && status.length > 0 && (
-                    <div className="flex items-center gap-2 border-b border-surface bg-accent/15 px-4 py-2 text-sm">
-                      <span className="min-w-0 flex-1">
-                        {status.length} local file change{status.length === 1 ? '' : 's'}
-                      </span>
-                      <button
-                        onClick={showWorking}
-                        className="shrink-0 rounded border border-accent/50 px-2 py-1 text-accent hover:bg-accent/15"
-                      >
-                        View changes
-                      </button>
+            <EdgeHandle side="right" open={rightOpen} onToggle={() => togglePanel('right')} />
+            <Panel
+              defaultSize={rightOpen ? `${useSettings.getState().rightPanelSize}%` : '0%'}
+              minSize="15%"
+              collapsible
+              collapsedSize={0}
+              panelRef={rightPanel}
+              elementRef={rightEl}
+              onResize={() => syncPanelSetting('right')}
+              className="glass-panel bg-mantle"
+            >
+              {/* the panel crossfades when what it shows changes kind (details, changes, workspace…) */}
+              <div key={rightPanelKind} className="panel-fade h-full min-h-0">
+                {recoveryOpen && repoPath ? (
+                  <RecoveryPanel
+                    repoPath={repoPath}
+                    onClose={() => setRecoveryOpen(false)}
+                    onNavigate={async (hash) => {
+                      const found = await navigateToHash(hash);
+                      if (found) setRecoveryOpen(false);
+                      return !!found;
+                    }}
+                  />
+                ) : workspaceInspectionOpen && repoPath ? (
+                  <WorkspaceInspectionPanel repoPath={repoPath} onClose={() => setWorkspaceInspectionOpen(false)} />
+                ) : operation && conflictView ? (
+                  <ConflictPanel />
+                ) : stashView ? (
+                  <DetailsPanel stash={stashView} file={file} onSelectFile={setFile} />
+                ) : workingView && repoPath ? (
+                  <WorkingChangesPanel
+                    selected={workingFile}
+                    onSelect={setWorkingFile}
+                    onClear={() => setWorkingFile(null)}
+                    onRefresh={refreshWorking}
+                  />
+                ) : (
+                  <div className="flex h-full min-h-0 flex-col">
+                    {repoPath && status.length > 0 && (
+                      <div className="flex items-center gap-2 border-b border-surface bg-accent/15 px-4 py-2 text-sm">
+                        <span className="min-w-0 flex-1">
+                          {status.length} local file change{status.length === 1 ? '' : 's'}
+                        </span>
+                        <button
+                          onClick={showWorking}
+                          className="shrink-0 rounded border border-accent/50 px-2 py-1 text-accent hover:bg-accent/15"
+                        >
+                          View changes
+                        </button>
+                      </div>
+                    )}
+                    <div className="min-h-0 flex-1">
+                      {range ? (
+                        <CombinedChanges {...range} file={file} onSelectFile={setFile} />
+                      ) : (
+                        <DetailsPanel file={file} onSelectFile={setFile} />
+                      )}
                     </div>
-                  )}
-                  <div className="min-h-0 flex-1">
-                    <DetailsPanel file={file} onSelectFile={setFile} />
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </Panel>
             {aiOpen && (
               <>
@@ -1542,6 +2296,19 @@ export default function App() {
       )}
       {cloneOpen && <CloneDialog onClose={() => setCloneOpen(false)} />}
       {pushRepo && <PushDialog repo={pushRepo} onClose={() => setPushRepo(null)} />}
+      <ExplainDialog />
+      <ComposerDialog />
+      <Launchpad />
+      <NewAgentSession />
+      {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
+      {shortcutsOpen && <ShortcutList shortcuts={shortcuts} onClose={() => setShortcutsOpen(false)} />}
+      {pullRequestRepo && !pushRepo && (
+        <PullRequestDialog
+          repo={pullRequestRepo}
+          onClose={() => setPullRequestRepo(null)}
+          onPush={() => setPushRepo(pullRequestRepo)}
+        />
+      )}
       <Toasts />
       <BusyOverlay />
       {ctx && (

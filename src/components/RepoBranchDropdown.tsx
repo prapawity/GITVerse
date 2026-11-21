@@ -68,7 +68,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
         {open === 'repo' && (
           <div
             id="repository-list"
-            className="absolute left-0 top-full z-40 mt-2 w-[min(360px,80vw)] rounded-lg border border-surface bg-[#252a35] p-2 shadow-xl"
+            className="pop-in absolute left-0 top-full z-40 mt-2 w-[min(360px,80vw)] rounded-lg border border-surface bg-[#252a35] p-2 shadow-xl"
           >
             <div className="relative mb-2">
               <Search size={14} className="absolute left-3 top-3 text-sub" aria-hidden />
@@ -138,7 +138,7 @@ export function RepoBranchDropdown({ current }: { current: string }) {
         {open === 'branch' && (
           <div
             id="branch-list"
-            className="absolute left-0 top-full z-40 mt-2 w-[min(380px,80vw)] rounded-lg border border-surface bg-[#252a35] p-2 shadow-xl"
+            className="pop-in absolute left-0 top-full z-40 mt-2 w-[min(380px,80vw)] rounded-lg border border-surface bg-[#252a35] p-2 shadow-xl"
           >
             <div className="relative mb-2">
               <Search size={14} className="absolute left-3 top-3 text-sub" aria-hidden />

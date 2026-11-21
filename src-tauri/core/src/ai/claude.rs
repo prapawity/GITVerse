@@ -202,11 +202,23 @@ impl Claude {
     }
 
     pub async fn commit_message(&self, diff: &str, cancel: &CancellationToken) -> MessageResult {
+        self.message(&spec().commit_system, diff, 1024, cancel)
+            .await
+    }
+
+    /// One-shot text answer for `prompt` under `system` (commit messages, pull requests).
+    pub async fn message(
+        &self,
+        system: &str,
+        prompt: &str,
+        max_tokens: u32,
+        cancel: &CancellationToken,
+    ) -> MessageResult {
         let body = json!({
             "model": spec().model,
-            "max_tokens": 1024,
-            "system": spec().commit_system,
-            "messages": [{ "role": "user", "content": diff }],
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{ "role": "user", "content": prompt }],
         });
         let value = match self.post_json(false, &body, cancel).await {
             Ok(v) => v,
@@ -218,7 +230,7 @@ impl Claude {
         };
         let text = text_of(&value).trim().to_owned();
         if text.is_empty() {
-            MessageResult::failed(err(ErrKind::Other, "Claude returned no commit message."))
+            MessageResult::failed(err(ErrKind::Other, "Claude returned no text."))
         } else {
             MessageResult::ok(text)
         }

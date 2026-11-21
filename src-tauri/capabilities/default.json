@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Permissions for the main GITVerse by PRAPAWITY window.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open", "opener:default"]
+  "permissions": ["core:default", "dialog:allow-open", "opener:default", "core:webview:allow-set-webview-zoom"]
 }

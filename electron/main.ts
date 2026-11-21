@@ -1,17 +1,23 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 import * as git from './git/git';
 import { reflog } from './git/reflog';
 import { inspectWorkspace } from './git/workspaceInspection';
 import { registerTerminal } from './terminal';
 import { loadState, saveKey } from './state';
 import { registerAi } from './ai';
+import { registerHosting } from './hosting';
+import { registerEditors } from './editors';
+import { pushTokenKey } from './pushTokens';
 import { readSecret, writeSecret } from './ai/common';
 import { checkAppUpdate, downloadMacUpdate, isReleaseDownloadUrl, listReleases, RELEASES_URL } from './updates';
 import type { AppUpdateCheck } from '../src/shared/updates';
 import { scanRepositories } from './repositoryScan';
+import { fixPath } from './shellPath';
+
+// before any Git command: hooks (git-lfs…) need the same PATH as the user's terminal
+fixPath();
 
 // Keep the internal name for existing storage and Keychain entries; public labels use the product name.
 app.setName('GITVerse');
@@ -45,6 +51,34 @@ const handlers = {
   trackedStage: git.trackedStage,
   indexUndoState: git.indexUndoState,
   moveIndexHistory: git.moveIndexHistory,
+  renameBranch: git.renameBranch,
+  pushTag: git.pushTag,
+  deleteTag: git.deleteTag,
+  addRemote: git.addRemote,
+  removeRemote: git.removeRemote,
+  ignorePath: git.ignorePath,
+  commitTemplate: git.commitTemplate,
+  signingConfig: git.signingConfig,
+  setSigningConfig: git.setSigningConfig,
+  lfsStatus: git.lfsStatus,
+  lfsAction: git.lfsAction,
+  submodules: git.submodules,
+  submoduleUpdate: git.submoduleUpdate,
+  worktreeRemove: git.worktreeRemove,
+  worktreeLock: git.worktreeLock,
+  applyPatch: git.applyPatch,
+  rangeFiles: git.rangeFiles,
+  rangeFileDiff: git.rangeFileDiff,
+  rangePatch: git.rangePatch,
+  externalTool: git.externalTool,
+  externalToolConfig: git.externalToolConfig,
+  setExternalToolConfig: git.setExternalToolConfig,
+  maintenance: git.maintenance,
+  commitPeople: git.commitPeople,
+  branchDiff: git.branchDiff,
+  workingDiff: git.workingDiff,
+  commitFiles: git.commitFiles,
+  worktreeAddBranch: git.worktreeAddBranch,
   refs: git.refs,
   reflog,
   inspectWorkspace,
@@ -133,6 +167,8 @@ ipcMain.handle('app:openRuntimeNotice', async (_e, kind: 'electron' | 'chromium'
 });
 registerTerminal();
 registerAi();
+registerHosting();
+registerEditors();
 
 // persisted UI state (settings, open tabs): read synchronously at startup so the renderer can hydrate before first paint
 ipcMain.on('state:load', (e) => {
@@ -151,18 +187,23 @@ ipcMain.handle('repo:open', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
-const scans = new Map<number, { id: string; controller: AbortController }>();
+// Folder scans per window, by request id. Several can run at once: a background Group Sync must not
+// block the user opening a folder.
+const MAX_SCANS = 8;
+const scans = new Map<number, Map<string, AbortController>>();
 ipcMain.on('repo:cancelScan', (event, id: string) => {
-  const scan = scans.get(event.sender.id);
-  if (scan?.id === id) scan.controller.abort();
+  scans.get(event.sender.id)?.get(id)?.abort();
 });
 ipcMain.handle('repo:findRepositories', async (event, folder: string, id: string) => {
-  if (typeof id !== 'string' || !id || scans.has(event.sender.id))
-    throw new Error('A folder scan is already running or the request is invalid.');
-  const controller = new AbortController();
   const senderId = event.sender.id;
+  const running = scans.get(senderId) ?? new Map<string, AbortController>();
+  if (typeof id !== 'string' || !id || running.has(id))
+    throw new Error('A folder scan with this request is already running, or the request is invalid.');
+  if (running.size >= MAX_SCANS) throw new Error('Too many folder scans are running. Try again in a moment.');
+  const controller = new AbortController();
   const abort = () => controller.abort();
-  scans.set(senderId, { id, controller });
+  running.set(id, controller);
+  scans.set(senderId, running);
   event.sender.once('destroyed', abort);
   try {
     return await scanRepositories(folder, controller.signal, (progress) => {
@@ -170,13 +211,20 @@ ipcMain.handle('repo:findRepositories', async (event, folder: string, id: string
     });
   } finally {
     event.sender.removeListener('destroyed', abort);
-    scans.delete(senderId);
+    running.delete(id);
+    if (!running.size) scans.delete(senderId);
   }
 });
 
 ipcMain.handle(
   'repo:clone',
-  (event, url: string, destination: string, credentials?: { username: string; password: string }) =>
+  (
+    event,
+    url: string,
+    destination: string,
+    credentials?: { username: string; password: string },
+    options?: { depth?: number | null },
+  ) =>
     git.clone(
       url,
       destination,
@@ -184,13 +232,10 @@ ipcMain.handle(
         if (!event.sender.isDestroyed()) event.sender.send('repo:cloneProgress', message);
       },
       credentials,
+      options ?? {},
     ),
 );
 
-const pushTokenKey = (repo: string, id: string) =>
-  `push.token.${createHash('sha256')
-    .update(JSON.stringify([repo, id]))
-    .digest('hex')}`;
 ipcMain.handle('push:tokenStatus', (_e, repo: string, id: string) => !!readSecret(pushTokenKey(repo, id)));
 ipcMain.handle('push:setToken', (_e, repo: string, id: string, token: string | null) =>
   writeSecret(pushTokenKey(repo, id), token?.trim() || null),
@@ -390,8 +435,54 @@ app.whenReady().then(async () => {
           ]
         : []),
       { role: 'fileMenu' as const },
-      { role: 'editMenu' as const },
-      { role: 'viewMenu' as const },
+      {
+        label: 'Edit',
+        // Undo / Redo reach the app: text fields keep their own undo, elsewhere it undoes the last Git action
+        submenu: [
+          {
+            label: 'Undo',
+            accelerator: 'CmdOrCtrl+Z',
+            click: (_item, window) => (window as BrowserWindow | undefined)?.webContents.send('app:editKey', 'undo'),
+          },
+          {
+            label: 'Redo',
+            accelerator: 'Shift+CmdOrCtrl+Z',
+            click: (_item, window) => (window as BrowserWindow | undefined)?.webContents.send('app:editKey', 'redo'),
+          },
+          { type: 'separator' as const },
+          { role: 'cut' as const },
+          { role: 'copy' as const },
+          { role: 'paste' as const },
+          { role: 'selectAll' as const },
+        ],
+      },
+      {
+        label: 'View',
+        // zoom goes through the app setting (Settings → Appearance), so it is saved and restored
+        submenu: [
+          { role: 'reload' as const },
+          { role: 'forceReload' as const },
+          { role: 'toggleDevTools' as const },
+          { type: 'separator' as const },
+          {
+            label: 'Actual Size',
+            accelerator: 'CmdOrCtrl+0',
+            click: (_item, window) => (window as BrowserWindow | undefined)?.webContents.send('app:zoomKey', 'reset'),
+          },
+          {
+            label: 'Zoom In',
+            accelerator: 'CmdOrCtrl+=',
+            click: (_item, window) => (window as BrowserWindow | undefined)?.webContents.send('app:zoomKey', 'in'),
+          },
+          {
+            label: 'Zoom Out',
+            accelerator: 'CmdOrCtrl+-',
+            click: (_item, window) => (window as BrowserWindow | undefined)?.webContents.send('app:zoomKey', 'out'),
+          },
+          { type: 'separator' as const },
+          { role: 'togglefullscreen' as const },
+        ],
+      },
       { role: 'windowMenu' as const },
       {
         role: 'help' as const,

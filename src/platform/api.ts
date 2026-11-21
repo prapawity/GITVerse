@@ -7,6 +7,7 @@
  */
 import type { GitMethodName } from '../shared/gitMethods';
 import type { ScanProgress } from '../shared/repositoryScan';
+import type { ConnectResult, HostKind, HostRequest, HostResponse } from '../shared/pullRequests';
 
 type Unsubscribe = () => void;
 // Git payloads are typed at the call site for now; tighten per method as the contract is generated.
@@ -32,6 +33,18 @@ export interface PlatformApi extends Record<GitMethodName, AnyAsync> {
   openRuntimeNotice: AnyAsync;
   cloneRepo: AnyAsync;
   openFile: AnyAsync;
+  /** Editors / IDEs found on this computer */
+  editors(): Promise<{ id: string; name: string }[]>;
+  /** Command-line coding agents installed on this computer (Agent Sessions) */
+  agents(): Promise<{ id: string; name: string }[]>;
+  /** Open a folder or file in one of `editors()` */
+  openIn(editor: string, target: string): Promise<void>;
+  /** Whole-app zoom (1 = 100%) */
+  setZoom(factor: number): Promise<void>;
+  /** Zoom shortcuts handled by a native menu (Electron); Tauri delivers them as key events */
+  onZoomKey?(cb: (key: 'in' | 'out' | 'reset') => void): Unsubscribe;
+  /** Undo / Redo chosen in a native Edit menu (Electron) */
+  onEditKey?(cb: (key: 'undo' | 'redo') => void): Unsubscribe;
   onCloneProgress(cb: (message: string) => void): Unsubscribe;
   pathForFile(file: File): string;
   findRepositories: AnyAsync;
@@ -71,11 +84,26 @@ export interface PlatformApi extends Record<GitMethodName, AnyAsync> {
     | 'reset'
     | 'toolResult'
     | 'resolveConflict'
-    | 'commitMessage',
+    | 'commitMessage'
+    | 'pullRequest'
+    | 'task',
     AnyAsync
   > & {
     onDelta(cb: (reqId: number, text: string) => void): Unsubscribe;
     onToolCall<T = unknown>(cb: (call: T) => void): Unsubscribe;
+  };
+  hosting: {
+    tokenStatus(kind: HostKind, host: string): Promise<boolean>;
+    setToken(kind: HostKind, host: string, token: string | null): Promise<void>;
+    request(request: HostRequest): Promise<HostResponse>;
+    /** Open a page on the repository's own host in the browser. */
+    open(kind: HostKind, host: string, url: string): Promise<void>;
+    /** Verify a new token (then save it) or the saved one, else try credentials already on this machine. */
+    connect(
+      kind: HostKind,
+      host: string,
+      options?: { token?: string; repo?: string; profileIds?: string[] },
+    ): Promise<ConnectResult>;
   };
   stateStorage: StateStorage;
 }

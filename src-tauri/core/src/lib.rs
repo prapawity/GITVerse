@@ -3,6 +3,7 @@
 pub mod ai;
 pub mod error;
 pub mod git;
+pub mod hosting;
 pub mod migrate;
 pub mod releases;
 pub mod scan;

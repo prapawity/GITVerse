@@ -24,6 +24,8 @@ asar: true
 npmRebuild: false
 asarUnpack:
   - node_modules/node-pty/**/*
+  # the Copilot runtime is an executable (plus runtime.node); it cannot run from inside app.asar
+  - node_modules/@github/copilot-sdk-*/**/*
 artifactName: GITVerse-by-PRAPAWITY-${version}-${os}-${arch}.${ext}
 publish:
   provider: github

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { askConfirm, askFlow, askText } from './Dialogs';
 import { useRepo } from '../store/repoStore';
 import { checkoutRemoteWithSparseRecovery } from '../lib/checkoutRemoteFlow';
 import { groupRefs } from '../lib/refGroups';
 import { desktopApi } from '../platform/api';
+import { useSettings } from '../store/settingsStore';
+import { refKey } from '../lib/historyScope';
+import { branchMaterial, commitMaterial, useExplain } from '../lib/aiTask';
+import { consecutiveRange } from './CombinedChanges';
 
 const api = () => desktopApi();
 
@@ -50,6 +55,17 @@ export function CommitMenu({
 }) {
   const { repoPath, exec, deleteBothBranches, checkout, toast, track, refs, graph, action, operation } = useRepo();
   const [open, setOpen] = useState<number | null>(null);
+  // submenus fly out beside their item (rendered at the document level so the scrolling menu cannot clip them)
+  const [flyout, setFlyout] = useState<{ top: number; left: number } | null>(null);
+  const openSub = (i: number | null, anchor?: HTMLElement | null) => {
+    setOpen(i);
+    if (i === null || !anchor) return setFlyout(null);
+    const rect = anchor.getBoundingClientRect();
+    const width = 280;
+    const right = rect.right + 6;
+    const left = right + width > window.innerWidth - 8 ? rect.left - width - 6 : right;
+    setFlyout({ top: rect.top - 6, left: Math.max(8, left) });
+  };
   const short = hash.slice(0, 7);
 
   const attempt = (fn: () => Promise<void>) => async () => {
@@ -130,6 +146,24 @@ export function CommitMenu({
       () => exec('deleteRemoteBranch', name),
       true,
     );
+  // everyday actions stay at the top; the rest is grouped into submenus that open on hover or click
+  const graphVisibility = (): Item[] => {
+    if (!repoPath || !ref || !refName || (ref.kind !== 'local' && ref.kind !== 'remote')) return [];
+    const key = refKey(ref.kind, refName);
+    const settings = useSettings.getState();
+    const hidden = (settings.graphHidden[repoPath] ?? []).includes(key);
+    const solo = (settings.graphSolo[repoPath] ?? []).includes(key);
+    return [
+      {
+        label: hidden ? `Show ${refName} in graph` : `Hide ${refName} in graph`,
+        run: () => settings.setRefVisibility(repoPath, key, hidden ? 'show' : 'hide'),
+      },
+      {
+        label: solo ? `Stop solo ${refName}` : `Solo ${refName}`,
+        run: () => settings.setRefVisibility(repoPath, key, solo ? 'unsolo' : 'solo'),
+      },
+    ];
+  };
   const branchItems: Item[] =
     ref && refName
       ? [
@@ -160,43 +194,78 @@ export function CommitMenu({
                 '-' as const,
               ]),
           {
-            label: `Create branch from ${refName}`,
-            run: async () => {
-              const n = await askFlow(
-                refs.local.map((b) => b.name),
-                refName,
-              );
-              if (n) exec('branchAt', n, hash);
-            },
-          },
-          ...(sameTip && !pairedLocal.current
-            ? [
-                { label: `Delete local ${pairedLocal.name}`, danger: true, run: deleteLocal(pairedLocal.name) },
-                { label: `Delete remote ${pairedRemote.name}`, danger: true, run: deleteRemote(pairedRemote.name) },
-                {
-                  label: `Delete both ${pairedLocal.name}`,
-                  danger: true,
-                  run: sure(
-                    'Delete both branches',
-                    `Delete local branch ${pairedLocal.name} and remote branch ${pairedRemote.name}? The local branch is checked first and must be fully merged. If remote deletion fails afterwards, the local branch will already be deleted.`,
-                    'Delete both',
-                    () => deleteBothBranches(pairedLocal.name, pairedRemote.name),
-                    true,
-                  ),
+            label: `Branch ${refName}`,
+            sub: [
+              {
+                label: `Create branch from ${refName}`,
+                run: async () => {
+                  const n = await askFlow(
+                    refs.local.map((b) => b.name),
+                    refName,
+                  );
+                  if (n) exec('branchAt', n, hash);
                 },
-              ]
-            : ref.kind === 'local' && !isCurrent
-              ? [{ label: `Delete ${refName}`, danger: true, run: deleteLocal(refName) }]
-              : ref.kind === 'remote'
-                ? [{ label: `Delete remote ${refName}`, danger: true, run: deleteRemote(refName) }]
+              },
+              ...(sameTip && !pairedLocal.current
+                ? [
+                    { label: `Delete local ${pairedLocal.name}`, danger: true, run: deleteLocal(pairedLocal.name) },
+                    { label: `Delete remote ${pairedRemote.name}`, danger: true, run: deleteRemote(pairedRemote.name) },
+                    {
+                      label: `Delete both ${pairedLocal.name}`,
+                      danger: true,
+                      run: sure(
+                        'Delete both branches',
+                        `Delete local branch ${pairedLocal.name} and remote branch ${pairedRemote.name}? The local branch is checked first and must be fully merged. If remote deletion fails afterwards, the local branch will already be deleted.`,
+                        'Delete both',
+                        () => deleteBothBranches(pairedLocal.name, pairedRemote.name),
+                        true,
+                      ),
+                    },
+                  ]
+                : ref.kind === 'local' && !isCurrent
+                  ? [{ label: `Delete ${refName}`, danger: true, run: deleteLocal(refName) }]
+                  : ref.kind === 'remote'
+                    ? [{ label: `Delete remote ${refName}`, danger: true, run: deleteRemote(refName) }]
+                    : []),
+              ...(ref.kind === 'local'
+                ? [
+                    {
+                      label: `Rename ${refName}…`,
+                      run: async () => {
+                        const next = await askText(`Rename ${refName}`, 'New branch name', refName);
+                        if (next && next.trim() && next.trim() !== refName) exec('renameBranch', refName, next.trim());
+                      },
+                    },
+                  ]
                 : []),
-          {
-            label: 'Copy branch name',
-            run: attempt(async () => {
-              await navigator.clipboard.writeText(refName);
-              toast('Branch name copied');
-            }),
+              {
+                label: 'Explain changes with AI',
+                run: () => {
+                  const fallback = ['main', 'master', 'develop'].find(
+                    (b) => b !== refName && refs.local.some((l) => l.name === b),
+                  );
+                  const base = isCurrent || !current ? fallback : current;
+                  if (!base) {
+                    useRepo.getState().notify('info', 'Nothing to compare with', 'Check out another branch first.');
+                    return;
+                  }
+                  useExplain.getState().open({
+                    title: `Explain ${refName}`,
+                    subtitle: `What it brings compared with ${base}`,
+                    material: () => branchMaterial(repoPath!, base, refName),
+                  });
+                },
+              },
+              {
+                label: 'Copy branch name',
+                run: attempt(async () => {
+                  await navigator.clipboard.writeText(refName);
+                  toast('Branch name copied');
+                }),
+              },
+            ].filter(Boolean) as Item[],
           },
+          ...(graphVisibility().length ? [{ label: 'Graph', sub: graphVisibility() }] : []),
           '-' as const,
         ]
       : [];
@@ -259,6 +328,18 @@ export function CommitMenu({
             ]
           : branchItems),
         {
+          label: selected.length > 1 ? `Explain ${selected.length} commits with AI` : 'Explain commit with AI',
+          run: () => {
+            const hashes = selected.length > 1 ? selected : [hash];
+            const range = consecutiveRange(hashes, graph.rows);
+            useExplain.getState().open({
+              title: hashes.length > 1 ? `Explain ${hashes.length} commits` : 'Explain commit',
+              subtitle: hashes.length > 1 ? undefined : short,
+              material: () => commitMaterial(repoPath!, hashes, range),
+            });
+          },
+        },
+        {
           label: 'Checkout this commit',
           run: sure(
             'Checkout commit',
@@ -266,14 +347,6 @@ export function CommitMenu({
             'Checkout',
             () => checkout(hash),
           ),
-        },
-        '-',
-        {
-          label: 'Create worktree from this commit',
-          run: attempt(async () => {
-            const p = await askText('Create worktree', 'Absolute path of the new worktree folder');
-            if (p) await exec('worktreeAdd', p, hash);
-          }),
         },
         '-',
         {
@@ -303,60 +376,76 @@ export function CommitMenu({
         },
         '-',
         {
-          label: 'Copy commit sha',
-          run: attempt(async () => {
-            await navigator.clipboard.writeText(hash);
-            toast(`Copied ${short}`);
-          }),
+          label: 'Copy',
+          sub: [
+            {
+              label: 'Copy commit sha',
+              run: attempt(async () => {
+                await navigator.clipboard.writeText(hash);
+                toast(`Copied ${short}`);
+              }),
+            },
+            {
+              label: 'Copy link to this commit on remote: origin',
+              run: () =>
+                track('Preparing link…', async () => {
+                  const base = webUrl(await api().remoteUrl(repoPath));
+                  if (!base) throw new Error('Could not turn the origin remote into a web URL.');
+                  await navigator.clipboard.writeText(commitLink(base, hash));
+                  toast('Commit link copied');
+                }),
+            },
+          ],
         },
         {
-          label: 'Copy link to this commit on remote: origin',
-          run: () =>
-            track('Preparing link…', async () => {
-              const base = webUrl(await api().remoteUrl(repoPath));
-              if (!base) throw new Error('Could not turn the origin remote into a web URL.');
-              await navigator.clipboard.writeText(commitLink(base, hash));
-              toast('Commit link copied');
-            }),
-        },
-        {
-          label: selected.length > 1 ? `Create patch from ${selected.length} commits` : 'Create patch from commit',
-          run: () =>
-            track('Creating patch…', async () => {
-              const patches: string[] = await Promise.all(
-                (selected.length > 1 ? [...selected].reverse() : [hash]).map((commit) =>
-                  api().formatPatch(repoPath, commit),
-                ),
-              );
-              if (patches.some((patch) => !patch.trim()))
-                throw new Error(
-                  'Could not create a patch for every selected commit. Merge commits cannot be exported this way.',
-                );
-              const patch = patches.join('\n');
-              const a = document.createElement('a');
-              a.href = URL.createObjectURL(new Blob([patch], { type: 'text/plain' }));
-              a.download = `${short}.patch`;
-              a.click();
-              URL.revokeObjectURL(a.href);
-              toast(`Saved ${short}.patch`);
-            }),
-        },
-        '-',
-        {
-          label: 'Create tag here',
-          run: async () => {
-            const n = await askText('Create tag', 'Tag name');
-            if (n) exec('createTag', n, hash);
-          },
-        },
-        {
-          label: 'Create annotated tag here',
-          run: attempt(async () => {
-            const n = await askText('Create annotated tag', 'Tag name');
-            if (!n) return;
-            const m = await askText('Tag message', 'Message');
-            if (m) await exec('createAnnotatedTag', n, hash, m);
-          }),
+          label: 'Create',
+          sub: [
+            {
+              label: 'Create tag here',
+              run: async () => {
+                const n = await askText('Create tag', 'Tag name');
+                if (n) exec('createTag', n, hash);
+              },
+            },
+            {
+              label: 'Create annotated tag here',
+              run: attempt(async () => {
+                const n = await askText('Create annotated tag', 'Tag name');
+                if (!n) return;
+                const m = await askText('Tag message', 'Message');
+                if (m) await exec('createAnnotatedTag', n, hash, m);
+              }),
+            },
+            {
+              label: 'Create worktree from this commit',
+              run: attempt(async () => {
+                const p = await askText('Create worktree', 'Absolute path of the new worktree folder');
+                if (p) await exec('worktreeAdd', p, hash);
+              }),
+            },
+            {
+              label: selected.length > 1 ? `Create patch from ${selected.length} commits` : 'Create patch from commit',
+              run: () =>
+                track('Creating patch…', async () => {
+                  const patches: string[] = await Promise.all(
+                    (selected.length > 1 ? [...selected].reverse() : [hash]).map((commit) =>
+                      api().formatPatch(repoPath, commit),
+                    ),
+                  );
+                  if (patches.some((patch) => !patch.trim()))
+                    throw new Error(
+                      'Could not create a patch for every selected commit. Merge commits cannot be exported this way.',
+                    );
+                  const patch = patches.join('\n');
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(new Blob([patch], { type: 'text/plain' }));
+                  a.download = `${short}.patch`;
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                  toast(`Saved ${short}.patch`);
+                }),
+            },
+          ],
         },
         '-',
         {
@@ -463,6 +552,7 @@ export function CommitMenu({
       style={{ left, top, width: W }}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={navigateMenu}
+      onScroll={() => openSub(null)}
     >
       <div className="pointer-events-none border-b border-surface/60 px-3 pb-2 pt-1">
         <div className="text-2xs font-semibold uppercase tracking-wider text-sub">
@@ -476,7 +566,11 @@ export function CommitMenu({
         it === '-' ? (
           <div key={i} role="separator" className="my-1.5 border-t border-surface/70" />
         ) : (
-          <div key={it.label} className="relative" onMouseEnter={() => setOpen(it.sub ? i : null)}>
+          <div
+            key={it.label}
+            className="relative"
+            onMouseEnter={(e) => openSub(it.sub ? i : null, e.currentTarget.querySelector('button'))}
+          >
             <button
               role="menuitem"
               data-menu-index={i}
@@ -485,15 +579,13 @@ export function CommitMenu({
               className={`${row} ${it.danger ? 'text-danger' : ''} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
               disabled={it.blocked}
               title={it.blocked ? BUSY_HINT : it.label}
-              onClick={() => {
+              onClick={(e) => {
                 if (it.sub) {
                   const nextOpen = open === i ? null : i;
-                  setOpen(nextOpen);
+                  openSub(nextOpen, e.currentTarget);
                   if (nextOpen !== null)
                     requestAnimationFrame(() =>
-                      menuRef.current
-                        ?.querySelector<HTMLElement>(`[data-parent-index="${i}"] [role="menuitem"]`)
-                        ?.focus(),
+                      document.querySelector<HTMLElement>(`[data-parent-index="${i}"] [role="menuitem"]`)?.focus(),
                     );
                 } else {
                   onClose();
@@ -504,31 +596,49 @@ export function CommitMenu({
               <span className="truncate">{it.label}</span>
               {it.sub && <ChevronRight size={14} aria-hidden />}
             </button>
-            {it.sub && open === i && (
-              <div
-                role="menu"
-                aria-label={it.label}
-                data-parent-index={i}
-                className="ml-3 rounded-lg border-l-2 border-accent/40 bg-crust/60 py-1 pl-2"
-              >
-                {it.sub.map(
-                  (s) =>
-                    s !== '-' && (
-                      <button
-                        key={s.label}
-                        role="menuitem"
-                        className={`${row} ${s.danger ? 'text-danger' : ''}`}
-                        onClick={() => {
-                          onClose();
-                          s.run?.();
-                        }}
-                      >
-                        {s.label}
-                      </button>
-                    ),
-                )}
-              </div>
-            )}
+            {it.sub &&
+              open === i &&
+              flyout &&
+              createPortal(
+                <div
+                  role="menu"
+                  aria-label={it.label}
+                  data-parent-index={i}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowLeft' || e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openSub(null);
+                      menuRef.current?.querySelector<HTMLElement>(`[data-menu-index="${i}"]`)?.focus();
+                    } else navigateMenu(e);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseEnter={() => setOpen(i)}
+                  className="glass-context-menu pop-in fixed z-[60] w-[280px] rounded-xl p-1.5 shadow-2xl"
+                  style={{
+                    top: Math.min(flyout.top, window.innerHeight - 44 * it.sub.length - 24),
+                    left: flyout.left,
+                  }}
+                >
+                  {it.sub.map(
+                    (s) =>
+                      s !== '-' && (
+                        <button
+                          key={s.label}
+                          role="menuitem"
+                          className={`${row} ${s.danger ? 'text-danger' : ''}`}
+                          onClick={() => {
+                            onClose();
+                            s.run?.();
+                          }}
+                        >
+                          {s.label}
+                        </button>
+                      ),
+                  )}
+                </div>,
+                document.body,
+              )}
           </div>
         ),
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, FileMinus, FilePen, FilePlus, FileSymlink, Folder, List, ListTree } from 'lucide-react';
 import { useRepo } from '../store/repoStore';
 import { DetailsSkeleton, Skeleton } from './Loading';
@@ -6,6 +6,9 @@ import type { StashDetail, StashRef } from '../shared/types';
 import { askConfirm } from './Dialogs';
 import { desktopApi } from '../platform/api';
 import { stashBranch } from '../lib/graphLayout';
+import { CommitPeople } from './CommitPeople';
+import { useLfs } from '../lib/lfs';
+import { LfsBadge } from './LfsBadge';
 
 export type ChangedFile = { status: string; path: string; oldPath?: string; untracked?: boolean };
 type F = ChangedFile;
@@ -40,6 +43,7 @@ function FileRow({
   selected: boolean;
   onSelect: (file: F) => void;
 }) {
+  const isLfs = useLfs(useRepo((state) => state.repoPath));
   const i = f.path.lastIndexOf('/');
   return (
     <button
@@ -50,7 +54,10 @@ function FileRow({
     >
       {icon(f.status)}
       <span className="min-w-0 flex-1 py-1">
-        <span className="block truncate font-medium">{f.path.slice(i + 1)}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-medium">{f.path.slice(i + 1)}</span>
+          {isLfs(f.path) && <LfsBadge />}
+        </span>
         {!tree && i >= 0 && <span className="block truncate text-xs text-sub">{f.path.slice(0, i + 1)}</span>}
       </span>
       <span className="shrink-0 text-2xs text-sub">{LABEL[f.status] ?? f.status}</span>
@@ -99,7 +106,13 @@ export function DetailsPanel({
     };
   }, [repoPath, stashKey, stash?.id, stash?.hash]);
   const saved = snapshot?.key === stashKey ? snapshot.data : undefined;
-  const detail = stash ? saved : state.detail;
+  const loaded = stash ? saved : state.detail;
+  // selecting another commit keeps the previous file list on screen, dimmed, until the new one
+  // arrives and fades in: no skeleton flash between commits
+  const previous = useRef<{ repo: string | null; detail: NonNullable<typeof loaded> } | null>(null);
+  if (loaded) previous.current = { repo: repoPath, detail: loaded };
+  const stale = !loaded && !stash && previous.current?.repo === repoPath ? previous.current.detail : null;
+  const detail = loaded ?? stale ?? undefined;
   const [view, setView] = useState<'path' | 'tree'>('path');
   const c = stash
     ? {
@@ -134,7 +147,7 @@ export function DetailsPanel({
         {status.length} changed file(s) in working tree. Select a commit to see its details.
       </div>
     );
-  const [title, ...rest] = (stash ? stash.message : (detail?.body ?? c.subject)).split('\n');
+  const [title, ...rest] = (stash ? stash.message : (loaded?.body ?? c.subject)).split('\n');
   const initials = c.author
     .split(/\s+/)
     .slice(0, 2)
@@ -142,8 +155,14 @@ export function DetailsPanel({
     .join('')
     .toUpperCase();
   const seg = (v: 'path' | 'tree', label: string, I: typeof List) => (
-    <button aria-pressed={view === v} onClick={() => setView(v)} className="seg-item flex items-center gap-1.5">
-      <I size={14} aria-hidden /> {label}
+    <button
+      aria-pressed={view === v}
+      onClick={() => setView(v)}
+      aria-label={label}
+      title={label}
+      className="seg-item flex items-center gap-1.5"
+    >
+      <I size={14} aria-hidden /> <span className="ui-label">{label}</span>
     </button>
   );
 
@@ -330,21 +349,29 @@ export function DetailsPanel({
         )}
       </div>
 
-      <div className="flex items-center gap-3 px-4 pb-3">
-        <div
-          aria-hidden
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-ai text-base font-bold text-crust"
-        >
-          {initials}
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-base font-medium">{c.author}</div>
-          {c.email && <div className="break-all text-sm text-sub">{c.email}</div>}
-          <div className="text-sm text-sub">
-            {c.date ? `authored ${new Date(c.date).toLocaleString()}` : 'Loading metadata...'}
+      {stash ? (
+        <div className="flex items-center gap-3 px-4 pb-3">
+          <div
+            aria-hidden
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-ai text-base font-bold text-crust"
+          >
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-base font-medium">{c.author}</div>
+            {c.email && <div className="break-all text-sm text-sub">{c.email}</div>}
+            <div className="text-sm text-sub">
+              {c.date ? `authored ${new Date(c.date).toLocaleString()}` : 'Loading metadata...'}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <CommitPeople
+          hash={c.hash}
+          fallback={{ author: c.author, email: c.email, date: c.date }}
+          body={loaded?.body ?? ''}
+        />
+      )}
 
       <div className="flex items-center gap-2 border-t border-surface px-4 pt-3 text-text">
         <FilePen size={15} aria-hidden />
@@ -360,7 +387,10 @@ export function DetailsPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto pb-3" aria-busy={!detail}>
+      <div
+        className={`min-h-0 flex-1 overflow-auto pb-3 transition-opacity duration-200 ${stale ? 'opacity-45' : 'opacity-100'}`}
+        aria-busy={!loaded}
+      >
         {!detail && (
           <div role="status" aria-label="Loading files" className="space-y-3 px-4 pt-1">
             {[70, 55, 85, 60].map((w, i) => (

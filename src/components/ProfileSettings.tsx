@@ -116,11 +116,15 @@ export function ProfileSettings({ repo }: { repo: string | null }) {
     setBusy(true);
     clear();
     try {
-      if (token.trim()) await api().pushProfiles.setToken(repo, value.id, token);
+      const stored = token.trim() ? await api().pushProfiles.setToken(repo, value.id, token) : null;
       store.setPushProfiles(repo, [...profiles.filter((p) => p.id !== value.id), value]);
       setProfile(null);
       setToken('');
-      setMessage('Push authentication saved.');
+      setMessage(
+        stored === 'session'
+          ? 'Saved until GITVerse quits: the system keychain did not allow this app to store the token.'
+          : 'Push authentication saved.',
+      );
     } catch (e) {
       setError(errorText(e));
     } finally {

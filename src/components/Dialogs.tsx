@@ -5,7 +5,7 @@ import { create } from 'zustand';
 
 type Req =
   | { kind: 'confirm'; title: string; message: string; danger?: boolean; label?: string; resolve: (v: boolean) => void }
-  | { kind: 'text'; title: string; placeholder: string; resolve: (v: string | null) => void }
+  | { kind: 'text'; title: string; placeholder: string; initial?: string; resolve: (v: string | null) => void }
   | { kind: 'flow'; branches: string[]; source: string; resolve: (v: string | null) => void };
 
 const useDialog = create<{ req: Req | null; open: (r: Req) => void; close: () => void }>((set) => ({
@@ -16,8 +16,10 @@ const useDialog = create<{ req: Req | null; open: (r: Req) => void; close: () =>
 
 export const askConfirm = (title: string, message: string, opts: { danger?: boolean; label?: string } = {}) =>
   new Promise<boolean>((resolve) => useDialog.getState().open({ kind: 'confirm', title, message, resolve, ...opts }));
-export const askText = (title: string, placeholder = '') =>
-  new Promise<string | null>((resolve) => useDialog.getState().open({ kind: 'text', title, placeholder, resolve }));
+export const askText = (title: string, placeholder = '', initial = '') =>
+  new Promise<string | null>((resolve) =>
+    useDialog.getState().open({ kind: 'text', title, placeholder, initial, resolve }),
+  );
 export const askFlow = (branches: string[], source: string) =>
   new Promise<string | null>((resolve) => useDialog.getState().open({ kind: 'flow', branches, source, resolve }));
 
@@ -131,7 +133,7 @@ export function DialogHost() {
   const { req, close } = useDialog();
   const [text, setText] = useState('');
   const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => setText(''), [req]);
+  useEffect(() => setText(req?.kind === 'text' ? (req.initial ?? '') : ''), [req]);
   useEffect(() => {
     if (req?.kind === 'confirm') ref.current?.focus();
   }, [req]);

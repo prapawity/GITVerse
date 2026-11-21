@@ -27,6 +27,7 @@ import {
   openaiStatus,
   openaiTurn,
 } from './openai';
+import spec from '../../src/shared/aiSpec.json';
 
 /**
  * All model access is here, in the main process: keys, tokens and sign-ins never reach the renderer.
@@ -169,6 +170,57 @@ export function registerAi() {
         : provider === 'openai'
           ? await openaiCommitMessage(diff, model, ac.signal)
           : await copilotCommitMessage(diff, model, ac.signal);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
+  // ---- one-shot AI tasks: explain changes, name a stash, compose commits ----
+  const TASK_SYSTEM: Record<string, string> = {
+    explain: spec.explainSystem,
+    stash: spec.stashSystem,
+    compose: spec.composeSystem,
+  };
+  ipcMain.handle('ai:task', async (_e, provider: Provider, model: string | undefined, task: string, prompt: string) => {
+    const system = TASK_SYSTEM[task];
+    if (
+      !system ||
+      !['claude', 'openai', 'copilot'].includes(provider) ||
+      typeof prompt !== 'string' ||
+      !prompt.trim() ||
+      prompt.length > 150000
+    )
+      return { ok: false, error: err('other', 'Invalid AI request.') };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 180_000);
+    try {
+      return provider === 'claude'
+        ? await claudeCommitMessage(prompt, ac.signal, system)
+        : provider === 'openai'
+          ? await openaiCommitMessage(prompt, model, ac.signal, system)
+          : await copilotCommitMessage(prompt, model, ac.signal, system);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
+  // ---- pull/merge request title and description ----
+  ipcMain.handle('ai:pullRequest', async (_e, provider: Provider, model: string | undefined, prompt: string) => {
+    if (
+      !['claude', 'openai', 'copilot'].includes(provider) ||
+      typeof prompt !== 'string' ||
+      !prompt.trim() ||
+      prompt.length > 150000
+    )
+      return { ok: false, error: err('other', 'Invalid pull request material or AI provider.') };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 180_000);
+    try {
+      return provider === 'claude'
+        ? await claudeCommitMessage(prompt, ac.signal, spec.prSystem)
+        : provider === 'openai'
+          ? await openaiCommitMessage(prompt, model, ac.signal, spec.prSystem)
+          : await copilotCommitMessage(prompt, model, ac.signal, spec.prSystem);
     } finally {
       clearTimeout(timer);
     }
