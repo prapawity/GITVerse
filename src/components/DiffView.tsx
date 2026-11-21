@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Columns2, FilePen, History, Loader2, Rows2, Trash2, UserRound, X } from 'lucide-react';
+import { Columns2, FilePen, History, Loader2, Rows2, SquareArrowOutUpRight, Trash2, UserRound, X } from 'lucide-react';
 import { highlight, parseDiff, toSplit, type DiffLine } from '../lib/diff';
 import { Markdown } from '../lib/markdown';
 import { relTime } from './CommitGraph';
@@ -9,6 +9,7 @@ import { useRepo } from '../store/repoStore';
 import { askConfirm } from './Dialogs';
 import { isJsonFile, isSvgFile, JsonPreview, MediaPreview, mediaType } from './MediaPreview';
 import { desktopApi } from '../platform/api';
+import { useActionHistory } from '../lib/actionHistory';
 
 const BG = { add: 'bg-[#a6e22e]/[0.13]', del: 'bg-danger/[0.14]', ctx: '' } as const;
 const SIGN = { add: '+', del: '−', ctx: '' } as const;
@@ -19,7 +20,7 @@ const grp = 'seg';
 
 type Res<T> = { data?: T; error?: string } | null;
 type Blame = { hash: string; author: string; time: number }[];
-type Hist = { hash: string; author: string; date: string; subject: string }[];
+type Hist = { hash: string; author: string; date: string; subject: string; path?: string }[];
 
 const Code = ({ text, change, plain }: { text: string; change?: [number, number]; plain?: boolean }) => {
   let offset = 0;
@@ -116,10 +117,13 @@ function SplitHunk({
   );
 }
 
+/** whether the History list was left open (kept between diff views) */
+let historyOpen = false;
+
 export function DiffView({
   repoPath,
-  hash,
-  file,
+  hash: openedHash,
+  file: openedFile,
   onClose,
   onJumpToCommit,
   area,
@@ -133,7 +137,8 @@ export function DiffView({
   hash: string;
   file: ChangedFile;
   onClose: () => void;
-  onJumpToCommit?: (hash: string) => void;
+  /** open the same file in another commit; `path` is its name there (it differs before a rename) */
+  onJumpToCommit?: (hash: string, path?: string) => void;
   area?: 'staged' | 'unstaged' | 'untracked';
   revision?: number;
   onRefresh?: () => Promise<void>;
@@ -141,12 +146,28 @@ export function DiffView({
   loadContent?: () => Promise<string>;
   readOnlySnapshot?: boolean;
 }) {
+  // a History entry is viewed right here: only this diff changes, the graph and selection stay put
+  const [historyView, setHistoryView] = useState<{ hash: string; path: string } | null>(null);
+  useEffect(() => setHistoryView(null), [openedHash, openedFile.path]);
+  const hash = historyView?.hash ?? openedHash;
+  const file: ChangedFile = historyView
+    ? { status: historyView.path === openedFile.path ? openedFile.status : 'M', path: historyView.path }
+    : openedFile;
   const [mode, setMode] = useState<'diff' | 'file'>('diff');
   const [split, setSplit] = useState(false);
   const [view, setView] = useState<'code' | 'preview'>('code');
   const [blame, setBlame] = useState(false);
-  const [history, setHistory] = useState(false);
+  // History stays open from one file / commit to the next, so stepping back through it keeps the list
+  const [history, setHistoryState] = useState(historyOpen);
+  const setHistory = (open: boolean) => {
+    historyOpen = open;
+    setHistoryState(open);
+  };
   const [showWhitespace, setShowWhitespace] = useState(true);
+  // back in Diff View, Blame turns off (it only annotates File View)
+  useEffect(() => {
+    if (mode === 'diff') setBlame(false);
+  }, [mode]);
   const [discarding, setDiscarding] = useState(false);
   const [discardError, setDiscardError] = useState('');
   const [discardRevision, setDiscardRevision] = useState(0);
@@ -174,7 +195,6 @@ export function DiffView({
   useEffect(() => {
     setMode('diff');
     setBlame(false);
-    setHistory(false);
     setView(hasPreview ? 'preview' : 'code');
     setDiscardError('');
   }, [hash, file.path, hasPreview]);
@@ -206,8 +226,8 @@ export function DiffView({
   );
   const histRes = useLoad<Hist>(
     !readOnlySnapshot && !area && history,
-    () => api().fileHistory(repoPath, hash, file.path),
-    key,
+    () => api().fileHistory(repoPath, openedHash, openedFile.path),
+    [repoPath, openedHash, openedFile.path, area, revision],
   );
 
   const parsed = useMemo(() => (diff?.data == null ? null : parseDiff(diff.data)), [diff]);
@@ -234,6 +254,7 @@ export function DiffView({
     setDiscardError('');
     try {
       await api().stageWorkingHunk(repoPath, file.path, area, diff.data, hunk);
+      useActionHistory.getState().markStaging();
       if (useRepo.getState().repoPath === repoPath && activeContext.current === context) {
         setDiscardRevision((value) => value + 1);
         await onRefresh?.();
@@ -351,9 +372,22 @@ export function DiffView({
           {i >= 0 && <span className="block truncate text-xs text-sub">{file.path.slice(0, i + 1)}</span>}
         </span>
         <span className="text-xs text-sub">UTF-8</span>
-        <span className="rounded-md border border-surface bg-crust/50 px-2 py-1 font-mono text-xs text-sub">
+        <span
+          className={`rounded-md border px-2 py-1 font-mono text-xs ${historyView ? 'border-accent/50 bg-accent/10 text-accent' : 'border-surface bg-crust/50 text-sub'}`}
+          title={historyView ? 'Viewing this file in an earlier commit from History' : undefined}
+        >
           {area ?? (readOnlySnapshot ? 'stash' : hash.slice(0, 7))}
         </span>
+        {historyView && (
+          <button
+            type="button"
+            onClick={() => setHistoryView(null)}
+            title={`Back to ${openedHash.slice(0, 7)}`}
+            className="fade-in rounded-md px-2 py-1 text-xs text-accent hover:bg-accent/10"
+          >
+            Back to {openedHash.slice(0, 7)}
+          </button>
+        )}
         {canDiscardFile && (
           <button
             onClick={() => void discard()}
@@ -363,6 +397,28 @@ export function DiffView({
             className="shrink-0 rounded p-1.5 text-danger hover:bg-danger/15 disabled:opacity-40"
           >
             {discarding ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+          </button>
+        )}
+        {area && area !== 'untracked' && (
+          <button
+            onClick={() =>
+              void api()
+                .externalTool(repoPath, 'diff', file.path, area === 'staged')
+                .catch((e: Error) =>
+                  useRepo
+                    .getState()
+                    .notify(
+                      'error',
+                      'Could not open the diff tool',
+                      e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''),
+                    ),
+                )
+            }
+            aria-label="Open in external diff tool"
+            title="Open in external diff tool (git difftool)"
+            className="btn-ghost shrink-0 p-1.5"
+          >
+            <SquareArrowOutUpRight size={16} />
           </button>
         )}
         <button onClick={onClose} aria-label="Close file changes" title="Close (Esc)" className="btn-ghost p-1">
@@ -431,10 +487,21 @@ export function DiffView({
             <div role="group" aria-label="File tools" className={grp}>
               <button
                 aria-pressed={blame}
-                disabled={mode !== 'file' || view !== 'code'}
-                title={mode === 'file' ? 'Show who last changed each line' : 'Blame is available in File View'}
+                disabled={mode === 'file' && view !== 'code'}
+                title={
+                  mode === 'file' && view !== 'code'
+                    ? 'Blame is shown on the code, not the preview'
+                    : 'Show who last changed each line (opens File View)'
+                }
                 className={seg(blame) + ' disabled:opacity-40'}
-                onClick={() => setBlame(!blame)}
+                onClick={() => {
+                  // Blame annotates the whole file, so it switches to File View
+                  if (mode !== 'file') {
+                    setMode('file');
+                    setView('code');
+                    setBlame(true);
+                  } else setBlame(!blame);
+                }}
               >
                 <UserRound size={14} aria-hidden /> Blame
               </button>
@@ -576,7 +643,10 @@ export function DiffView({
               {histRes?.data?.map((h) => (
                 <button
                   key={h.hash}
-                  onClick={() => onJumpToCommit?.(h.hash)}
+                  onClick={() =>
+                    setHistoryView(h.hash === openedHash ? null : { hash: h.hash, path: h.path ?? openedFile.path })
+                  }
+                  aria-current={h.hash === hash ? 'true' : undefined}
                   className={`block w-full border-b border-surface/50 px-4 py-2 text-left font-sans hover:bg-surface/40 ${h.hash === hash ? 'bg-accent/15' : ''}`}
                 >
                   <div className="truncate text-sm">{h.subject}</div>

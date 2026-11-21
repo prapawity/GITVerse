@@ -475,6 +475,26 @@ export function MergeTool({ path }: { path: string }) {
             <button className="btn-secondary min-h-[36px] px-3" onClick={() => exec('resolveFile', path, 'theirs')}>
               Keep B — {bLabel}
             </button>
+            <button
+              className="btn-secondary min-h-[36px] px-3"
+              title="Open this conflict in the merge tool set in git config (merge.tool)"
+              onClick={() =>
+                repoPath &&
+                void desktopApi()
+                  .externalTool(repoPath, 'merge', path)
+                  .catch((e: Error) =>
+                    useRepo
+                      .getState()
+                      .notify(
+                        'error',
+                        'Could not open the merge tool',
+                        e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''),
+                      ),
+                  )
+              }
+            >
+              External merge tool
+            </button>
           </div>
         </div>
       )}

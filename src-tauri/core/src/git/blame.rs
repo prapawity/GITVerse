@@ -57,6 +57,7 @@ pub async fn file_blame(
     hash: &str,
     path: &str,
 ) -> Result<Vec<BlameLine>> {
+    super::not_option("commit", hash)?;
     Ok(parse_blame(
         &git.run(
             cwd,
@@ -73,6 +74,8 @@ pub struct FileHistoryEntry {
     pub author: String,
     pub date: String,
     pub subject: String,
+    /// the file's path in this commit (differs before a rename)
+    pub path: String,
 }
 
 pub async fn file_history(
@@ -81,14 +84,16 @@ pub async fn file_history(
     hash: &str,
     path: &str,
 ) -> Result<Vec<FileHistoryEntry>> {
+    // --name-only gives the file's path in each commit, which differs before a rename (--follow)
     let out = git
         .run(
             cwd,
             &[
                 "log",
                 "--follow",
+                "--name-only",
                 "-n200",
-                "--format=%H%x1f%an%x1f%aI%x1f%s",
+                "--format=%x1e%H%x1f%an%x1f%aI%x1f%s",
                 hash,
                 "--",
                 path,
@@ -97,16 +102,21 @@ pub async fn file_history(
         )
         .await?;
     Ok(out
-        .split('\n')
-        .filter(|l| !l.is_empty())
-        .map(|l| {
-            let mut f = l.split('\x1f');
+        .split('\u{1e}')
+        .map(str::trim)
+        .filter(|r| !r.is_empty())
+        .map(|record| {
+            let mut lines = record.lines().filter(|l| !l.is_empty());
+            let header = lines.next().unwrap_or_default();
+            let file = lines.next_back().unwrap_or(path).to_owned();
+            let mut f = header.split('\u{1f}');
             let mut next = || f.next().unwrap_or_default().to_owned();
             FileHistoryEntry {
                 hash: next(),
                 author: next(),
                 date: next(),
                 subject: next(),
+                path: file,
             }
         })
         .collect())

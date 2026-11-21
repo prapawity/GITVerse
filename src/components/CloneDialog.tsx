@@ -17,6 +17,8 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
   const [authNeeded, setAuthNeeded] = useState(false);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [shallow, setShallow] = useState(false);
+  const [depth, setDepth] = useState('1');
 
   useEffect(() => api().onCloneProgress((message: string) => setProgress(message)), []);
   useEffect(() => {
@@ -62,6 +64,7 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
         url.trim(),
         destination.trim(),
         authNeeded ? { username: login.trim(), password } : undefined,
+        { depth: shallow ? Math.max(1, Number.parseInt(depth, 10) || 1) : null },
       );
       setPassword('');
       useRepo.getState().recordActivity('success', 'Repository cloned', destination.trim(), destination.trim());
@@ -164,6 +167,33 @@ export function CloneDialog({ onClose }: { onClose: () => void }) {
               Choose a parent folder or enter the full path for the new repository folder. HTTPS and SSH use your system
               Git credentials or SSH agent.
             </p>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={shallow}
+                  disabled={running}
+                  onChange={(e) => setShallow(e.target.checked)}
+                />
+                Shallow clone — only the latest
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={depth}
+                disabled={!shallow || running}
+                onChange={(e) => setDepth(e.target.value)}
+                aria-label="Number of commits to clone"
+                className="w-20 rounded-md border border-surface bg-crust px-2 py-1 outline-none focus:border-accent disabled:opacity-40"
+              />
+              <span>commit{depth === '1' ? '' : 's'}</span>
+              {shallow && (
+                <span className="w-full text-xs text-sub">
+                  Much faster for large repositories. Older history is not downloaded (fetch with --unshallow later for
+                  the rest).
+                </span>
+              )}
+            </div>
             {authNeeded && (
               <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
                 <p className="text-sm text-warning">

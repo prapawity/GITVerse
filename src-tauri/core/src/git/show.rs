@@ -47,6 +47,7 @@ pub fn parse_name_status(out: &str) -> Vec<ChangedFile> {
 }
 
 pub async fn commit_detail(git: &GitRunner, cwd: &Path, hash: &str) -> Result<CommitDetail> {
+    super::not_option("commit", hash)?;
     let body = git
         .run(
             cwd,
@@ -187,4 +188,52 @@ mod tests {
         );
         assert_eq!(files[1].path, "a.txt");
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Person {
+    pub name: String,
+    pub email: String,
+    pub date: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CommitPeople {
+    pub author: Person,
+    pub committer: Person,
+}
+
+/// Author and committer of a commit (`commitPeople` in git.ts).
+pub async fn commit_people(git: &GitRunner, cwd: &Path, hash: &str) -> Result<CommitPeople> {
+    let ok = hash == "HEAD"
+        || ((7..=64).contains(&hash.len()) && hash.bytes().all(|b| b.is_ascii_hexdigit()));
+    if !ok {
+        return Err(crate::error::AppError::Invalid("Invalid commit ID.".into()));
+    }
+    let out = git
+        .run(
+            cwd,
+            &[
+                "show",
+                "-s",
+                "--format=%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI",
+                hash,
+            ],
+            RunOpts::default(),
+        )
+        .await?;
+    let f: Vec<&str> = out.trim().split('\u{1f}').collect();
+    let at = |i: usize| f.get(i).copied().unwrap_or_default().to_owned();
+    Ok(CommitPeople {
+        author: Person {
+            name: at(0),
+            email: at(1),
+            date: at(2),
+        },
+        committer: Person {
+            name: at(3),
+            email: at(4),
+            date: at(5),
+        },
+    })
 }

@@ -1,6 +1,8 @@
 //! `ai:*` commands (port of electron/ai/index.ts). Claude and ChatGPT run in Rust; Copilot runs in a
 //! Node sidecar (core/src/ai/copilot.rs) because its SDK is Node-only.
 use std::collections::HashMap;
+
+use gitverse_core::hosting;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -333,6 +335,129 @@ pub async fn ai_commit_message(
         Provider::Openai => chatgpt(&app).commit_message(&diff, model, &cancel).await,
         Provider::Copilot => app.copilot.commit_message(&diff, model).await,
     })
+}
+
+#[tauri::command]
+pub async fn ai_task(
+    app: tauri::State<'_, AppState>,
+    provider: Provider,
+    model: Option<String>,
+    task: String,
+    prompt: String,
+) -> Result<MessageResult, ()> {
+    let spec = gitverse_core::ai::spec();
+    let system = match task.as_str() {
+        "explain" => &spec.explain_system,
+        "stash" => &spec.stash_system,
+        "compose" => &spec.compose_system,
+        _ => {
+            return Ok(MessageResult::failed(err(
+                ErrKind::Other,
+                "Invalid AI request.",
+            )))
+        }
+    };
+    if prompt.trim().is_empty() || prompt.encode_utf16().count() > 150_000 {
+        return Ok(MessageResult::failed(err(
+            ErrKind::Other,
+            "Invalid AI request.",
+        )));
+    }
+    let cancel = deadline(Duration::from_secs(180));
+    Ok(match provider {
+        Provider::Claude => {
+            claude::Claude::new(app.secrets.as_ref())
+                .message(system, &prompt, 4096, &cancel)
+                .await
+        }
+        Provider::Openai => chatgpt(&app).message(system, &prompt, model, &cancel).await,
+        Provider::Copilot => app.copilot.task(&task, &prompt, model).await,
+    })
+}
+
+#[tauri::command]
+pub async fn ai_pull_request(
+    app: tauri::State<'_, AppState>,
+    provider: Provider,
+    model: Option<String>,
+    prompt: String,
+) -> Result<MessageResult, ()> {
+    if prompt.trim().is_empty() || prompt.encode_utf16().count() > 150_000 {
+        return Ok(MessageResult::failed(err(
+            ErrKind::Other,
+            "Invalid pull request material or AI provider.",
+        )));
+    }
+    let cancel = deadline(Duration::from_secs(180));
+    let system = &gitverse_core::ai::spec().pr_system;
+    Ok(match provider {
+        Provider::Claude => {
+            claude::Claude::new(app.secrets.as_ref())
+                .message(system, &prompt, 2048, &cancel)
+                .await
+        }
+        Provider::Openai => chatgpt(&app).message(system, &prompt, model, &cancel).await,
+        Provider::Copilot => app.copilot.pull_request(&prompt, model).await,
+    })
+}
+
+#[tauri::command]
+pub fn hosting_token_status(
+    app: tauri::State<'_, AppState>,
+    kind: hosting::HostKind,
+    host: String,
+) -> bool {
+    hosting::check_host(kind, &host).is_ok()
+        && app.secrets.get(&hosting::token_key(kind, &host)).is_some()
+}
+
+#[tauri::command]
+pub fn hosting_set_token(
+    app: tauri::State<'_, AppState>,
+    kind: hosting::HostKind,
+    host: String,
+    token: Option<String>,
+) -> Result<(), gitverse_core::AppError> {
+    hosting::check_host(kind, &host)?;
+    let token = token.as_deref().map(str::trim).filter(|t| !t.is_empty());
+    app.secrets.set(&hosting::token_key(kind, &host), token)
+}
+
+#[tauri::command]
+pub fn hosting_open(
+    handle: tauri::AppHandle,
+    kind: hosting::HostKind,
+    host: String,
+    url: String,
+) -> Result<(), gitverse_core::AppError> {
+    use tauri_plugin_opener::OpenerExt;
+    if !hosting::web_url_allowed(kind, &host, &url) {
+        return Err(gitverse_core::AppError::Invalid(
+            "Refusing to open a link outside this repository's host.".into(),
+        ));
+    }
+    handle
+        .opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| gitverse_core::AppError::Invalid(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn hosting_connect(
+    app: tauri::State<'_, AppState>,
+    kind: hosting::HostKind,
+    host: String,
+    token: Option<String>,
+) -> Result<hosting::ConnectResult, gitverse_core::AppError> {
+    hosting::connect(app.secrets.as_ref(), kind, &host, token).await
+}
+
+#[tauri::command]
+pub async fn hosting_request(
+    app: tauri::State<'_, AppState>,
+    request: hosting::HostRequest,
+) -> Result<hosting::HostResponse, gitverse_core::AppError> {
+    hosting::request(app.secrets.as_ref(), request).await
 }
 
 #[tauri::command]

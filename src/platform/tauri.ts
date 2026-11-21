@@ -59,8 +59,18 @@ export async function createTauriApi(): Promise<PlatformApi> {
     openRepoDialog: () => call<string | null>('repo_open'),
     openThirdPartyNotices: () => call('app_open_third_party_notices'),
     openRuntimeNotice: (kind: string) => call('app_open_runtime_notice', { kind }),
-    cloneRepo: (url: string, destination: string, credentials?: { username: string; password: string }) =>
-      call('repo_clone', { url, destination, credentials }),
+    cloneRepo: (
+      url: string,
+      destination: string,
+      credentials?: { username: string; password: string },
+      options?: { depth?: number | null },
+    ) => call('repo_clone', { url, destination, credentials, depth: options?.depth ?? null }),
+    editors: () => call('app_editors'),
+    agents: () => call('app_agents'),
+    openIn: (editor: string, target: string) => call('app_open_in', { editor, target }),
+    setZoom: async (factor: number) => {
+      await getCurrentWebview().setZoom(factor);
+    },
     openFile: (cwd: string, rel: string) => call('repo_open_file', { cwd, rel }),
     onCloneProgress: (cb) => subscribe<string>('repo:cloneProgress', cb),
     // Tauri exposes dropped files' paths through its own drag-drop event, not on File objects.
@@ -132,9 +142,25 @@ export async function createTauriApi(): Promise<PlatformApi> {
         call('ai_resolve_conflict', { provider, model: model ?? null, prompt, count }),
       commitMessage: (provider: string, model: string | undefined, diff: string) =>
         call('ai_commit_message', { provider, model: model ?? null, diff }),
+      task: (provider: string, model: string | undefined, task: string, prompt: string) =>
+        call('ai_task', { provider, model: model ?? null, task, prompt }),
+      pullRequest: (provider: string, model: string | undefined, prompt: string) =>
+        call('ai_pull_request', { provider, model: model ?? null, prompt }),
       onDelta: (cb) => subscribe<{ reqId: number; text: string }>('ai:delta', (p) => cb(p.reqId, p.text)),
       // Copilot runs its own tool loop and hands each call back to the app
       onToolCall: (cb) => subscribe('ai:toolcall', cb),
+    },
+    hosting: {
+      tokenStatus: (kind, host) => call<boolean>('hosting_token_status', { kind, host }),
+      setToken: (kind, host, token) => call<void>('hosting_set_token', { kind, host, token }),
+      request: (request) => call('hosting_request', { request }),
+      open: (kind, host, url) => call<void>('hosting_open', { kind, host, url }),
+      connect: (kind, host, options) =>
+        call('hosting_connect', {
+          kind,
+          host,
+          token: options?.token ?? null,
+        }),
     },
     stateStorage: {
       getItem: (k) => state[k] ?? null,

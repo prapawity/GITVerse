@@ -6,8 +6,12 @@ const gitApi: Record<string, (...a: unknown[]) => Promise<any>> = {
   openRepoDialog: () => ipcRenderer.invoke('repo:open'),
   openThirdPartyNotices: () => ipcRenderer.invoke('app:openThirdPartyNotices'),
   openRuntimeNotice: (kind: unknown) => ipcRenderer.invoke('app:openRuntimeNotice', kind),
-  cloneRepo: (url: unknown, destination: unknown, credentials?: unknown) =>
-    ipcRenderer.invoke('repo:clone', url, destination, credentials),
+  cloneRepo: (url: unknown, destination: unknown, credentials?: unknown, options?: unknown) =>
+    ipcRenderer.invoke('repo:clone', url, destination, credentials, options),
+  editors: () => ipcRenderer.invoke('app:editors'),
+  agents: () => ipcRenderer.invoke('app:agents'),
+  openIn: (editor: unknown, target: unknown) => ipcRenderer.invoke('app:openIn', editor, target),
+  setZoom: (factor: unknown) => ipcRenderer.invoke('app:setZoom', factor),
   openFile: (...a) => ipcRenderer.invoke('repo:openFile', ...a),
 };
 (gitApi as any).onCloneProgress = (cb: (message: string) => void) => {
@@ -104,8 +108,37 @@ const sub = <T extends unknown[]>(ch: string, cb: (...a: T) => void) => {
     ipcRenderer.invoke('ai:resolveConflict', provider, model, prompt, count),
   commitMessage: (provider: string, model: string | undefined, diff: string) =>
     ipcRenderer.invoke('ai:commitMessage', provider, model, diff),
+  task: (provider: string, model: string | undefined, task: string, prompt: string) =>
+    ipcRenderer.invoke('ai:task', provider, model, task, prompt),
+  pullRequest: (provider: string, model: string | undefined, prompt: string) =>
+    ipcRenderer.invoke('ai:pullRequest', provider, model, prompt),
   onDelta: (cb: (reqId: number, text: string) => void) => sub('ai:delta', cb),
   onToolCall: (cb: (call: unknown) => void) => sub('ai:toolcall', cb),
+};
+
+// Undo / Redo from the native Edit menu
+(gitApi as any).onEditKey = (cb: (key: string) => void) => {
+  const h = (_e: unknown, key: string) => cb(key);
+  ipcRenderer.on('app:editKey', h);
+  return () => ipcRenderer.removeListener('app:editKey', h);
+};
+
+// zoom shortcuts come from the native View menu
+(gitApi as any).onZoomKey = (cb: (key: string) => void) => {
+  const h = (_e: unknown, key: string) => cb(key);
+  ipcRenderer.on('app:zoomKey', h);
+  return () => ipcRenderer.removeListener('app:zoomKey', h);
+};
+
+// pull/merge request hosting: tokens and API calls stay in the main process
+(gitApi as any).hosting = {
+  tokenStatus: (kind: string, host: string) => ipcRenderer.invoke('hosting:tokenStatus', kind, host),
+  setToken: (kind: string, host: string, token: string | null) =>
+    ipcRenderer.invoke('hosting:setToken', kind, host, token),
+  request: (request: unknown) => ipcRenderer.invoke('hosting:request', request),
+  open: (kind: string, host: string, url: string) => ipcRenderer.invoke('hosting:open', kind, host, url),
+  connect: (kind: string, host: string, options?: unknown) =>
+    ipcRenderer.invoke('hosting:connect', kind, host, options),
 };
 
 // persisted state: loaded once synchronously, then written through to the main process on every change

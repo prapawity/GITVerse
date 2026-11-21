@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, FileMinus, FilePen, FilePlus } from 'lucide-react';
+import { AlertTriangle, ExternalLink, FileMinus, FilePen, FilePlus } from 'lucide-react';
 import { askConfirm } from './Dialogs';
 import { useRepo } from '../store/repoStore';
 import { desktopApi } from '../platform/api';
+import { Chevron, Collapse } from './Motion';
 
 const NAME = { rebase: 'Rebase', merge: 'Merge', 'cherry-pick': 'Cherry-pick', revert: 'Revert' } as const;
 const Chip = ({ children, tone }: { children: React.ReactNode; tone: 'branch' | 'commit' }) => (
@@ -37,11 +38,13 @@ function Section({
           onClick={() => setOpen(!open)}
           className="flex min-h-[32px] flex-1 items-center gap-1.5 text-left text-base"
         >
-          {open ? <ChevronDown size={15} aria-hidden /> : <ChevronRight size={15} aria-hidden />} {title} ({count})
+          <Chevron open={open} size={15} /> {title} ({count})
         </button>
         {action}
       </div>
-      {open && <div className="pb-2">{children}</div>}
+      <Collapse open={open}>
+        <div className="pb-2">{children}</div>
+      </Collapse>
     </div>
   );
 }

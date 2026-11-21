@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Copy, Info, X, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Copy, Info, X, XCircle } from 'lucide-react';
 import { useRepo, type Toast } from '../store/repoStore';
 import { Spinner, useDelayed } from './Loading';
+import { Chevron, Collapse } from './Motion';
 
 const STYLE = {
   success: { Icon: CheckCircle2, color: '#a6e3a1', ms: 3500 },
@@ -56,14 +57,13 @@ function ToastCard({ t }: { t: Toast }) {
                 aria-expanded={open}
                 className="mt-1 flex items-center gap-1 text-sm text-sub hover:text-text"
               >
-                {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}{' '}
-                {open ? 'Hide details' : 'Show details'}
+                <Chevron open={open} /> {open ? 'Hide details' : 'Show details'}
               </button>
-              {open && (
+              <Collapse open={open}>
                 <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-crust p-2 font-mono text-xs text-sub">
                   {detail}
                 </pre>
-              )}
+              </Collapse>
             </>
           )}
           {t.kind === 'error' && detail && (

@@ -3,13 +3,23 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { storage } from '../lib/storage';
 
 export interface Settings {
-  theme: 'dark' | 'midnight' | 'graphite' | 'light';
+  theme: 'system' | 'dark' | 'midnight' | 'graphite' | 'light'; // system follows the OS light/dark setting
   fontSize: number;
+  /** standard: icons with labels; minimal: labels hidden where the icon is clear (names on hover) */
+  uiMode: 'standard' | 'minimal';
+  zoom: number; // whole-app zoom, 1 = 100%
+  leftPanelOpen: boolean; // branches / tags sidebar
+  rightPanelOpen: boolean; // details / changes panel
+  leftPanelSize: number; // % of the window, restored when the panel opens
+  agentSetup: string; // commands run in a new agent worktree before the agent starts, e.g. npm install
+  rightPanelSize: number;
   graphSort: 'topo' | 'date' | 'author-date';
   graphColumns: { branch: boolean; graph: boolean; message: boolean; author: boolean; date: boolean; sha: boolean };
   autoFetchMinutes: number; // 0 disables
   autoPrune: boolean;
   autoCheckUpdates: boolean;
+  openRequestAfterPush: boolean; // open the PR/MR dialog after a successful push
+  showAvatars: boolean; // profile photos on the graph (only from the repository's own host)
   fetchMode: 'all' | 'ff' | 'ff-only' | 'rebase';
   initialCommits: number;
   lazyLoad: boolean;
@@ -36,6 +46,17 @@ export interface FlowConfig {
   main: string; // long-lived branch names
 }
 
+export interface AgentSession {
+  id: string;
+  agent: string; // id from the installed agents list (claude, codex, …)
+  agentName: string;
+  task: string;
+  branch: string;
+  base: string;
+  path: string; // worktree folder
+  created: number;
+}
+
 export interface PushProfile {
   id: string;
   name: string;
@@ -58,12 +79,21 @@ export const FONT_SIZE_PRESETS = [
 
 export const DEFAULTS: Settings = {
   theme: 'dark',
+  uiMode: 'standard',
+  zoom: 1,
+  leftPanelOpen: true,
+  rightPanelOpen: true,
+  leftPanelSize: 20,
+  agentSetup: '',
+  rightPanelSize: 25,
   fontSize: 14,
   graphSort: 'topo',
   graphColumns: { branch: true, graph: true, message: true, author: true, date: true, sha: false },
   autoFetchMinutes: 1,
   autoPrune: true,
   autoCheckUpdates: true,
+  openRequestAfterPush: false,
+  showAvatars: true,
   fetchMode: 'all',
   initialCommits: 400,
   lazyLoad: true,
@@ -105,6 +135,14 @@ interface Store extends Settings {
   activeIdentityProfile: string;
   repoGroups: Record<string, string>;
   repoGroupRoots: Record<string, string>;
+  /** graph visibility per repository: ref keys like `local:main`, `remote:origin/x`, `tag:v1` */
+  /** Agent Sessions started from the app, per repository */
+  agentSessions: Record<string, AgentSession[]>;
+  setAgentSessions: (repo: string, sessions: AgentSession[]) => void;
+  graphHidden: Record<string, string[]>;
+  graphSolo: Record<string, string[]>;
+  setRefVisibility: (repo: string, key: string, mode: 'hide' | 'show' | 'solo' | 'unsolo') => void;
+  resetRefVisibility: (repo: string) => void;
   setRepoGroup: (repo: string, group: string) => void;
   setRepoGroupRoot: (group: string, root: string) => void;
   deleteRepoGroup: (group: string) => void;
@@ -140,6 +178,28 @@ export const useSettings = create<Store>()(
       activeIdentityProfile: '',
       repoGroups: {},
       repoGroupRoots: {},
+      agentSessions: {},
+      setAgentSessions: (repo, sessions) => set((s) => ({ agentSessions: { ...s.agentSessions, [repo]: sessions } })),
+      graphHidden: {},
+      graphSolo: {},
+      setRefVisibility: (repo, key, mode) =>
+        set((s) => {
+          const without = (list: string[] | undefined) => (list ?? []).filter((k) => k !== key);
+          const hidden = mode === 'hide' ? [...without(s.graphHidden[repo]), key] : without(s.graphHidden[repo]);
+          const solo = mode === 'solo' ? [...without(s.graphSolo[repo]), key] : without(s.graphSolo[repo]);
+          return {
+            graphHidden: {
+              ...s.graphHidden,
+              [repo]: mode === 'solo' || mode === 'unsolo' ? (s.graphHidden[repo] ?? []) : hidden,
+            },
+            graphSolo: {
+              ...s.graphSolo,
+              [repo]: mode === 'hide' || mode === 'show' ? (s.graphSolo[repo] ?? []) : solo,
+            },
+          };
+        }),
+      resetRefVisibility: (repo) =>
+        set((s) => ({ graphHidden: { ...s.graphHidden, [repo]: [] }, graphSolo: { ...s.graphSolo, [repo]: [] } })),
       setRepoGroup: (repo, group) => set((s) => ({ repoGroups: { ...s.repoGroups, [repo]: group } })),
       setRepoGroupRoot: (group, root) => set((s) => ({ repoGroupRoots: { ...s.repoGroupRoots, [group]: root } })),
       deleteRepoGroup: (group) =>

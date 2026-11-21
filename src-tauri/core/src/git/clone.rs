@@ -14,7 +14,11 @@ fn invalid(m: &str) -> AppError {
 
 pub fn validate_clone_url(url: &str) -> Result<()> {
     let bad = || invalid("Enter a valid HTTPS or SSH repository URL.");
-    if url.is_empty() || url.starts_with('-') || url.chars().any(|c| c.is_whitespace() || c == '\0')
+    // `::` is git's `<transport>::<address>` remote-helper syntax (ext::, fd::, …), never a plain URL.
+    if url.is_empty()
+        || url.starts_with('-')
+        || url.contains("::")
+        || url.chars().any(|c| c.is_whitespace() || c == '\0')
     {
         return Err(bad());
     }
@@ -70,8 +74,23 @@ pub async fn clone_with_credentials(
     url: &str,
     destination: &str,
     credentials: Option<(&str, &str)>,
+    progress: impl FnMut(&str),
+) -> Result<()> {
+    clone_with_options(url, destination, credentials, None, progress).await
+}
+
+/// `depth`: a shallow clone with only that many commits of history.
+pub async fn clone_with_options(
+    url: &str,
+    destination: &str,
+    credentials: Option<(&str, &str)>,
+    depth: Option<u32>,
     mut progress: impl FnMut(&str),
 ) -> Result<()> {
+    if depth == Some(0) || depth.is_some_and(|d| d > 1_000_000) {
+        return Err(invalid("Clone depth must be a whole number of commits."));
+    }
+    let depth_arg = depth.map(|d| d.to_string());
     validate_clone_url(url)?;
     let dest = Path::new(destination);
     if !dest.is_absolute() || destination.contains('\0') || dest.parent().is_none() {
@@ -110,7 +129,20 @@ pub async fn clone_with_credentials(
             .env("GITVERSE_PUSH_TOKEN", password);
         _auth_dir = Some(dir);
     }
-    cmd.args(["clone", "--progress", "--", url, destination])
+    // Only HTTPS and SSH transports, whatever the URL or the user's git config says.
+    cmd.args([
+        "-c",
+        "protocol.allow=never",
+        "-c",
+        "protocol.https.allow=always",
+        "-c",
+        "protocol.ssh.allow=always",
+    ]);
+    cmd.args(["clone", "--progress"]);
+    if let Some(d) = &depth_arg {
+        cmd.args(["--depth", d]);
+    }
+    cmd.args(["--", url, destination])
         .current_dir(parent)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env(
@@ -192,6 +224,9 @@ mod tests {
             "/tmp/repo",
             "https://u:p@h/r",
             "a b",
+            "ext::/bin/evil",
+            "fd::3",
+            "git@h:a::b",
         ] {
             assert!(validate_clone_url(bad).is_err(), "{bad}");
         }

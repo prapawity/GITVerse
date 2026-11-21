@@ -80,6 +80,8 @@ pub struct CommitOpts {
     pub signoff: bool,
     #[serde(default)]
     pub gpg_sign: bool,
+    #[serde(default)]
+    pub no_verify: bool,
 }
 
 pub async fn commit(
@@ -107,10 +109,14 @@ pub async fn commit(
     if opts.gpg_sign {
         args.push("-S");
     }
+    if opts.no_verify {
+        args.push("--no-verify");
+    }
     git.run(cwd, &args, RunOpts::default()).await
 }
 
 pub async fn checkout(git: &GitRunner, cwd: &Path, reference: &str) -> Result<String> {
+    super::not_option("reference", reference)?;
     preflight(git, cwd, reference, "check out").await?;
     git.run(cwd, &["checkout", reference], RunOpts::default())
         .await
@@ -122,6 +128,10 @@ pub async fn create_branch(
     name: &str,
     from: Option<&str>,
 ) -> Result<String> {
+    super::not_option("branch name", name)?;
+    if let Some(f) = from {
+        super::not_option("start point", f)?;
+    }
     git.run(
         cwd,
         &["checkout", "-b", name, from.unwrap_or("HEAD")],
@@ -131,6 +141,8 @@ pub async fn create_branch(
 }
 
 pub async fn branch_at(git: &GitRunner, cwd: &Path, name: &str, hash: &str) -> Result<String> {
+    super::not_option("branch name", name)?;
+    super::not_option("commit", hash)?;
     ensure_target_tree_supported(git, cwd, hash, "create a branch from").await?;
     git.run(cwd, &["checkout", "-b", name, hash], RunOpts::default())
         .await
@@ -145,6 +157,7 @@ pub enum ResetMode {
 }
 
 pub async fn reset(git: &GitRunner, cwd: &Path, hash: &str, mode: ResetMode) -> Result<String> {
+    super::not_option("commit", hash)?;
     let name = match mode {
         ResetMode::Soft => "soft",
         ResetMode::Mixed => "mixed",
@@ -162,16 +175,19 @@ pub async fn reset(git: &GitRunner, cwd: &Path, hash: &str, mode: ResetMode) -> 
 }
 
 pub async fn cherry_pick(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(cwd, &["cherry-pick", hash], RunOpts::default())
         .await
 }
 
 pub async fn revert(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(cwd, &["revert", "--no-edit", hash], RunOpts::default())
         .await
 }
 
 pub async fn rebase_onto(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(cwd, &["rebase", hash], RunOpts::default()).await
 }
 
@@ -183,6 +199,7 @@ pub async fn merge(
     no_ff: bool,
     ff_only: bool,
 ) -> Result<String> {
+    super::not_option("reference", reference)?;
     let mut args = vec!["merge"];
     if ff_only {
         args.push("--ff-only");
@@ -195,6 +212,8 @@ pub async fn merge(
 }
 
 pub async fn create_tag(git: &GitRunner, cwd: &Path, name: &str, hash: &str) -> Result<String> {
+    super::not_option("tag name", name)?;
+    super::not_option("commit", hash)?;
     git.run(cwd, &["tag", name, hash], RunOpts::default()).await
 }
 
@@ -205,6 +224,8 @@ pub async fn create_annotated_tag(
     hash: &str,
     message: &str,
 ) -> Result<String> {
+    super::not_option("tag name", name)?;
+    super::not_option("commit", hash)?;
     let message = if message.is_empty() { name } else { message };
     git.run(
         cwd,
@@ -227,6 +248,7 @@ pub async fn tag_commit(git: &GitRunner, cwd: &Path, name: &str) -> Result<Strin
 }
 
 pub async fn file_at(git: &GitRunner, cwd: &Path, hash: &str, path: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(
         cwd,
         &["show", &format!("{hash}:{path}")],
@@ -236,6 +258,7 @@ pub async fn file_at(git: &GitRunner, cwd: &Path, hash: &str, path: &str) -> Res
 }
 
 pub async fn format_patch(git: &GitRunner, cwd: &Path, hash: &str) -> Result<String> {
+    super::not_option("commit", hash)?;
     git.run(
         cwd,
         &["format-patch", "-1", "--stdout", hash],
@@ -625,4 +648,61 @@ pub fn write_work_file(cwd: &Path, rel: &str, text: &str) -> Result<()> {
     }
     std::fs::write(full, text)?;
     Ok(())
+}
+
+/// Stage and commit only `paths` (deletions and both sides of renames included); other staged
+/// changes stay staged and are not part of this commit (`commitFiles` in git.ts).
+pub async fn commit_files(
+    git: &GitRunner,
+    cwd: &Path,
+    paths: &[String],
+    summary: &str,
+    description: &str,
+) -> Result<String> {
+    if paths.is_empty() {
+        return Err(invalid("Choose at least one file for this commit."));
+    }
+    if summary.trim().is_empty() {
+        return Err(invalid("Each commit needs a summary."));
+    }
+    let files = status(git, cwd).await?;
+    if files.iter().any(conflicted) {
+        return Err(invalid("Resolve conflicts before composing commits."));
+    }
+    let mut names: Vec<String> = Vec::new();
+    // only changes not yet in the index need adding; staged deletions / renames are already there
+    let mut unstaged: Vec<String> = Vec::new();
+    for p in paths {
+        let f = files.iter().find(|f| &f.path == p).ok_or_else(|| {
+            AppError::Invalid(format!(
+                "{p} has no uncommitted changes any more. Refresh and try again."
+            ))
+        })?;
+        if f.worktree != " " && !unstaged.contains(&f.path) {
+            unstaged.push(f.path.clone());
+        }
+        for n in std::iter::once(&f.path).chain(f.old_path.iter()) {
+            if !names.contains(n) {
+                names.push(n.clone());
+            }
+        }
+    }
+    if !unstaged.is_empty() {
+        let mut add: Vec<&str> = vec!["--literal-pathspecs", "add", "-A", "--"];
+        add.extend(unstaged.iter().map(String::as_str));
+        git.run(cwd, &add, RunOpts::default()).await?;
+    }
+    let mut args: Vec<&str> = vec![
+        "--literal-pathspecs",
+        "commit",
+        "--only",
+        "-m",
+        summary.trim(),
+    ];
+    if !description.trim().is_empty() {
+        args.extend(["-m", description.trim()]);
+    }
+    args.push("--");
+    args.extend(names.iter().map(String::as_str));
+    git.run(cwd, &args, RunOpts::default()).await
 }

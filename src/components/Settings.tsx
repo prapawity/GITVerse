@@ -12,6 +12,7 @@ import {
   Undo2,
   UserRound,
   Workflow,
+  Wrench,
 } from 'lucide-react';
 import { AI_MODEL } from '../shared/aiTools';
 import { PROVIDERS } from '../shared/aiTypes';
@@ -27,6 +28,8 @@ import {
   type Settings as S,
 } from '../store/settingsStore';
 import { useRepo } from '../store/repoStore';
+import { SigningSettings } from './SigningSettings';
+import { ExternalToolsSettings } from './ExternalToolsSettings';
 import { ProfileSettings } from './ProfileSettings';
 import { ApplicationAbout } from './ApplicationAbout';
 import { desktopApi, platformApi } from '../platform/api';
@@ -37,7 +40,8 @@ const defaultShellHint = /Win/.test(navigator.platform)
     ? '/bin/zsh'
     : '/bin/bash';
 
-export type Section = 'general' | 'appearance' | 'terminal' | 'conflicts' | 'ai' | 'gitflow' | 'profiles' | 'about';
+export type Section =
+  'general' | 'appearance' | 'terminal' | 'conflicts' | 'ai' | 'gitflow' | 'signing' | 'tools' | 'profiles' | 'about';
 
 const input =
   'w-full max-w-[360px] rounded-md border border-surface bg-crust px-3 py-2 outline-none focus:border-accent';
@@ -483,7 +487,8 @@ function AiSettings() {
           <Msgline k="claude" />
           {c && !c.canEncrypt && (
             <p className="mt-2 text-sm text-warning">
-              Secure storage is unavailable on this system — set ANTHROPIC_API_KEY instead.
+              The system keychain is not available to this app, so a key entered here is kept only until the app quits
+              (never written to disk). To keep it, allow keychain access or set ANTHROPIC_API_KEY.
             </p>
           )}
         </AiRow>
@@ -802,6 +807,8 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
             )}
           </div>
           {repoName && nav('gitflow', 'Gitflow', Workflow)}
+          {repoName && nav('signing', 'Commit signing', ShieldCheck)}
+          {repoName && nav('tools', 'External tools', Wrench)}
         </nav>
 
         <main className="min-w-0 flex-1 overflow-y-auto px-5 py-7 sm:px-10 lg:px-14">
@@ -932,6 +939,12 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                   {(
                     [
                       // canvas, sidebar, surface, text, accent — the theme's real values from index.css
+                      // System previews Light and Dark split diagonally
+                      {
+                        id: 'system',
+                        name: 'System',
+                        colors: ['#f2f5f9', '#f8fafc', '#cfd8e3', '#1d2939', '#006fae'],
+                      },
                       { id: 'light', name: 'Light', colors: ['#f2f5f9', '#f8fafc', '#cfd8e3', '#1d2939', '#006fae'] },
                       { id: 'dark', name: 'Dark', colors: ['#1e1e2e', '#181825', '#313244', '#cdd6f4', '#4cc2ff'] },
                       {
@@ -956,7 +969,13 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                       <span
                         aria-hidden
                         className="mb-3 flex h-20 overflow-hidden rounded-md border"
-                        style={{ background: option.colors[0], borderColor: option.colors[2] }}
+                        style={{
+                          background:
+                            option.id === 'system'
+                              ? 'linear-gradient(135deg, #f2f5f9 0 50%, #1e1e2e 50% 100%)'
+                              : option.colors[0],
+                          borderColor: option.colors[2],
+                        }}
                       >
                         <span className="flex w-1/3 flex-col gap-1.5 p-2" style={{ background: option.colors[1] }}>
                           <span className="h-1.5 w-3/4 rounded-full" style={{ background: option.colors[4] }} />
@@ -989,6 +1008,67 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
                     </button>
                   ))}
                 </div>
+                <Row label="Interface">
+                  <div
+                    role="group"
+                    aria-label="Interface style"
+                    className="inline-flex flex-wrap gap-1 rounded-md border border-surface p-1"
+                  >
+                    {(
+                      [
+                        ['standard', 'Standard', 'Icons with labels'],
+                        ['minimal', 'Minimal', 'Icons only where they are clear · names on hover'],
+                      ] as const
+                    ).map(([id, name, hint]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={st.uiMode === id}
+                        title={hint}
+                        onClick={() => st.set('uiMode', id)}
+                        className={`min-h-9 rounded px-4 text-left text-sm ${st.uiMode === id ? 'bg-accent/15 font-semibold text-accent' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
+                      >
+                        {name}
+                        <span className="block text-2xs font-normal text-sub">{hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Row>
+                <Row
+                  label="Author photos"
+                  hint="Loaded only from the repository's own host (e.g. your GitLab). Initials are shown otherwise."
+                >
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={st.showAvatars}
+                      onChange={(e) => st.set('showAvatars', e.target.checked)}
+                    />
+                    Show author photos in the commit graph
+                  </label>
+                </Row>
+                <Row
+                  label="Zoom"
+                  hint={`Whole app. Shortcuts: ${/Mac/.test(navigator.platform) ? '⌘' : 'Ctrl+'}= / - / 0`}
+                >
+                  <div
+                    role="group"
+                    aria-label="Zoom"
+                    className="inline-flex flex-wrap gap-1 rounded-md border border-surface p-1"
+                  >
+                    {[0.8, 0.9, 1, 1.1, 1.25, 1.5, 2].map((z) => (
+                      <button
+                        key={z}
+                        type="button"
+                        aria-pressed={Math.abs(st.zoom - z) < 0.001}
+                        onClick={() => st.set('zoom', z)}
+                        className={`min-h-9 rounded px-3 text-sm ${Math.abs(st.zoom - z) < 0.001 ? 'bg-accent/15 font-semibold text-accent' : 'text-sub hover:bg-surface/50 hover:text-text'}`}
+                      >
+                        {Math.round(z * 100)}%
+                      </button>
+                    ))}
+                  </div>
+                </Row>
                 <Row label="Font size">
                   <div
                     role="group"
@@ -1089,6 +1169,20 @@ export function SettingsPage({ onExit, initial = 'general' }: { onExit: () => vo
             {section === 'ai' && <AiSettings />}
             {section === 'profiles' && <ProfileSettings key={repoPath ?? ''} repo={repoPath} />}
 
+            {section === 'tools' && repoPath && (
+              <>
+                <h1 className="mb-1 text-2xl font-semibold">External tools</h1>
+                <p className="mb-6 text-sm text-sub">Diff and merge tools opened from file changes and conflicts.</p>
+                <ExternalToolsSettings repoPath={repoPath} />
+              </>
+            )}
+            {section === 'signing' && repoPath && repoName && (
+              <>
+                <h1 className="mb-1 text-2xl font-semibold">Commit signing</h1>
+                <p className="mb-6 text-sm text-sub">GPG or SSH signatures for commits and tags.</p>
+                <SigningSettings key={repoPath} repoPath={repoPath} repoName={repoName} />
+              </>
+            )}
             {section === 'gitflow' && repoPath && (
               <>
                 <h1 className="mb-1 text-2xl font-semibold">Gitflow</h1>

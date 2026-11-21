@@ -912,26 +912,27 @@ impl OpenAi {
         model: Option<String>,
         cancel: &CancellationToken,
     ) -> MessageResult {
-        let input = vec![json!({ "role": "user", "content": diff })];
+        self.message(&spec().commit_system, diff, model, cancel)
+            .await
+    }
+
+    /// One-shot text answer for `prompt` under `system` (commit messages, pull requests).
+    pub async fn message(
+        &self,
+        system: &str,
+        prompt: &str,
+        model: Option<String>,
+        cancel: &CancellationToken,
+    ) -> MessageResult {
+        let input = vec![json!({ "role": "user", "content": prompt })];
         match self
-            .respond(
-                input,
-                &spec().commit_system,
-                model,
-                false,
-                None,
-                &|_| {},
-                cancel,
-            )
+            .respond(input, system, model, false, None, &|_| {}, cancel)
             .await
         {
             Err(Failure::Aborted) => MessageResult::failed(err(ErrKind::Other, "Cancelled.")),
             Err(Failure::Err(e)) => MessageResult::failed(e),
             Ok(out) if out.incomplete.is_some() || out.text.trim().is_empty() => {
-                MessageResult::failed(err(
-                    ErrKind::Other,
-                    "AI did not return a complete commit message.",
-                ))
+                MessageResult::failed(err(ErrKind::Other, "AI did not return a complete answer."))
             }
             Ok(out) => MessageResult::ok(out.text.trim().to_owned()),
         }

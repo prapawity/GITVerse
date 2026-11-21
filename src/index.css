@@ -310,11 +310,12 @@ button {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateX(16px);
+    translate: 16px 0;
   }
   to {
     opacity: 1;
-    transform: none;
+    translate: 0 0;
+    scale: 1;
   }
 }
 @keyframes fade-in {
@@ -384,4 +385,296 @@ select option {
   .seg-item[aria-checked='true'] {
     @apply bg-surface text-text;
   }
+}
+
+/* motion: collapse/expand, rotating chevrons, popovers and dialogs (reduced motion disables all) */
+.collapse-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 200ms ease,
+    opacity 200ms ease;
+}
+.collapse-wrap.collapse-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.collapse-settled > .collapse-inner {
+  overflow: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .collapse-open > .collapse-inner {
+    overflow: visible;
+  }
+}
+.chevron {
+  transition: transform 180ms ease;
+}
+.chevron-open {
+  transform: rotate(90deg);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    translate: 0 -6px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+/* menus, dropdowns, popovers. The keyframes animate translate / scale (not transform), so they add to an
+   element's own positioning transform (e.g. -translate-x-1/2) instead of replacing it mid-animation. */
+.pop-in {
+  animation: pop-in 140ms ease-out;
+  transform-origin: top;
+}
+/* modal panels */
+.dialog-in {
+  animation: dialog-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* inline content that appears (banners, rows, details) */
+.slide-down {
+  animation: slide-down 160ms ease-out;
+}
+/* smooth state changes on interactive elements instead of instant blinks */
+button,
+a,
+[role='treeitem'],
+[role='tab'],
+[role='menuitem'] {
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease;
+}
+/* every modal panel and menu animates in, and their backdrops fade */
+[role='dialog'] {
+  animation: dialog-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+[role='menu'],
+[role='listbox'] {
+  animation: pop-in 140ms ease-out;
+  transform-origin: top;
+}
+.fixed.inset-0 {
+  animation: fade-in 160ms ease-out;
+}
+/* exit animations, played by src/lib/exitAnimations.ts on a static copy of the closed element */
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    translate: 0 6px;
+    scale: 0.97;
+  }
+}
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    translate: 0 -4px;
+    scale: 0.98;
+  }
+}
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    translate: 16px 0;
+  }
+}
+.exit-fade {
+  animation: fade-out 160ms ease-in forwards !important;
+}
+.exit-dialog {
+  animation: dialog-out 150ms ease-in forwards !important;
+}
+.exit-pop {
+  animation: pop-out 120ms ease-in forwards !important;
+  transform-origin: top;
+}
+.exit-toast {
+  animation: toast-out 160ms ease-in forwards !important;
+}
+
+/* AI drafting in the pull request form: a moving sheen over fields while AI works, then a soft glow */
+.ai-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(var(--ai, 203 166 247) / 0.16) 45%,
+    rgb(var(--ai, 203 166 247) / 0.28) 50%,
+    rgb(var(--ai, 203 166 247) / 0.16) 55%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes ai-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--ai, 203 166 247) / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgb(var(--ai, 203 166 247) / 0);
+  }
+}
+.ai-fields input,
+.ai-fields textarea {
+  border-color: rgb(var(--ai, 203 166 247) / 0.45);
+}
+.ai-fields input:not(:disabled),
+.ai-fields textarea:not(:disabled) {
+  animation: ai-glow 900ms ease-out 1;
+}
+
+/* icons follow the text size setting (14px = 1×); zoom keeps layout in step, unlike transform */
+svg.lucide {
+  zoom: var(--ui-font-scale, 1);
+}
+
+/* Minimal interface: hide labels that only repeat a clear icon (names stay in title / aria-label) */
+:root[data-ui='minimal'] .ui-label {
+  display: none !important;
+}
+:root[data-ui='minimal'] .ui-tool {
+  width: calc(40px * var(--ui-font-scale, 1)) !important;
+  min-height: calc(40px * var(--ui-font-scale, 1)) !important;
+  gap: 0 !important;
+}
+
+/* right panel: a new kind of content crossfades in; same-kind updates fade in place (no blink, no collapse) */
+@keyframes panel-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.panel-fade {
+  animation: panel-fade 180ms ease-out;
+}
+
+/* side panels: content slides and fades (transform + opacity only); the panel width changes once */
+@keyframes panel-in-left {
+  from {
+    opacity: 0;
+    translate: -24px 0;
+  }
+}
+@keyframes panel-in-right {
+  from {
+    opacity: 0;
+    translate: 24px 0;
+  }
+}
+@keyframes panel-out-left {
+  to {
+    opacity: 0;
+    translate: -24px 0;
+  }
+}
+@keyframes panel-out-right {
+  to {
+    opacity: 0;
+    translate: 24px 0;
+  }
+}
+.panel-enter-left {
+  animation: panel-in-left 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.panel-enter-right {
+  animation: panel-in-right 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.panel-leave-left {
+  animation: panel-out-left 140ms ease-in forwards;
+}
+.panel-leave-right {
+  animation: panel-out-right 140ms ease-in forwards;
+}
+
+/* panel edge tab: hidden until the divider is hovered; always shown while its panel is closed */
+.edge-tab {
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.edge-handle:hover .edge-tab,
+.edge-handle.is-closed .edge-tab,
+.edge-tab:focus-visible {
+  opacity: 1;
+}
+.edge-handle.is-closed .edge-tab {
+  opacity: 1;
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent) / 0.45);
+  background: rgb(var(--accent) / 0.12);
+}
+
+/* Minimal: with labels gone, icons that had one take the freed space */
+:root[data-ui='minimal'] button:has(> .ui-label) > svg.lucide,
+:root[data-ui='minimal'] button:has(> .ui-label) > span > svg.lucide {
+  zoom: calc(var(--ui-font-scale, 1) * 1.25);
+}
+:root[data-ui='minimal'] .ui-tool {
+  width: calc(44px * var(--ui-font-scale, 1)) !important;
+  min-height: calc(44px * var(--ui-font-scale, 1)) !important;
+}
+
+/* Minimal toolbar: icons are larger, so give each button and each group room to breathe */
+:root[data-ui='minimal'] header .ui-tool {
+  margin-inline: calc(3px * var(--ui-font-scale, 1));
+}
+:root[data-ui='minimal'] header [role='group'] + [role='group'],
+:root[data-ui='minimal'] header [role='group'] + div,
+:root[data-ui='minimal'] header [aria-hidden].bg-surface {
+  margin-inline: calc(10px * var(--ui-font-scale, 1));
+}
+/* grouped toolbar buttons keep a small ▾ when their label is hidden */
+.ui-group-hint {
+  display: none;
+}
+:root[data-ui='minimal'] .ui-group-hint {
+  display: block;
 }
