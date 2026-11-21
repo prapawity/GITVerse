@@ -1,7 +1,7 @@
 {
   "name": "gitverse-by-prapawity",
   "productName": "GITVerse by PRAPAWITY",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "A desktop Git client with commit graphs, conflict tools, and optional AI assistance.",
   "author": "PRAPAWITY",
