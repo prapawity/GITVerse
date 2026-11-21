@@ -380,6 +380,8 @@ export interface OpenRequest {
   author: string;
   url: string;
   head: string;
+  /** head commit, for CI status; empty when the host did not report it */
+  sha: string;
   base: string;
   draft: boolean;
   updated: string;
@@ -409,7 +411,7 @@ export async function openRequests(repo: HostedRepo): Promise<OpenRequest[]> {
         title: string;
         user: Person;
         html_url: string;
-        head: { ref: string };
+        head: { ref: string; sha?: string };
         base: { ref: string };
         draft?: boolean;
         updated_at: string;
@@ -424,6 +426,7 @@ export async function openRequests(repo: HostedRepo): Promise<OpenRequest[]> {
       author: who(p.user),
       url: p.html_url,
       head: p.head.ref,
+      sha: p.head.sha ?? '',
       base: p.base.ref,
       draft: !!p.draft,
       updated: p.updated_at,
@@ -442,6 +445,7 @@ export async function openRequests(repo: HostedRepo): Promise<OpenRequest[]> {
         web_url: string;
         source_branch: string;
         target_branch: string;
+        sha?: string;
         draft?: boolean;
         work_in_progress?: boolean;
         updated_at: string;
@@ -456,6 +460,7 @@ export async function openRequests(repo: HostedRepo): Promise<OpenRequest[]> {
       author: who(m.author),
       url: m.web_url,
       head: m.source_branch,
+      sha: m.sha ?? '',
       base: m.target_branch,
       draft: !!(m.draft ?? m.work_in_progress),
       updated: m.updated_at,
@@ -470,7 +475,7 @@ export async function openRequests(repo: HostedRepo): Promise<OpenRequest[]> {
       title: string;
       author: Person;
       links: { html: { href: string } };
-      source: { branch: { name: string } };
+      source: { branch: { name: string }; commit?: { hash?: string } };
       destination: { branch: { name: string } };
       draft?: boolean;
       updated_on: string;
@@ -484,6 +489,7 @@ export async function openRequests(repo: HostedRepo): Promise<OpenRequest[]> {
     author: who(p.author),
     url: p.links.html.href,
     head: p.source.branch.name,
+    sha: p.source.commit?.hash ?? '',
     base: p.destination.branch.name,
     draft: !!p.draft,
     updated: p.updated_on,
@@ -491,6 +497,83 @@ export async function openRequests(repo: HostedRepo): Promise<OpenRequest[]> {
     assigned: false, // Bitbucket has no assignees
     reviewRequested: (p.reviewers ?? []).some((r) => same(r, user)),
   }));
+}
+
+export type CiState = 'success' | 'failure' | 'pending' | 'none';
+export interface CiStatus {
+  state: CiState;
+  /** checks by outcome, for the tooltip */
+  passed: number;
+  failed: number;
+  pending: number;
+  /** page with the checks on the host, when it gave one */
+  url?: string;
+}
+
+const SHA_RE = /^[0-9a-f]{7,64}$/i;
+const rollup = (states: CiState[], url?: string): CiStatus => {
+  const count = (s: CiState) => states.filter((x) => x === s).length;
+  const [passed, failed, pending] = [count('success'), count('failure'), count('pending')];
+  const state: CiState = failed ? 'failure' : pending ? 'pending' : passed ? 'success' : 'none';
+  return { state, passed, failed, pending, url };
+};
+const githubRun = (status: string, conclusion: string | null): CiState =>
+  status !== 'completed'
+    ? 'pending'
+    : ['success', 'neutral', 'skipped'].includes(conclusion ?? '')
+      ? 'success'
+      : 'failure';
+const githubStatus = (state: string): CiState =>
+  state === 'success' ? 'success' : state === 'pending' ? 'pending' : 'failure';
+const gitlabPipeline = (status: string): CiState =>
+  status === 'success' || status === 'skipped' || status === 'manual'
+    ? 'success'
+    : ['failed', 'canceled'].includes(status)
+      ? 'failure'
+      : 'pending';
+const bitbucketStatus = (state: string): CiState =>
+  state === 'SUCCESSFUL' ? 'success' : state === 'INPROGRESS' ? 'pending' : 'failure';
+
+/**
+ * CI result for one commit: GitHub check runs plus commit statuses, the latest GitLab pipeline,
+ * or Bitbucket build statuses. A failed check wins over a running one, which wins over passed.
+ */
+export async function ciStatus(repo: HostedRepo, sha: string): Promise<CiStatus> {
+  if (!SHA_RE.test(sha)) return rollup([]);
+  if (repo.kind === 'github') {
+    const [runs, statuses] = await Promise.all([
+      call<{ check_runs?: { status: string; conclusion: string | null }[] }>(
+        repo,
+        'GET',
+        `${repoPath(repo)}/commits/${sha}/check-runs?per_page=100`,
+      ),
+      call<{ statuses?: { state: string }[] }>(repo, 'GET', `${repoPath(repo)}/commits/${sha}/status`),
+    ]);
+    return rollup(
+      [
+        ...(runs.check_runs ?? []).map((r) => githubRun(r.status, r.conclusion)),
+        ...(statuses.statuses ?? []).map((s) => githubStatus(s.state)),
+      ],
+      `https://${repo.host === 'github.com' ? 'github.com' : repo.host}/${repo.path}/commit/${sha}/checks`,
+    );
+  }
+  if (repo.kind === 'gitlab') {
+    const pipelines = await call<{ status: string; web_url?: string }[]>(
+      repo,
+      'GET',
+      `${project(repo)}/pipelines?sha=${sha}&per_page=1&order_by=id&sort=desc`,
+    );
+    const latest = pipelines[0];
+    return latest ? rollup([gitlabPipeline(latest.status)], latest.web_url) : rollup([]);
+  }
+  const list = await call<{ values?: { state: string; url?: string }[] }>(
+    repo,
+    'GET',
+    `${repoPath(repo)}/commit/${sha}/statuses?pagelen=100`,
+  );
+  const values = list.values ?? [];
+  // Bitbucket status links point at the CI server, not bitbucket.org, so the badge opens the pull request
+  return rollup(values.map((v) => bitbucketStatus(v.state)));
 }
 
 /** Provider chosen by hand for a self-hosted server, remembered per host. */

@@ -899,7 +899,51 @@ export async function discardWorkingFiles(
   for (const full of untracked) await rm(full);
 }
 
-export async function discardWorkingHunk(cwd: string, filePath: string, expectedDiff: string, hunkIndex: number) {
+/**
+ * Keep only the selected changed lines of one hunk (indices count its ` `, `+` and `-` lines, like
+ * parseDiff). An unselected line becomes context on the side the patch is applied to: for a forward
+ * patch a `-` stays as context and a `+` is dropped; for a reverse patch it is the other way round.
+ * The hunk header keeps its start lines; `git apply --recount` recomputes the counts.
+ */
+export function selectHunkLines(hunk: string[], selected: number[], reverse: boolean): string[] {
+  if (!Array.isArray(selected) || !selected.length || selected.some((n) => !Number.isInteger(n) || n < 0))
+    throw new Error('Select the lines to apply.');
+  const want = new Set(selected);
+  const [header, ...body] = hunk;
+  const out = [header];
+  let index = -1;
+  let changed = false;
+  let dropped = false;
+  for (const line of body) {
+    if (line.startsWith('\\')) {
+      if (!dropped) out.push(line);
+      continue;
+    }
+    const sign = line[0];
+    if (sign !== ' ' && sign !== '+' && sign !== '-') {
+      out.push(line);
+      continue;
+    }
+    index++;
+    dropped = false;
+    if (sign === ' ' || want.has(index)) {
+      if (sign !== ' ') changed = true;
+      out.push(line);
+    } else if ((sign === '-') !== reverse) out.push(` ${line.slice(1)}`);
+    else dropped = true;
+  }
+  if (selected.some((n) => n > index)) throw new Error('This selection is no longer available. Refresh the diff.');
+  if (!changed) throw new Error('Select at least one added or removed line.');
+  return out;
+}
+
+export async function discardWorkingHunk(
+  cwd: string,
+  filePath: string,
+  expectedDiff: string,
+  hunkIndex: number,
+  selectedLines?: number[] | null,
+) {
   if (await opState(cwd)) throw new Error('Finish or abort the current Git operation before discarding changes.');
   const current = await workingFileDiff(cwd, filePath, 'unstaged');
   if (typeof expectedDiff !== 'string' || current !== expectedDiff)
@@ -912,20 +956,22 @@ export async function discardWorkingHunk(cwd: string, filePath: string, expected
     throw new Error('Discard this change as a whole file instead.');
   const { full } = await workPath(cwd, filePath);
   if (!(await lstat(full)).isFile()) throw new Error('Only regular text files support hunk discard.');
+  const selection = selectedLines ?? null;
   const lines = current.split('\n');
   const starts = lines.flatMap((line, index) => (/^@@ /.test(line) ? [index] : []));
   if (!Number.isInteger(hunkIndex) || hunkIndex < 0 || hunkIndex >= starts.length)
     throw new Error('This hunk is no longer available. Refresh the diff.');
-  const patch = [
-    ...lines.slice(0, starts[0]),
-    ...lines.slice(starts[hunkIndex], starts[hunkIndex + 1] ?? lines.length),
-  ].join('\n');
+  const hunk = lines.slice(starts[hunkIndex], starts[hunkIndex + 1] ?? lines.length);
+  const patch = [...lines.slice(0, starts[0]), ...(selection ? selectHunkLines(hunk, selection, true) : hunk)].join(
+    '\n',
+  );
   const dir = await mkdtemp(path.join(tmpdir(), 'gitverse-discard-'));
   try {
     const patchFile = path.join(dir, 'hunk.patch');
     await writeFile(patchFile, patch.endsWith('\n') ? patch : `${patch}\n`);
-    await git(cwd, ['apply', '--reverse', '--check', '--whitespace=nowarn', '--', patchFile]);
-    await git(cwd, ['apply', '--reverse', '--whitespace=nowarn', '--', patchFile]);
+    const args = ['apply', '--reverse', '--recount', '--whitespace=nowarn'];
+    await git(cwd, [...args, '--check', '--', patchFile]);
+    await git(cwd, [...args, '--', patchFile]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -937,8 +983,10 @@ export async function stageWorkingHunk(
   area: 'staged' | 'unstaged',
   expectedDiff: string,
   hunkIndex: number,
+  selectedLines?: number[] | null,
 ) {
   if (area !== 'staged' && area !== 'unstaged') throw new Error('Invalid change area.');
+  const selection = selectedLines ?? null;
   if (await opState(cwd)) throw new Error('Finish or abort the current Git operation first.');
   const current = await workingFileDiff(cwd, filePath, area);
   if (typeof expectedDiff !== 'string' || current !== expectedDiff)
@@ -953,9 +1001,10 @@ export async function stageWorkingHunk(
   const starts = lines.flatMap((line, index) => (/^@@ /.test(line) ? [index] : []));
   if (!Number.isInteger(hunkIndex) || hunkIndex < 0 || hunkIndex >= starts.length)
     throw new Error('This hunk is no longer available. Refresh the diff.');
+  const hunk = lines.slice(starts[hunkIndex], starts[hunkIndex + 1] ?? lines.length);
   const patch = [
     ...lines.slice(0, starts[0]),
-    ...lines.slice(starts[hunkIndex], starts[hunkIndex + 1] ?? lines.length),
+    ...(selection ? selectHunkLines(hunk, selection, area === 'staged') : hunk),
   ].join('\n');
   const index = await indexFile(cwd);
   const before = await indexSnapshot(cwd, index);
@@ -963,13 +1012,17 @@ export async function stageWorkingHunk(
   try {
     const patchFile = path.join(dir, 'hunk.patch');
     await writeFile(patchFile, patch.endsWith('\n') ? patch : `${patch}\n`);
-    const args = ['apply', '--cached', ...(area === 'staged' ? ['--reverse'] : []), '--whitespace=nowarn'];
+    const args = ['apply', '--cached', ...(area === 'staged' ? ['--reverse'] : []), '--recount', '--whitespace=nowarn'];
     await git(cwd, [...args, '--check', '--', patchFile]);
     await git(cwd, [...args, '--', patchFile]);
     const after = await indexSnapshot(cwd, index);
     if (!sameIndex(before, after)) {
       const history = indexHistory.get(cwd) ?? { undo: [], redo: [] };
-      history.undo.push({ before, after, label: area === 'staged' ? 'unstage hunk' : 'stage hunk' });
+      history.undo.push({
+        before,
+        after,
+        label: `${area === 'staged' ? 'unstage' : 'stage'} ${selection ? 'lines' : 'hunk'}`,
+      });
       history.undo = history.undo.slice(-20);
       history.redo = [];
       indexHistory.set(cwd, history);

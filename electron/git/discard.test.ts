@@ -196,3 +196,38 @@ test('file change counts use rename destinations and preserve tabs in filenames'
   assert.deepEqual(counts.get('renamed.txt'), { path: 'renamed.txt', staged: 0, unstaged: 0 });
   if (process.platform !== 'win32') assert.equal(counts.get('tab\tname.txt')?.unstaged, 2);
 });
+
+test('stage, unstage and discard selected lines of a hunk', async (t) => {
+  const { cwd, command } = await fixture(t);
+  const { parseDiff } = await import('../../src/lib/diff');
+  const at = (diff: string, sign: 'add' | 'del', text: string) =>
+    parseDiff(diff).hunks[0].lines.findIndex((l) => l.type === sign && l.text === text);
+  const lines = original.split('\n');
+  lines.splice(1, 2, 'X2', 'X3');
+  await writeFile(path.join(cwd, 'one.txt'), lines.join('\n'));
+
+  // stage only "-line 2" and "+X2": the unselected "-line 3" stays as context before the added line
+  let diff = await workingFileDiff(cwd, 'one.txt', 'unstaged');
+  await stageWorkingHunk(cwd, 'one.txt', 'unstaged', diff, 0, [at(diff, 'del', 'line 2'), at(diff, 'add', 'X2')]);
+  assert.deepEqual((await command('show', ':one.txt')).split('\n').slice(0, 4), ['line 1', 'line 3', 'X2', 'line 4']);
+
+  // unstage only the added "X2": the index keeps "line 2" removed
+  diff = await workingFileDiff(cwd, 'one.txt', 'staged');
+  await stageWorkingHunk(cwd, 'one.txt', 'staged', diff, 0, [at(diff, 'add', 'X2')]);
+  assert.deepEqual((await command('show', ':one.txt')).split('\n').slice(0, 3), ['line 1', 'line 3', 'line 4']);
+
+  // discard only the unstaged "X3" addition from the working tree
+  diff = await workingFileDiff(cwd, 'one.txt', 'unstaged');
+  await discardWorkingHunk(cwd, 'one.txt', diff, 0, [at(diff, 'add', 'X3')]);
+  assert.deepEqual((await readFile(path.join(cwd, 'one.txt'), 'utf8')).split('\n').slice(0, 3), [
+    'line 1',
+    'X2',
+    'line 4',
+  ]);
+
+  // a selection with no changed lines, or out of range, is refused
+  diff = await workingFileDiff(cwd, 'one.txt', 'unstaged');
+  await assert.rejects(stageWorkingHunk(cwd, 'one.txt', 'unstaged', diff, 0, []), /Select the lines/);
+  await assert.rejects(stageWorkingHunk(cwd, 'one.txt', 'unstaged', diff, 0, [0]), /at least one/);
+  await assert.rejects(stageWorkingHunk(cwd, 'one.txt', 'unstaged', diff, 0, [999]), /no longer available/);
+});

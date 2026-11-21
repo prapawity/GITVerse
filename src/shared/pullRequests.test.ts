@@ -78,3 +78,65 @@ test('issue branch names and issue numbers from branches', async () => {
   assert.equal(issueFromBranch('develop'), null);
   assert.equal(issueFromBranch('release/1.0.4'), null);
 });
+
+test('CI status rolls up GitHub checks, the latest GitLab pipeline and Bitbucket statuses', async () => {
+  const { ciStatus } = await import('../lib/pullRequests');
+  const replies = new Map<string, unknown>();
+  const asked: string[] = [];
+  const g = globalThis as { window?: unknown };
+  const previous = g.window;
+  g.window = {
+    gitApi: {
+      hosting: {
+        request: async ({ path }: { path: string }) => {
+          asked.push(path);
+          return { status: 200, data: replies.get(path.split('?')[0]) ?? {} };
+        },
+      },
+    },
+  };
+  try {
+    const sha = 'a'.repeat(40);
+    const github = { kind: 'github' as const, host: 'github.com', path: 'acme/app' };
+    replies.set(`/repos/acme/app/commits/${sha}/check-runs`, {
+      check_runs: [
+        { status: 'completed', conclusion: 'success' },
+        { status: 'completed', conclusion: 'skipped' },
+        { status: 'in_progress', conclusion: null },
+      ],
+    });
+    replies.set(`/repos/acme/app/commits/${sha}/status`, { statuses: [{ state: 'success' }] });
+    assert.deepEqual(await ciStatus(github, sha), {
+      state: 'pending',
+      passed: 3,
+      failed: 0,
+      pending: 1,
+      url: `https://github.com/acme/app/commit/${sha}/checks`,
+    });
+    replies.set(`/repos/acme/app/commits/${sha}/status`, { statuses: [{ state: 'error' }] });
+    assert.equal((await ciStatus(github, sha)).state, 'failure', 'a failure wins over running checks');
+
+    const gitlab = { kind: 'gitlab' as const, host: 'gitlab.com', path: 'group/app' };
+    replies.set('/projects/group%2Fapp/pipelines', [{ status: 'success', web_url: 'https://gitlab.com/p/1' }]);
+    assert.equal((await ciStatus(gitlab, sha)).state, 'success');
+
+    const bitbucket = { kind: 'bitbucket' as const, host: 'bitbucket.org', path: 'team/app' };
+    replies.set(`/repositories/team/app/commit/${sha}/statuses`, { values: [{ state: 'FAILED', url: 'https://ci' }] });
+    assert.deepEqual(await ciStatus(bitbucket, sha), {
+      state: 'failure',
+      passed: 0,
+      failed: 1,
+      pending: 0,
+      url: undefined,
+    });
+
+    // no checks, or not a commit hash: nothing to show and nothing is requested
+    replies.clear();
+    assert.equal((await ciStatus(github, sha)).state, 'none');
+    const before = asked.length;
+    assert.equal((await ciStatus(github, 'main; rm')).state, 'none');
+    assert.equal(asked.length, before);
+  } finally {
+    g.window = previous;
+  }
+});
